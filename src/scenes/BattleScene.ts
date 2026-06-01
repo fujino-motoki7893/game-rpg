@@ -17,6 +17,9 @@ export class BattleScene extends Phaser.Scene {
   private enemyInstanceId = "";
   private enemyHp = 0;
   private playerTurn = true;
+  private battleOver = false;
+  private pendingEnemyTurnAt?: number;
+  private pendingPlayerTurnAt?: number;
   private logText?: Phaser.GameObjects.Text;
   private playerHpText?: Phaser.GameObjects.Text;
   private enemyHpText?: Phaser.GameObjects.Text;
@@ -31,6 +34,9 @@ export class BattleScene extends Phaser.Scene {
     this.enemyInstanceId = payload.enemyInstanceId;
     this.enemyHp = this.enemy.maxHp;
     this.playerTurn = true;
+    this.battleOver = false;
+    this.pendingEnemyTurnAt = undefined;
+    this.pendingPlayerTurnAt = undefined;
 
     this.add.rectangle(400, 320, 800, 640, 0x090b0e, 0.86);
     this.add.rectangle(400, 324, 640, 440, 0x18202a, 0.98).setStrokeStyle(2, 0xd8bc72);
@@ -49,6 +55,25 @@ export class BattleScene extends Phaser.Scene {
     this.createButtons();
     this.refreshHud();
     this.setLog(`${this.enemy.name}が行く手をふさいだ。`);
+  }
+
+  update(): void {
+    if (this.battleOver) {
+      return;
+    }
+
+    const now = this.time.now;
+    if (this.pendingEnemyTurnAt !== undefined && now >= this.pendingEnemyTurnAt) {
+      this.pendingEnemyTurnAt = undefined;
+      this.runEnemyTurn();
+    }
+
+    if (this.pendingPlayerTurnAt !== undefined && now >= this.pendingPlayerTurnAt) {
+      this.pendingPlayerTurnAt = undefined;
+      this.playerTurn = true;
+      this.setButtonsEnabled(true);
+      this.setLog("あなたの番だ。");
+    }
   }
 
   private createButtons(): void {
@@ -131,7 +156,20 @@ export class BattleScene extends Phaser.Scene {
   private endPlayerTurn(): void {
     this.playerTurn = false;
     this.setButtonsEnabled(false);
-    this.time.delayedCall(700, () => this.enemyTurn());
+    this.pendingEnemyTurnAt = this.time.now + 700;
+  }
+
+  private runEnemyTurn(): void {
+    try {
+      this.enemyTurn();
+    } catch (error) {
+      console.error(error);
+      this.pendingEnemyTurnAt = undefined;
+      this.pendingPlayerTurnAt = undefined;
+      this.playerTurn = true;
+      this.setButtonsEnabled(true);
+      this.setLog("ターン処理を復旧しました。もう一度行動できます。");
+    }
   }
 
   private enemyTurn(): void {
@@ -145,14 +183,13 @@ export class BattleScene extends Phaser.Scene {
     }
 
     this.setLog(`${this.enemy.name}の攻撃。${damage}のダメージを受けた。`);
-    this.time.delayedCall(700, () => {
-      this.playerTurn = true;
-      this.setButtonsEnabled(true);
-      this.setLog("あなたの番だ。");
-    });
+    this.pendingPlayerTurnAt = this.time.now + 700;
   }
 
   private winBattle(lastDamage: number): void {
+    this.battleOver = true;
+    this.pendingEnemyTurnAt = undefined;
+    this.pendingPlayerTurnAt = undefined;
     markEnemyDefeated(this.enemyInstanceId);
     const reward = grantReward(this.enemy.exp, this.enemy.gold);
     const levelText = reward.leveledUp ? " レベルアップ！" : "";
@@ -166,6 +203,9 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private loseBattle(lastDamage: number): void {
+    this.battleOver = true;
+    this.pendingEnemyTurnAt = undefined;
+    this.pendingPlayerTurnAt = undefined;
     const save = getSave();
     save.hp = Math.ceil(save.maxHp * 0.6);
     save.gold = Math.floor(save.gold * 0.8);
@@ -184,6 +224,9 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private closeBattle(message: string): void {
+    this.battleOver = true;
+    this.pendingEnemyTurnAt = undefined;
+    this.pendingPlayerTurnAt = undefined;
     this.game.events.emit(GAME_EVENTS.toast, message);
     this.game.events.emit(GAME_EVENTS.stateChanged);
     this.scene.stop();
