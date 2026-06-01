@@ -1,0 +1,422 @@
+import Phaser from "phaser";
+import { getNpcDialogue } from "../data/dialogues";
+import { BLOCKING_TILES, MAPS } from "../data/maps";
+import { GAME_EVENTS, MAP_OFFSET_X, MAP_OFFSET_Y, TILE_SIZE } from "../game/constants";
+import {
+  getSave,
+  hasFlag,
+  healPlayer,
+  markFlag,
+  persistSave,
+  resetSave,
+  setPlayerPosition
+} from "../game/GameState";
+import type {
+  ChestDefinition,
+  Direction,
+  EnemySpawn,
+  MapDefinition,
+  MapId,
+  NpcDefinition,
+  TilePosition
+} from "../game/types";
+
+const directionVectors: Record<Direction, TilePosition> = {
+  down: { x: 0, y: 1 },
+  left: { x: -1, y: 0 },
+  right: { x: 1, y: 0 },
+  up: { x: 0, y: -1 }
+};
+
+export class WorldScene extends Phaser.Scene {
+  private currentMap!: MapDefinition;
+  private player!: Phaser.GameObjects.Image;
+  private playerTile: TilePosition = { x: 0, y: 0 };
+  private facing: Direction = "down";
+  private moving = false;
+  private dialogueLines: string[] = [];
+  private dialogueIndex = 0;
+  private dialogueBox?: Phaser.GameObjects.Rectangle;
+  private dialogueText?: Phaser.GameObjects.Text;
+  private objectGroup?: Phaser.GameObjects.Group;
+  private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
+  private wasd?: Record<string, Phaser.Input.Keyboard.Key>;
+  private actionKeys?: Phaser.Input.Keyboard.Key[];
+  private resetKey?: Phaser.Input.Keyboard.Key;
+
+  constructor() {
+    super("WorldScene");
+  }
+
+  create(): void {
+    if (!this.scene.isActive("UIScene")) {
+      this.scene.launch("UIScene");
+    }
+
+    this.cursors = this.input.keyboard?.createCursorKeys();
+    this.wasd = this.input.keyboard?.addKeys("W,A,S,D") as Record<string, Phaser.Input.Keyboard.Key>;
+    this.actionKeys = [
+      this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
+      this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER)
+    ];
+    this.resetKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+
+    this.input.keyboard?.on("keydown", this.handleKeyDown, this);
+    this.events.on("resume", this.refreshAfterBattle, this);
+
+    const save = getSave();
+    this.loadMap(save.mapId, { x: save.x, y: save.y });
+  }
+
+  update(): void {
+    if (this.dialogueLines.length > 0 || this.moving) {
+      return;
+    }
+
+    if (this.resetKey && Phaser.Input.Keyboard.JustDown(this.resetKey)) {
+      resetSave();
+      this.loadMap("village", MAPS.village.spawn);
+      this.game.events.emit(GAME_EVENTS.toast, "New adventure");
+      this.game.events.emit(GAME_EVENTS.stateChanged);
+      return;
+    }
+
+    const direction = this.getPressedDirection();
+    if (direction) {
+      this.tryMove(direction);
+    }
+  }
+
+  private loadMap(mapId: MapId, spawn: TilePosition): void {
+    this.children.removeAll(true);
+    this.currentMap = MAPS[mapId];
+    this.objectGroup = this.add.group();
+
+    this.drawMap();
+    this.createObjects();
+    this.playerTile = { ...spawn };
+    this.player = this.add.image(
+      this.toWorldX(this.playerTile.x),
+      this.toWorldY(this.playerTile.y),
+      "player"
+    );
+    this.player.setDepth(20);
+    this.createDialoguePanel();
+    setPlayerPosition(mapId, spawn.x, spawn.y);
+    this.game.events.emit(GAME_EVENTS.mapChanged, this.currentMap.name);
+    this.game.events.emit(GAME_EVENTS.stateChanged);
+  }
+
+  private drawMap(): void {
+    for (let y = 0; y < this.currentMap.rows.length; y += 1) {
+      for (let x = 0; x < this.currentMap.rows[y].length; x += 1) {
+        const tile = this.currentMap.rows[y][x];
+        const texture = this.getTileTexture(tile);
+        this.add
+          .image(MAP_OFFSET_X + x * TILE_SIZE, MAP_OFFSET_Y + y * TILE_SIZE, texture)
+          .setOrigin(0)
+          .setDepth(0);
+      }
+    }
+  }
+
+  private createObjects(): void {
+    this.currentMap.portals.forEach((portal) => {
+      this.objectGroup
+        ?.add(
+          this.add
+            .image(this.toWorldX(portal.x), this.toWorldY(portal.y), "tile-portal")
+            .setDepth(5)
+            .setAlpha(0.78)
+        );
+    });
+
+    this.currentMap.npcs.forEach((npc) => {
+      this.objectGroup?.add(
+        this.add.image(this.toWorldX(npc.x), this.toWorldY(npc.y), npc.texture).setDepth(12)
+      );
+    });
+
+    this.currentMap.chests.forEach((chest) => {
+      const opened = hasFlag(`${chest.id}-opened`);
+      this.objectGroup?.add(
+        this.add
+          .image(this.toWorldX(chest.x), this.toWorldY(chest.y), opened ? "chest-open" : "chest-closed")
+          .setDepth(11)
+      );
+    });
+
+    this.currentMap.enemies
+      .filter((enemy) => !getSave().defeatedEnemies.includes(enemy.id))
+      .forEach((enemy) => {
+        const texture = enemy.enemyKey === "slime" ? "enemy-slime" : enemy.enemyKey === "goblin" ? "enemy-goblin" : "enemy-guardian";
+        this.objectGroup?.add(
+          this.add.image(this.toWorldX(enemy.x), this.toWorldY(enemy.y), texture).setDepth(11)
+        );
+      });
+  }
+
+  private refreshAfterBattle(): void {
+    this.loadMap(this.currentMap.id, this.playerTile);
+  }
+
+  private handleKeyDown(event: KeyboardEvent): void {
+    if (this.dialogueLines.length > 0 && (event.code === "Space" || event.code === "Enter")) {
+      this.advanceDialogue();
+      return;
+    }
+
+    if (event.code === "Space" || event.code === "Enter") {
+      this.tryInteract();
+    }
+  }
+
+  private getPressedDirection(): Direction | undefined {
+    if (this.cursors?.left.isDown || this.wasd?.A.isDown) {
+      return "left";
+    }
+    if (this.cursors?.right.isDown || this.wasd?.D.isDown) {
+      return "right";
+    }
+    if (this.cursors?.up.isDown || this.wasd?.W.isDown) {
+      return "up";
+    }
+    if (this.cursors?.down.isDown || this.wasd?.S.isDown) {
+      return "down";
+    }
+    return undefined;
+  }
+
+  private tryMove(direction: Direction): void {
+    this.facing = direction;
+    const vector = directionVectors[direction];
+    const target = {
+      x: this.playerTile.x + vector.x,
+      y: this.playerTile.y + vector.y
+    };
+
+    const enemy = this.enemyAt(target);
+    if (enemy) {
+      this.startBattle(enemy);
+      return;
+    }
+
+    if (this.isBlocked(target)) {
+      return;
+    }
+
+    this.moving = true;
+    this.playerTile = target;
+    setPlayerPosition(this.currentMap.id, target.x, target.y);
+    this.tweens.add({
+      targets: this.player,
+      x: this.toWorldX(target.x),
+      y: this.toWorldY(target.y),
+      duration: 125,
+      ease: "Sine.easeInOut",
+      onComplete: () => {
+        this.moving = false;
+        this.checkPortal();
+      }
+    });
+  }
+
+  private tryInteract(): void {
+    if (this.dialogueLines.length > 0 || this.moving) {
+      return;
+    }
+
+    const target = this.frontTile();
+    const npc = this.npcAt(target);
+    if (npc) {
+      this.handleNpc(npc);
+      return;
+    }
+
+    const chest = this.chestAt(target);
+    if (chest) {
+      this.openChest(chest);
+    }
+  }
+
+  private handleNpc(npc: NpcDefinition): void {
+    const dialogue = getNpcDialogue(npc.id);
+    let stateChanged = false;
+
+    if (npc.id === "healer") {
+      const save = getSave();
+      save.potions = Math.min(5, save.potions + 1);
+      healPlayer(save.maxHp);
+      persistSave();
+      stateChanged = true;
+    }
+
+    if (npc.id === "elder" && !hasFlag("questAccepted")) {
+      markFlag("questAccepted");
+      stateChanged = true;
+    }
+
+    if (npc.id === "elder" && hasFlag("treasureFound") && !hasFlag("questComplete")) {
+      const save = getSave();
+      save.gold += 40;
+      markFlag("questComplete");
+      persistSave();
+      stateChanged = true;
+    }
+
+    if (stateChanged) {
+      this.game.events.emit(GAME_EVENTS.stateChanged);
+    }
+
+    this.showDialogue(dialogue);
+  }
+
+  private openChest(chest: ChestDefinition): void {
+    if (hasFlag(`${chest.id}-opened`)) {
+      this.showDialogue(["The chest is empty."]);
+      return;
+    }
+
+    if (!getSave().defeatedEnemies.includes("dungeon-guardian")) {
+      this.showDialogue(["A sealed lock burns with the guardian's crest."]);
+      return;
+    }
+
+    markFlag(`${chest.id}-opened`);
+    markFlag("treasureFound");
+    this.game.events.emit(GAME_EVENTS.stateChanged);
+    this.loadMap(this.currentMap.id, this.playerTile);
+    this.showDialogue(["You found the Sunstone.", "Its warm light points back to Stonebrook."]);
+  }
+
+  private startBattle(enemy: EnemySpawn): void {
+    this.scene.launch("BattleScene", {
+      enemyInstanceId: enemy.id,
+      enemyKey: enemy.enemyKey
+    });
+    this.scene.pause();
+  }
+
+  private checkPortal(): void {
+    const portal = this.currentMap.portals.find(
+      (candidate) => candidate.x === this.playerTile.x && candidate.y === this.playerTile.y
+    );
+
+    if (portal) {
+      this.loadMap(portal.toMap, { x: portal.toX, y: portal.toY });
+    }
+  }
+
+  private isBlocked(position: TilePosition): boolean {
+    const row = this.currentMap.rows[position.y];
+    if (!row || position.x < 0 || position.x >= row.length) {
+      return true;
+    }
+
+    const tile = row[position.x];
+    if (BLOCKING_TILES.has(tile)) {
+      return true;
+    }
+
+    return Boolean(this.npcAt(position) || this.chestAt(position));
+  }
+
+  private enemyAt(position: TilePosition): EnemySpawn | undefined {
+    return this.currentMap.enemies.find(
+      (enemy) =>
+        enemy.x === position.x &&
+        enemy.y === position.y &&
+        !getSave().defeatedEnemies.includes(enemy.id)
+    );
+  }
+
+  private npcAt(position: TilePosition): NpcDefinition | undefined {
+    return this.currentMap.npcs.find((npc) => npc.x === position.x && npc.y === position.y);
+  }
+
+  private chestAt(position: TilePosition): ChestDefinition | undefined {
+    return this.currentMap.chests.find((chest) => chest.x === position.x && chest.y === position.y);
+  }
+
+  private frontTile(): TilePosition {
+    const vector = directionVectors[this.facing];
+    return {
+      x: this.playerTile.x + vector.x,
+      y: this.playerTile.y + vector.y
+    };
+  }
+
+  private showDialogue(lines: string[]): void {
+    this.dialogueLines = lines;
+    this.dialogueIndex = 0;
+    this.dialogueBox?.setVisible(true);
+    this.dialogueText?.setVisible(true);
+    this.dialogueText?.setText(lines[0]);
+  }
+
+  private advanceDialogue(): void {
+    this.dialogueIndex += 1;
+    if (this.dialogueIndex >= this.dialogueLines.length) {
+      this.dialogueLines = [];
+      this.dialogueBox?.setVisible(false);
+      this.dialogueText?.setVisible(false);
+      return;
+    }
+
+    this.dialogueText?.setText(this.dialogueLines[this.dialogueIndex]);
+  }
+
+  private createDialoguePanel(): void {
+    this.dialogueBox = this.add
+      .rectangle(400, 535, 672, 86, 0x17171f, 0.96)
+      .setStrokeStyle(2, 0xd1bb78)
+      .setDepth(40)
+      .setVisible(false);
+    this.dialogueText = this.add
+      .text(96, 504, "", {
+        fontFamily: "Inter, Arial, sans-serif",
+        fontSize: "18px",
+        color: "#fff4cf",
+        wordWrap: { width: 608, useAdvancedWrap: true },
+        lineSpacing: 8
+      })
+      .setDepth(41)
+      .setVisible(false);
+  }
+
+  private getTileTexture(tile: string): string {
+    switch (tile) {
+      case ",":
+      case "S":
+      case "G":
+        return "tile-tall-grass";
+      case "=":
+        return "tile-path";
+      case "~":
+        return "tile-water";
+      case "H":
+        return "tile-house";
+      case "#":
+        return this.currentMap.id === "dungeon" ? "tile-cave" : "tile-tree";
+      case "^":
+      case "C":
+        return "tile-rock";
+      case "O":
+        return "tile-path";
+      case "B":
+      case "D":
+      case "T":
+        return "tile-floor";
+      default:
+        return this.currentMap.id === "dungeon" ? "tile-floor" : "tile-grass";
+    }
+  }
+
+  private toWorldX(tileX: number): number {
+    return MAP_OFFSET_X + tileX * TILE_SIZE + TILE_SIZE / 2;
+  }
+
+  private toWorldY(tileY: number): number {
+    return MAP_OFFSET_Y + tileY * TILE_SIZE + TILE_SIZE / 2;
+  }
+}
