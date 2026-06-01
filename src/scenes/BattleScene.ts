@@ -34,7 +34,7 @@ export class BattleScene extends Phaser.Scene {
 
     this.add.rectangle(400, 320, 800, 640, 0x090b0e, 0.86);
     this.add.rectangle(400, 324, 640, 440, 0x18202a, 0.98).setStrokeStyle(2, 0xd8bc72);
-    this.add.text(116, 124, "Turn Battle", this.textStyle(24, "#f6e4a4"));
+    this.add.text(116, 124, "ターンバトル", this.textStyle(24, "#f6e4a4"));
     this.add.image(560, 218, this.enemy.texture).setScale(3).setDepth(5);
     this.add.image(205, 258, "player").setScale(2.6).setDepth(5);
 
@@ -48,14 +48,19 @@ export class BattleScene extends Phaser.Scene {
 
     this.createButtons();
     this.refreshHud();
-    this.setLog(`${this.enemy.name} blocks your path.`);
+    this.setLog(`${this.enemy.name}が行く手をふさいだ。`);
   }
 
   private createButtons(): void {
-    const labels = ["Attack", "Potion", "Flee"];
-    labels.forEach((label, index) => {
+    const actions = [
+      { label: "攻撃", run: () => this.attack() },
+      { label: "薬草", run: () => this.drinkPotion() },
+      { label: "逃げる", run: () => this.flee() }
+    ];
+
+    actions.forEach((action, index) => {
       const button = this.add
-        .text(116 + index * 154, 470, label, {
+        .text(116 + index * 154, 470, action.label, {
           ...this.textStyle(19, "#101820"),
           backgroundColor: "#f2d27a",
           padding: { x: 18, y: 10 },
@@ -63,15 +68,7 @@ export class BattleScene extends Phaser.Scene {
           align: "center"
         })
         .setInteractive({ useHandCursor: true })
-        .on("pointerdown", () => {
-          if (label === "Attack") {
-            this.attack();
-          } else if (label === "Potion") {
-            this.drinkPotion();
-          } else {
-            this.flee();
-          }
-        });
+        .on("pointerdown", action.run);
       this.buttons.push(button);
     });
   }
@@ -91,7 +88,7 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    this.setLog(`You strike for ${damage}.`);
+    this.setLog(`${damage}のダメージを与えた。`);
     this.endPlayerTurn();
   }
 
@@ -101,12 +98,12 @@ export class BattleScene extends Phaser.Scene {
     }
 
     if (!usePotion()) {
-      this.setLog("No useful potion remains.");
+      this.setLog("使える薬草がない。");
       this.refreshHud();
       return;
     }
 
-    this.setLog("You drink a potion.");
+    this.setLog("薬草で傷を癒した。");
     this.refreshHud();
     this.endPlayerTurn();
   }
@@ -117,17 +114,17 @@ export class BattleScene extends Phaser.Scene {
     }
 
     if (this.enemy.boss) {
-      this.setLog("The guardian seals the exit.");
+      this.setLog("守護者が退路を封じている。");
       this.endPlayerTurn();
       return;
     }
 
     if (Phaser.Math.Between(1, 100) <= 70) {
-      this.closeBattle("You slip away.");
+      this.closeBattle("うまく逃げ切った。");
       return;
     }
 
-    this.setLog("You fail to escape.");
+    this.setLog("逃げられなかった。");
     this.endPlayerTurn();
   }
 
@@ -147,25 +144,25 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    this.setLog(`${this.enemy.name} hits for ${damage}.`);
+    this.setLog(`${this.enemy.name}の攻撃。${damage}のダメージを受けた。`);
     this.time.delayedCall(700, () => {
       this.playerTurn = true;
       this.setButtonsEnabled(true);
-      this.setLog("Your turn.");
+      this.setLog("あなたの番だ。");
     });
   }
 
   private winBattle(lastDamage: number): void {
     markEnemyDefeated(this.enemyInstanceId);
     const reward = grantReward(this.enemy.exp, this.enemy.gold);
-    const levelText = reward.leveledUp ? " Level up!" : "";
+    const levelText = reward.leveledUp ? " レベルアップ！" : "";
     this.setLog(
-      `You strike for ${lastDamage}. ${this.enemy.name} falls. +${this.enemy.exp} EXP, +${this.enemy.gold} gold.${levelText}`
+      `${lastDamage}のダメージを与えた。${this.enemy.name}を倒した。EXP +${this.enemy.exp}、G +${this.enemy.gold}。${levelText}`
     );
     this.refreshHud();
     this.game.events.emit(GAME_EVENTS.stateChanged);
     this.setButtonsEnabled(false);
-    this.time.delayedCall(1200, () => this.closeBattle("Victory"));
+    this.time.delayedCall(1200, () => this.closeBattle("勝利"));
   }
 
   private loseBattle(lastDamage: number): void {
@@ -173,7 +170,9 @@ export class BattleScene extends Phaser.Scene {
     save.hp = Math.ceil(save.maxHp * 0.6);
     save.gold = Math.floor(save.gold * 0.8);
     persistSave();
-    this.setLog(`${this.enemy.name} hits for ${lastDamage}. You wake up in Stonebrook.`);
+    this.setLog(
+      `${this.enemy.name}の攻撃。${lastDamage}のダメージを受けた。気がつくとストーンブルック村に戻っていた。`
+    );
     this.setButtonsEnabled(false);
     this.time.delayedCall(1400, () => {
       setPlayerPosition("village", 9, 6);
@@ -193,7 +192,7 @@ export class BattleScene extends Phaser.Scene {
 
   private refreshHud(): void {
     const save = getSave();
-    this.playerHpText?.setText(`Hero HP ${save.hp}/${save.maxHp}  Potions ${save.potions}`);
+    this.playerHpText?.setText(`勇者 HP ${save.hp}/${save.maxHp}  薬草 ${save.potions}`);
     this.enemyHpText?.setText(`${this.enemy.name} HP ${this.enemyHp}/${this.enemy.maxHp}`);
   }
 
@@ -214,7 +213,7 @@ export class BattleScene extends Phaser.Scene {
 
   private textStyle(size: number, color: string): Phaser.Types.GameObjects.Text.TextStyle {
     return {
-      fontFamily: "Inter, Arial, sans-serif",
+      fontFamily: '"Yu Gothic", Meiryo, "Hiragino Sans", "Noto Sans JP", sans-serif',
       fontSize: `${size}px`,
       color
     };

@@ -3,7 +3,7 @@ import type { EnemyDefinition } from "../game/types";
 export const ENEMIES: Record<string, EnemyDefinition> = {
   slime: {
     key: "slime",
-    name: "Meadow Slime",
+    name: "草原スライム",
     maxHp: 16,
     attack: 4,
     exp: 4,
@@ -12,7 +12,7 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
   },
   goblin: {
     key: "goblin",
-    name: "Cave Goblin",
+    name: "洞窟ゴブリン",
     maxHp: 24,
     attack: 6,
     exp: 7,
@@ -21,7 +21,7 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
   },
   guardian: {
     key: "guardian",
-    name: "Relic Guardian",
+    name: "太陽石の守護者",
     maxHp: 38,
     attack: 8,
     exp: 14,

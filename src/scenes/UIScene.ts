@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { MAPS } from "../data/maps";
 import { GAME_EVENTS } from "../game/constants";
 import { getSave } from "../game/GameState";
 import { getObjective } from "../data/dialogues";
@@ -43,9 +44,10 @@ export class UIScene extends Phaser.Scene {
     const save = getSave();
     this.hpText?.setText(`HP ${save.hp}/${save.maxHp}`);
     this.statsText?.setText(
-      `Lv ${save.level}  ATK ${save.attack}  Potions ${save.potions}  Gold ${save.gold}`
+      `Lv ${save.level}  攻撃 ${save.attack}  薬草 ${save.potions}  G ${save.gold}`
     );
     this.objectiveText?.setText(getObjective());
+    this.mapText?.setText(MAPS[save.mapId].name);
   }
 
   private setMapName(mapName: string): void {
@@ -62,7 +64,7 @@ export class UIScene extends Phaser.Scene {
 
   private textStyle(size: number, color: string): Phaser.Types.GameObjects.Text.TextStyle {
     return {
-      fontFamily: "Inter, Arial, sans-serif",
+      fontFamily: '"Yu Gothic", Meiryo, "Hiragino Sans", "Noto Sans JP", sans-serif',
       fontSize: `${size}px`,
       color
     };

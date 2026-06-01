@@ -4,55 +4,55 @@ export function getNpcDialogue(npcId: string): string[] {
   if (npcId === "elder") {
     if (hasFlag("questComplete")) {
       return [
-        "Elder Rowan: Stonebrook is safe again.",
-        "Elder Rowan: Keep the road in your heart, young hero."
+        "村長ローアン: ストーンブルックはもう安全だ。",
+        "村長ローアン: 若き勇者よ、その旅路を胸に刻んでおくれ。"
       ];
     }
 
     if (hasFlag("treasureFound")) {
       return [
-        "Elder Rowan: The Sunstone is back in our hands.",
-        "Elder Rowan: Take this gold and our thanks.",
-        "The village bell rings clear across the valley."
+        "村長ローアン: 太陽石を取り戻してくれたのだな。",
+        "村長ローアン: この金貨と、村の感謝を受け取っておくれ。",
+        "村の鐘が谷いっぱいに澄んだ音を響かせた。"
       ];
     }
 
     if (hasFlag("questAccepted")) {
       return [
-        "Elder Rowan: The cave lies beyond the moonlit field.",
-        "Elder Rowan: Bring back the Sunstone before the shadows stir."
+        "村長ローアン: 洞窟は月明かりの草原の先にある。",
+        "村長ローアン: 影が濃くなる前に、太陽石を持ち帰っておくれ。"
       ];
     }
 
     return [
-      "Elder Rowan: A relic called the Sunstone sleeps in Emberfall Cave.",
-      "Elder Rowan: Will you retrieve it for Stonebrook?",
-      "Quest started: Find the Sunstone."
+      "村長ローアン: エンバーフォール洞窟には、太陽石という古い秘宝が眠っている。",
+      "村長ローアン: ストーンブルックのために、取り戻してくれるか？",
+      "クエスト開始: 太陽石を探す"
     ];
   }
 
   if (npcId === "healer") {
     return [
-      "Mira: Let me mend your wounds.",
-      "Mira: I tucked an extra potion into your pack."
+      "ミラ: 傷を癒しましょう。",
+      "ミラ: 予備の薬草も荷物に入れておきました。"
     ];
   }
 
-  return ["There is no answer."];
+  return ["返事はない。"];
 }
 
 export function getObjective(): string {
   if (hasFlag("questComplete")) {
-    return "Quest complete";
+    return "クエスト完了";
   }
 
   if (hasFlag("treasureFound")) {
-    return "Return to Elder Rowan";
+    return "村長ローアンに報告する";
   }
 
   if (hasFlag("questAccepted")) {
-    return "Recover the Sunstone";
+    return "太陽石を取り戻す";
   }
 
-  return "Speak with Elder Rowan";
+  return "村長ローアンと話す";
 }

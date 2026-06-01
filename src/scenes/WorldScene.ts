@@ -76,7 +76,7 @@ export class WorldScene extends Phaser.Scene {
     if (this.resetKey && Phaser.Input.Keyboard.JustDown(this.resetKey)) {
       resetSave();
       this.loadMap("village", MAPS.village.spawn);
-      this.game.events.emit(GAME_EVENTS.toast, "New adventure");
+      this.game.events.emit(GAME_EVENTS.toast, "新しい冒険");
       this.game.events.emit(GAME_EVENTS.stateChanged);
       return;
     }
@@ -273,12 +273,12 @@ export class WorldScene extends Phaser.Scene {
 
   private openChest(chest: ChestDefinition): void {
     if (hasFlag(`${chest.id}-opened`)) {
-      this.showDialogue(["The chest is empty."]);
+      this.showDialogue(["宝箱は空だ。"]);
       return;
     }
 
     if (!getSave().defeatedEnemies.includes("dungeon-guardian")) {
-      this.showDialogue(["A sealed lock burns with the guardian's crest."]);
+      this.showDialogue(["守護者の紋章が刻まれた封印で開かない。"]);
       return;
     }
 
@@ -286,7 +286,10 @@ export class WorldScene extends Phaser.Scene {
     markFlag("treasureFound");
     this.game.events.emit(GAME_EVENTS.stateChanged);
     this.loadMap(this.currentMap.id, this.playerTile);
-    this.showDialogue(["You found the Sunstone.", "Its warm light points back to Stonebrook."]);
+    this.showDialogue([
+      "太陽石を手に入れた。",
+      "あたたかな光がストーンブルックへの帰路を照らしている。"
+    ]);
   }
 
   private startBattle(enemy: EnemySpawn): void {
@@ -374,7 +377,7 @@ export class WorldScene extends Phaser.Scene {
       .setVisible(false);
     this.dialogueText = this.add
       .text(96, 504, "", {
-        fontFamily: "Inter, Arial, sans-serif",
+        fontFamily: '"Yu Gothic", Meiryo, "Hiragino Sans", "Noto Sans JP", sans-serif',
         fontSize: "18px",
         color: "#fff4cf",
         wordWrap: { width: 608, useAdvancedWrap: true },

@@ -3,7 +3,7 @@ import type { MapDefinition } from "../game/types";
 export const MAPS: Record<string, MapDefinition> = {
   village: {
     id: "village",
-    name: "Stonebrook Village",
+    name: "ストーンブルック村",
     spawn: { x: 9, y: 6 },
     rows: [
       "####################",
@@ -24,15 +24,15 @@ export const MAPS: Record<string, MapDefinition> = {
     ],
     portals: [{ x: 10, y: 13, toMap: "field", toX: 10, toY: 1 }],
     npcs: [
-      { id: "elder", name: "Elder Rowan", texture: "npc-elder", x: 3, y: 4 },
-      { id: "healer", name: "Mira", texture: "npc-healer", x: 15, y: 5 }
+      { id: "elder", name: "村長ローアン", texture: "npc-elder", x: 3, y: 4 },
+      { id: "healer", name: "ミラ", texture: "npc-healer", x: 15, y: 5 }
     ],
     chests: [],
     enemies: []
   },
   field: {
     id: "field",
-    name: "Moonlit Field",
+    name: "月明かりの草原",
     spawn: { x: 10, y: 1 },
     rows: [
       "####################",
@@ -66,7 +66,7 @@ export const MAPS: Record<string, MapDefinition> = {
   },
   dungeon: {
     id: "dungeon",
-    name: "Emberfall Cave",
+    name: "エンバーフォール洞窟",
     spawn: { x: 1, y: 1 },
     rows: [
       "####################",
