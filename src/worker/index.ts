@@ -1,6 +1,6 @@
 import { generateDungeon } from "../data/dungeonGenerator";
 import { DUNGEON_ENEMY_KEYS, isDungeonEnemyKey, type DungeonEnemyKey } from "../data/enemies";
-import type { EnemySpawn, MapDefinition, PortalDefinition, TilePosition } from "../game/types";
+import type { ChestReward, EnemySpawn, MapDefinition, PortalDefinition, TilePosition } from "../game/types";
 
 interface Env {
   ASSETS: {
@@ -165,6 +165,7 @@ async function generateGroqDungeon(env: Env, context: DungeonRequest): Promise<M
             "rows must be exactly 15 strings, each exactly 20 characters.",
             "Allowed row characters: # wall, . floor, ~ water, U up stairs, V down stairs, B relic chest, D guardian floor.",
             "The outer border must be #. Put U at x=1,y=1.",
+            "The server will add one supply chest automatically. Only place B when this floor needs the final relic chest.",
             isFinalFloor
               ? "This is the final floor. Put one B chest and one D guardian near the deeper side of the dungeon. Do not place V."
               : "This is not the final floor. Put one V down stairs near the deeper side of the dungeon. Do not place B or D.",
@@ -306,7 +307,18 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
     });
   }
 
+  const supplyChest = findOpenFloorNear(
+    rows,
+    { x: 5 + (context.floor % 3) * 3, y: 6 + (context.floor % 2) * 4 },
+    reserved
+  );
+  if (!supplyChest) {
+    return undefined;
+  }
+  reserved.add(positionKey(supplyChest));
+
   rows[spawn.y][spawn.x] = "U";
+  rows[supplyChest.y][supplyChest.x] = "B";
   if (chest) {
     rows[chest.y][chest.x] = "B";
   }
@@ -318,6 +330,11 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
   }
 
   let chestAccessTiles: TilePosition[] = [];
+  let supplyChestAccessTiles = ensureChestAccess(rows, supplyChest);
+  if (supplyChestAccessTiles.length === 0) {
+    return undefined;
+  }
+
   if (chest && guardian) {
     chestAccessTiles = ensureChestAccess(rows, chest, guardian);
     if (chestAccessTiles.length === 0) {
@@ -329,11 +346,13 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
     ...(guardian ? [guardian] : []),
     ...(downStairs ? [downStairs] : []),
     ...regularEnemies,
+    ...supplyChestAccessTiles,
     ...chestAccessTiles
   ];
   if (!canReachAll(rows, spawn, requiredTiles)) {
     requiredTiles.forEach((target) => carveCorridor(rows, spawn, target));
     rows[spawn.y][spawn.x] = "U";
+    rows[supplyChest.y][supplyChest.x] = "B";
     if (chest) {
       rows[chest.y][chest.x] = "B";
     }
@@ -346,6 +365,7 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
     if (chest && guardian) {
       chestAccessTiles = ensureChestAccess(rows, chest, guardian);
     }
+    supplyChestAccessTiles = ensureChestAccess(rows, supplyChest);
   }
 
   if (!canReachAll(rows, spawn, requiredTiles)) {
@@ -361,7 +381,24 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
     rows: rows.map((row) => row.join("")),
     portals,
     npcs: [],
-    chests: chest ? [{ id: "relic-chest", x: chest.x, y: chest.y }] : [],
+    chests: [
+      {
+        id: `dungeon-b${context.floor}-supply-chest`,
+        x: supplyChest.x,
+        y: supplyChest.y,
+        reward: pickSupplyChestReward(context.floor, context.floorCount)
+      },
+      ...(chest
+        ? [
+            {
+              id: "relic-chest",
+              x: chest.x,
+              y: chest.y,
+              reward: { type: "relic" } as const
+            }
+          ]
+        : [])
+    ],
     enemies: [
       ...regularEnemies.map((enemy, index) => ({
         id: `dungeon-b${context.floor}-${enemy.enemyKey}-${index + 1}`,
@@ -549,7 +586,7 @@ function sanitizeTile(tile: string): string {
 function ensureChestAccess(
   grid: string[][],
   chest: TilePosition,
-  guardian: TilePosition
+  blocked?: TilePosition
 ): TilePosition[] {
   let accessTiles = adjacentTiles(chest).filter((position) =>
     isWalkableForGeneration(grid, position)
@@ -562,7 +599,7 @@ function ensureChestAccess(
   const repairTile = adjacentTiles(chest).find(
     (position) =>
       isPlayable(position) &&
-      !(position.x === guardian.x && position.y === guardian.y)
+      !(blocked && position.x === blocked.x && position.y === blocked.y)
   );
   if (repairTile) {
     grid[repairTile.y][repairTile.x] = ".";
@@ -572,6 +609,17 @@ function ensureChestAccess(
     isWalkableForGeneration(grid, position)
   );
   return accessTiles;
+}
+
+function pickSupplyChestReward(floor: number, floorCount: number): ChestReward {
+  const depth = floor / floorCount;
+  if (depth < 0.34) {
+    return { type: "item", itemId: "herb", quantity: floor === 1 ? 1 : 2 };
+  }
+  if (depth < 0.74) {
+    return { type: "item", itemId: "strongHerb", quantity: 1 };
+  }
+  return { type: "item", itemId: "magicWater", quantity: 1 };
 }
 
 function carveCorridor(grid: string[][], from: TilePosition, to: TilePosition): void {

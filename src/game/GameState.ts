@@ -1,5 +1,6 @@
+import { getItemHealAmount, isItemId, ITEM_ORDER } from "../data/items";
 import { SAVE_KEY } from "./constants";
-import type { GameSave, MapDefinition, MapId } from "./types";
+import type { GameSave, Inventory, ItemId, MapDefinition, MapId } from "./types";
 
 const MIN_DUNGEON_FLOORS = 3;
 const MAX_DUNGEON_FLOORS = 5;
@@ -15,6 +16,7 @@ export const initialSave = (): GameSave => ({
   exp: 0,
   gold: 0,
   potions: 2,
+  items: { herb: 2 },
   flags: {},
   defeatedEnemies: []
 });
@@ -29,9 +31,12 @@ function loadSave(): GameSave {
     }
 
     const parsed = JSON.parse(raw) as Partial<GameSave>;
+    const items = normalizeInventory(parsed.items, parsed.potions);
     return {
       ...initialSave(),
       ...parsed,
+      items,
+      potions: items.herb ?? 0,
       flags: parsed.flags ?? {},
       defeatedEnemies: parsed.defeatedEnemies ?? [],
       generatedDungeonFloors: parsed.generatedDungeonFloors ?? undefined
@@ -46,6 +51,7 @@ export function getSave(): GameSave {
 }
 
 export function persistSave(): void {
+  syncLegacyPotionCount();
   localStorage.setItem(SAVE_KEY, JSON.stringify(save));
 }
 
@@ -131,15 +137,53 @@ export function damagePlayer(amount: number): void {
   persistSave();
 }
 
-export function usePotion(): boolean {
-  if (save.potions <= 0 || save.hp >= save.maxHp) {
-    return false;
+export interface UseItemResult {
+  used: boolean;
+  healed: number;
+  reason?: "full-hp" | "no-item" | "unknown-item";
+}
+
+export function getItemCount(itemId: ItemId): number {
+  ensureInventory();
+  return save.items[itemId] ?? 0;
+}
+
+export function getTotalItemCount(): number {
+  ensureInventory();
+  return ITEM_ORDER.reduce((total, itemId) => total + (save.items[itemId] ?? 0), 0);
+}
+
+export function addItem(itemId: ItemId, quantity = 1): number {
+  ensureInventory();
+  const nextCount = Math.max(0, (save.items[itemId] ?? 0) + quantity);
+  save.items[itemId] = nextCount;
+  persistSave();
+  return nextCount;
+}
+
+export function useItem(itemId: ItemId): UseItemResult {
+  if (!isItemId(itemId)) {
+    return { used: false, healed: 0, reason: "unknown-item" };
   }
 
-  save.potions -= 1;
-  healPlayer(16);
+  ensureInventory();
+  if ((save.items[itemId] ?? 0) <= 0) {
+    return { used: false, healed: 0, reason: "no-item" };
+  }
+
+  if (save.hp >= save.maxHp) {
+    return { used: false, healed: 0, reason: "full-hp" };
+  }
+
+  const before = save.hp;
+  save.hp = Math.min(save.maxHp, save.hp + getItemHealAmount(itemId, save.maxHp));
+  save.items[itemId] = Math.max(0, (save.items[itemId] ?? 0) - 1);
   persistSave();
-  return true;
+  return { used: true, healed: save.hp - before };
+}
+
+export function usePotion(): boolean {
+  return useItem("herb").used;
 }
 
 export function markFlag(flag: string): void {
@@ -186,4 +230,34 @@ function randomInt(min: number, max: number): number {
 
 function clampFloor(floor: number, floorCount: number): number {
   return Math.min(floorCount, Math.max(1, floor));
+}
+
+function ensureInventory(): void {
+  if (!save.items) {
+    save.items = normalizeInventory(undefined, save.potions);
+  }
+}
+
+function normalizeInventory(items: unknown, legacyPotions?: number): Inventory {
+  const inventory: Inventory = {};
+  if (items && typeof items === "object") {
+    const rawItems = items as Record<string, unknown>;
+    ITEM_ORDER.forEach((itemId) => {
+      const count = rawItems[itemId];
+      if (typeof count === "number" && Number.isFinite(count) && count > 0) {
+        inventory[itemId] = Math.floor(count);
+      }
+    });
+  }
+
+  if (inventory.herb === undefined && typeof legacyPotions === "number" && legacyPotions > 0) {
+    inventory.herb = Math.floor(legacyPotions);
+  }
+
+  return inventory;
+}
+
+function syncLegacyPotionCount(): void {
+  ensureInventory();
+  save.potions = save.items.herb ?? 0;
 }

@@ -31,7 +31,23 @@ export interface NpcDefinition extends TilePosition {
 
 export interface ChestDefinition extends TilePosition {
   id: string;
+  reward?: ChestReward;
 }
+
+export type ItemId = "herb" | "strongHerb" | "magicWater";
+export type Inventory = Partial<Record<ItemId, number>>;
+
+export interface ItemReward {
+  type: "item";
+  itemId: ItemId;
+  quantity: number;
+}
+
+export interface RelicReward {
+  type: "relic";
+}
+
+export type ChestReward = ItemReward | RelicReward;
 
 export interface PortalDefinition extends TilePosition {
   toMap: MapId;
@@ -65,6 +81,7 @@ export interface GameSave {
   exp: number;
   gold: number;
   potions: number;
+  items: Inventory;
   flags: Record<string, boolean>;
   defeatedEnemies: string[];
   generatedDungeon?: MapDefinition;

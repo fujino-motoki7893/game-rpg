@@ -3,6 +3,7 @@ import { ENEMIES } from "../data/enemies";
 import { GAME_EVENTS } from "../game/constants";
 import {
   damagePlayer,
+  getItemCount,
   getSave,
   grantReward,
   markEnemyDefeated,
@@ -261,7 +262,7 @@ export class BattleScene extends Phaser.Scene {
 
   private refreshHud(): void {
     const save = getSave();
-    this.playerHpText?.setText(`勇者 HP ${save.hp}/${save.maxHp}  薬草 ${save.potions}`);
+    this.playerHpText?.setText(`勇者 HP ${save.hp}/${save.maxHp}  薬草 ${getItemCount("herb")}`);
     this.enemyHpText?.setText(`${this.enemy.name} HP ${this.enemyHp}/${this.enemy.maxHp}`);
     this.playerHpFill?.setDisplaySize(184 * Phaser.Math.Clamp(save.hp / save.maxHp, 0, 1), 6);
     this.enemyHpFill?.setDisplaySize(

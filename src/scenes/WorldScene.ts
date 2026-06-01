@@ -2,11 +2,14 @@ import Phaser from "phaser";
 import { getNpcDialogue } from "../data/dialogues";
 import { createDungeon } from "../data/dungeonService";
 import { ENEMIES } from "../data/enemies";
+import { ITEMS } from "../data/items";
 import { BLOCKING_TILES, MAPS } from "../data/maps";
 import { GAME_EVENTS, MAP_OFFSET_X, MAP_OFFSET_Y, TILE_SIZE } from "../game/constants";
 import {
+  addItem,
   ensureDungeonProgress,
   getGeneratedDungeonFloor,
+  getItemCount,
   getSave,
   hasFlag,
   healPlayer,
@@ -149,7 +152,7 @@ export class WorldScene extends Phaser.Scene {
 
     const { floorCount, currentFloor } = ensureDungeonProgress();
     const generatedDungeon = getGeneratedDungeonFloor(currentFloor);
-    if (generatedDungeon) {
+    if (generatedDungeon && this.hasSupplyChest(generatedDungeon)) {
       return generatedDungeon;
     }
 
@@ -367,10 +370,10 @@ export class WorldScene extends Phaser.Scene {
     let stateChanged = false;
 
     if (npc.id === "healer") {
-      const save = getSave();
-      save.potions = Math.min(5, save.potions + 1);
-      healPlayer(save.maxHp);
-      persistSave();
+      if (getItemCount("herb") < 5) {
+        addItem("herb", 1);
+      }
+      healPlayer(getSave().maxHp);
       stateChanged = true;
     }
 
@@ -400,19 +403,37 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
 
-    if (!getSave().defeatedEnemies.includes("dungeon-guardian")) {
+    const isRelicChest = chest.reward?.type === "relic" || chest.id === "relic-chest";
+    if (isRelicChest && !getSave().defeatedEnemies.includes("dungeon-guardian")) {
       this.showDialogue(["守護者の紋章が刻まれた封印で開かない。"]);
       return;
     }
 
     markFlag(`${chest.id}-opened`);
-    markFlag("treasureFound");
+    if (isRelicChest) {
+      markFlag("treasureFound");
+      this.game.events.emit(GAME_EVENTS.stateChanged);
+      await this.loadMap(this.currentMap.id, this.playerTile);
+      this.showDialogue([
+        "太陽石を手に入れた。",
+        "あたたかな光がストーンブルックへの帰路を照らしている。"
+      ]);
+      return;
+    }
+
+    if (chest.reward?.type === "item") {
+      const item = ITEMS[chest.reward.itemId];
+      addItem(chest.reward.itemId, chest.reward.quantity);
+      this.game.events.emit(GAME_EVENTS.stateChanged);
+      await this.loadMap(this.currentMap.id, this.playerTile);
+      const quantityText = chest.reward.quantity > 1 ? ` x${chest.reward.quantity}` : "";
+      this.showDialogue(["宝箱を開けた。", `${item.name}${quantityText}を手に入れた。`]);
+      return;
+    }
+
     this.game.events.emit(GAME_EVENTS.stateChanged);
     await this.loadMap(this.currentMap.id, this.playerTile);
-    this.showDialogue([
-      "太陽石を手に入れた。",
-      "あたたかな光がストーンブルックへの帰路を照らしている。"
-    ]);
+    this.showDialogue(["宝箱を開けた。"]);
   }
 
   private startBattle(enemy: EnemySpawn): void {
@@ -584,5 +605,9 @@ export class WorldScene extends Phaser.Scene {
 
   private toWorldY(tileY: number): number {
     return MAP_OFFSET_Y + tileY * TILE_SIZE + TILE_SIZE / 2;
+  }
+
+  private hasSupplyChest(map: MapDefinition): boolean {
+    return map.chests.some((chest) => chest.reward?.type === "item");
   }
 }

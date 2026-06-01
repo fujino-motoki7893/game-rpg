@@ -1,7 +1,14 @@
 import Phaser from "phaser";
+import { ITEM_ORDER, ITEMS } from "../data/items";
 import { MAPS } from "../data/maps";
 import { GAME_EVENTS } from "../game/constants";
-import { getCurrentDungeonFloor, getDungeonFloorCount, getSave, usePotion } from "../game/GameState";
+import {
+  getCurrentDungeonFloor,
+  getDungeonFloorCount,
+  getItemCount,
+  getSave,
+  useItem
+} from "../game/GameState";
 
 type MenuTab = "items" | "status";
 
@@ -13,6 +20,7 @@ const TAB_LABELS: Record<MenuTab, string> = {
 
 export class MenuScene extends Phaser.Scene {
   private activeTab: MenuTab = "items";
+  private selectedItemIndex = 0;
   private tabButtons: Partial<Record<MenuTab, Phaser.GameObjects.Text>> = {};
   private contentObjects: Phaser.GameObjects.GameObject[] = [];
   private messageText?: Phaser.GameObjects.Text;
@@ -23,6 +31,7 @@ export class MenuScene extends Phaser.Scene {
 
   create(): void {
     this.activeTab = "items";
+    this.selectedItemIndex = 0;
     this.contentObjects = [];
     this.tabButtons = {};
 
@@ -99,40 +108,56 @@ export class MenuScene extends Phaser.Scene {
 
   private renderItems(): void {
     const save = getSave();
-    const canUsePotion = save.potions > 0 && save.hp < save.maxHp;
+    const selectedItem = ITEM_ORDER[this.selectedItemIndex];
+    const canUseSelected = getItemCount(selectedItem) > 0 && save.hp < save.maxHp;
+
+    ITEM_ORDER.forEach((itemId, index) => {
+      const item = ITEMS[itemId];
+      const selected = index === this.selectedItemIndex;
+      const count = getItemCount(itemId);
+      const y = 232 + index * 56;
+      const row = this.add
+        .rectangle(388, y + 15, 468, 46, selected ? 0x263442 : 0x111a24, selected ? 0.95 : 0.58)
+        .setStrokeStyle(selected ? 2 : 1, selected ? 0xd8bc72 : 0x34475a, selected ? 0.9 : 0.45)
+        .setDepth(101)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerdown", () => this.selectItem(index));
+      this.addContent(row);
+      this.addContent(
+        this.add
+          .text(164, y, selected ? ">" : "", this.textStyle(18, "#f6e4a4"))
+          .setDepth(102)
+      );
+      this.addContent(
+        this.add.text(190, y, item.name, this.textStyle(19, "#fff4cf")).setDepth(102)
+      );
+      this.addContent(
+        this.add.text(330, y, `x${count}`, this.textStyle(18, "#d9e5ef")).setDepth(102)
+      );
+      this.addContent(
+        this.add.text(404, y, item.description, this.textStyle(15, "#9fb4c6")).setDepth(102)
+      );
+    });
 
     this.addContent(
-      this.add.text(154, 232, "薬草", this.textStyle(21, "#fff4cf")).setDepth(102)
-    );
-    this.addContent(
       this.add
-        .text(154, 270, `所持数 ${save.potions}`, this.textStyle(18, "#d9e5ef"))
-        .setDepth(102)
-    );
-    this.addContent(
-      this.add
-        .text(154, 306, "HPを16回復する", this.textStyle(17, "#9fb4c6"))
-        .setDepth(102)
-    );
-    this.addContent(
-      this.add
-        .text(154, 354, `現在HP ${save.hp}/${save.maxHp}`, this.textStyle(18, "#f4df7e"))
+        .text(154, 416, `現在HP ${save.hp}/${save.maxHp}`, this.textStyle(18, "#f4df7e"))
         .setDepth(102)
     );
 
     const useButton = this.add
-      .text(530, 266, "使う", {
-        ...this.textStyle(18, canUsePotion ? "#101820" : "#2a3036"),
-        backgroundColor: canUsePotion ? "#f2d27a" : "#66707a",
+      .text(530, 412, "使う", {
+        ...this.textStyle(18, canUseSelected ? "#101820" : "#2a3036"),
+        backgroundColor: canUseSelected ? "#f2d27a" : "#66707a",
         padding: { x: 18, y: 10 },
         fixedWidth: 92,
         align: "center"
       })
-      .setAlpha(canUsePotion ? 1 : 0.58)
+      .setAlpha(canUseSelected ? 1 : 0.58)
       .setDepth(102);
 
-    if (canUsePotion) {
-      useButton.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.useHerb());
+    if (canUseSelected) {
+      useButton.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.useSelectedItem());
     }
     this.addContent(useButton);
   }
@@ -160,10 +185,18 @@ export class MenuScene extends Phaser.Scene {
     });
   }
 
-  private useHerb(): void {
+  private selectItem(index: number): void {
+    this.selectedItemIndex = Phaser.Math.Clamp(index, 0, ITEM_ORDER.length - 1);
+    this.setMessage("");
+    this.renderContent();
+  }
+
+  private useSelectedItem(): void {
+    const itemId = ITEM_ORDER[this.selectedItemIndex];
+    const item = ITEMS[itemId];
     const save = getSave();
-    if (save.potions <= 0) {
-      this.setMessage("薬草を持っていない。");
+    if (getItemCount(itemId) <= 0) {
+      this.setMessage(`${item.name}を持っていない。`);
       return;
     }
 
@@ -172,13 +205,13 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
-    const healed = Math.min(16, save.maxHp - save.hp);
-    if (!usePotion()) {
-      this.setMessage("薬草を使えなかった。");
+    const result = useItem(itemId);
+    if (!result.used) {
+      this.setMessage(`${item.name}を使えなかった。`);
       return;
     }
 
-    this.setMessage(`薬草でHPを${healed}回復した。`);
+    this.setMessage(`${item.name}でHPを${result.healed}回復した。`);
     this.game.events.emit(GAME_EVENTS.stateChanged);
     this.renderContent();
   }
@@ -189,18 +222,28 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
-    if (event.code === "ArrowLeft" || event.code === "ArrowUp") {
+    if (event.code === "ArrowLeft") {
       this.moveTab(-1);
       return;
     }
 
-    if (event.code === "ArrowRight" || event.code === "ArrowDown") {
+    if (event.code === "ArrowRight") {
       this.moveTab(1);
       return;
     }
 
+    if (this.activeTab === "items" && event.code === "ArrowUp") {
+      this.moveSelectedItem(-1);
+      return;
+    }
+
+    if (this.activeTab === "items" && event.code === "ArrowDown") {
+      this.moveSelectedItem(1);
+      return;
+    }
+
     if ((event.code === "Space" || event.code === "Enter") && this.activeTab === "items") {
-      this.useHerb();
+      this.useSelectedItem();
     }
   }
 
@@ -208,6 +251,16 @@ export class MenuScene extends Phaser.Scene {
     const currentIndex = TABS.indexOf(this.activeTab);
     const nextIndex = Phaser.Math.Wrap(currentIndex + direction, 0, TABS.length);
     this.selectTab(TABS[nextIndex]);
+  }
+
+  private moveSelectedItem(direction: number): void {
+    this.selectedItemIndex = Phaser.Math.Wrap(
+      this.selectedItemIndex + direction,
+      0,
+      ITEM_ORDER.length
+    );
+    this.setMessage("");
+    this.renderContent();
   }
 
   private updateTabs(): void {

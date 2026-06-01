@@ -1,5 +1,11 @@
 import { DUNGEON_ENEMY_KEYS, type DungeonEnemyKey } from "./enemies";
-import type { EnemySpawn, MapDefinition, PortalDefinition, TilePosition } from "../game/types";
+import type {
+  ChestReward,
+  EnemySpawn,
+  MapDefinition,
+  PortalDefinition,
+  TilePosition
+} from "../game/types";
 
 const WIDTH = 20;
 const HEIGHT = 15;
@@ -95,14 +101,14 @@ export function generateDungeon(
   const requiredTiles: TilePosition[] = [spawn];
   const endCenter = roomCenter(endRoom);
 
-  let chest: TilePosition | undefined;
+  let relicChest: TilePosition | undefined;
   let guardian: TilePosition | undefined;
   if (isFinalFloor) {
-    chest = { x: endCenter.x, y: Math.max(endRoom.y + 1, endCenter.y - 1) };
-    placeMarker(grid, chest, "B");
-    reserved.add(positionKey(chest));
+    relicChest = { x: endCenter.x, y: Math.max(endRoom.y + 1, endCenter.y - 1) };
+    placeMarker(grid, relicChest, "B");
+    reserved.add(positionKey(relicChest));
 
-    guardian = findOpenFloorNear(grid, { x: chest.x, y: chest.y + 1 }, reserved);
+    guardian = findOpenFloorNear(grid, { x: relicChest.x, y: relicChest.y + 1 }, reserved);
     placeMarker(grid, guardian, "D");
     reserved.add(positionKey(guardian));
     requiredTiles.push(guardian);
@@ -151,12 +157,17 @@ export function generateDungeon(
     });
   }
 
-  if (chest) {
-    const chestAccessTiles = adjacentTiles(chest).filter((position) =>
-      isWalkableForGeneration(grid, position)
-    );
-    chestAccessTiles.forEach((position) => reserved.add(positionKey(position)));
-    requiredTiles.push(...chestAccessTiles);
+  const supplyChest = findOpenFloorNear(
+    grid,
+    roomCenter(midRooms[(floor - 1) % midRooms.length]),
+    reserved
+  );
+  placeMarker(grid, supplyChest, "B");
+  reserved.add(positionKey(supplyChest));
+
+  addChestAccessRequirement(grid, supplyChest, reserved, requiredTiles);
+  if (relicChest) {
+    addChestAccessRequirement(grid, relicChest, reserved, requiredTiles);
   }
 
   addWaterPools(grid, rng, midRooms, reserved, requiredTiles);
@@ -171,7 +182,24 @@ export function generateDungeon(
     rows: grid.map((row) => row.join("")),
     portals,
     npcs: [],
-    chests: chest ? [{ id: "relic-chest", x: chest.x, y: chest.y }] : [],
+    chests: [
+      {
+        id: `dungeon-b${floor}-supply-chest`,
+        x: supplyChest.x,
+        y: supplyChest.y,
+        reward: pickSupplyChestReward(floor, floorCount, rng)
+      },
+      ...(relicChest
+        ? [
+            {
+              id: "relic-chest",
+              x: relicChest.x,
+              y: relicChest.y,
+              reward: { type: "relic" } as const
+            }
+          ]
+        : [])
+    ],
     enemies
   };
 }
@@ -282,6 +310,34 @@ function findOpenFloorNear(
 
 function isOpenFloor(grid: Grid, position: TilePosition, reserved: Set<string>): boolean {
   return grid[position.y]?.[position.x] === "." && !reserved.has(positionKey(position));
+}
+
+function addChestAccessRequirement(
+  grid: Grid,
+  chest: TilePosition,
+  reserved: Set<string>,
+  requiredTiles: TilePosition[]
+): void {
+  const accessTiles = adjacentTiles(chest).filter((position) =>
+    isWalkableForGeneration(grid, position)
+  );
+  accessTiles.forEach((position) => reserved.add(positionKey(position)));
+  requiredTiles.push(...accessTiles);
+}
+
+function pickSupplyChestReward(floor: number, floorCount: number, rng: Rng): ChestReward {
+  const depth = floor / floorCount;
+  if (depth < 0.34) {
+    return { type: "item", itemId: "herb", quantity: rng() < 0.35 ? 2 : 1 };
+  }
+  if (depth < 0.74) {
+    return rng() < 0.65
+      ? { type: "item", itemId: "strongHerb", quantity: 1 }
+      : { type: "item", itemId: "herb", quantity: 2 };
+  }
+  return rng() < 0.55
+    ? { type: "item", itemId: "magicWater", quantity: 1 }
+    : { type: "item", itemId: "strongHerb", quantity: 1 };
 }
 
 function addWaterPools(

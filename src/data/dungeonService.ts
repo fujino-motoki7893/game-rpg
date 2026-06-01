@@ -1,6 +1,7 @@
 import { generateDungeon } from "./dungeonGenerator";
 import { ENEMIES } from "./enemies";
-import type { MapDefinition, TilePosition } from "../game/types";
+import { isItemId } from "./items";
+import type { ChestDefinition, MapDefinition, TilePosition } from "../game/types";
 
 export type DungeonSource = "groq" | "worker-local" | "local";
 
@@ -58,6 +59,7 @@ function isDungeonMap(value: unknown, floor: number, floorCount: number): value 
     Array.isArray(map.portals) &&
     Array.isArray(map.npcs) &&
     Array.isArray(map.chests) &&
+    map.chests.every(isChestDefinition) &&
     Array.isArray(map.enemies) &&
     map.enemies.length >= 2 &&
     map.enemies.every(
@@ -75,6 +77,7 @@ function isDungeonMap(value: unknown, floor: number, floorCount: number): value 
 
   if (floor >= floorCount) {
     return (
+      map.chests.some(isItemRewardChest) &&
       map.chests.some((chest) => chest.id === "relic-chest" && isTilePosition(chest)) &&
       map.enemies.some(
         (enemy) =>
@@ -86,7 +89,8 @@ function isDungeonMap(value: unknown, floor: number, floorCount: number): value 
   }
 
   return (
-    map.chests.length === 0 &&
+    map.chests.some(isItemRewardChest) &&
+    !map.chests.some((chest) => chest.id === "relic-chest" || chest.reward?.type === "relic") &&
     map.portals.some(
       (portal) =>
         portal.kind === "stairs-down" &&
@@ -99,6 +103,41 @@ function isDungeonMap(value: unknown, floor: number, floorCount: number): value 
         enemy.enemyKey !== "guardian" &&
         isTilePosition(enemy)
     )
+  );
+}
+
+function isChestDefinition(value: unknown): value is ChestDefinition {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const chest = value as ChestDefinition;
+  if (typeof chest.id !== "string" || !isTilePosition(chest)) {
+    return false;
+  }
+
+  if (!chest.reward) {
+    return true;
+  }
+
+  if (chest.reward.type === "relic") {
+    return true;
+  }
+
+  return (
+    chest.reward.type === "item" &&
+    isItemId(chest.reward.itemId) &&
+    Number.isInteger(chest.reward.quantity) &&
+    chest.reward.quantity > 0
+  );
+}
+
+function isItemRewardChest(chest: ChestDefinition): boolean {
+  return (
+    chest.reward?.type === "item" &&
+    isItemId(chest.reward.itemId) &&
+    Number.isInteger(chest.reward.quantity) &&
+    chest.reward.quantity > 0
   );
 }
 

@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { MAPS } from "../data/maps";
 import { GAME_EVENTS } from "../game/constants";
-import { getCurrentDungeonFloor, getDungeonFloorCount, getSave } from "../game/GameState";
+import { getCurrentDungeonFloor, getDungeonFloorCount, getSave, getTotalItemCount } from "../game/GameState";
 import { getObjective } from "../data/dialogues";
 
 export class UIScene extends Phaser.Scene {
@@ -58,7 +58,7 @@ export class UIScene extends Phaser.Scene {
     const save = getSave();
     this.hpText?.setText(`HP ${save.hp}/${save.maxHp}`);
     this.statsText?.setText(
-      `Lv ${save.level}  攻撃 ${save.attack}  薬草 ${save.potions}  G ${save.gold}`
+      `Lv ${save.level}  攻撃 ${save.attack}  道具 ${getTotalItemCount()}  G ${save.gold}`
     );
     const hpRatio = Phaser.Math.Clamp(save.hp / save.maxHp, 0, 1);
     this.hpBarFill?.setDisplaySize(146 * hpRatio, 6);
