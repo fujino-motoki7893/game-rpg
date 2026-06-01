@@ -1,5 +1,5 @@
 import { DUNGEON_ENEMY_KEYS, type DungeonEnemyKey } from "./enemies";
-import type { EnemySpawn, MapDefinition, TilePosition } from "../game/types";
+import type { EnemySpawn, MapDefinition, PortalDefinition, TilePosition } from "../game/types";
 
 const WIDTH = 20;
 const HEIGHT = 15;
@@ -25,7 +25,21 @@ interface Room {
   h: number;
 }
 
-export function generateDungeon(seed = createDungeonSeed()): MapDefinition {
+export interface DungeonGenerationOptions {
+  seed?: number;
+  floor?: number;
+  floorCount?: number;
+  upTarget?: TilePosition;
+}
+
+export function generateDungeon(
+  seedOrOptions: number | DungeonGenerationOptions = {}
+): MapDefinition {
+  const options = typeof seedOrOptions === "number" ? { seed: seedOrOptions } : seedOrOptions;
+  const seed = options.seed ?? createDungeonSeed();
+  const floorCount = Math.max(1, options.floorCount ?? 1);
+  const floor = clamp(options.floor ?? 1, 1, floorCount);
+  const isFinalFloor = floor >= floorCount;
   const rng = createRng(seed);
   const grid = createFilledGrid("#");
   const startRoom: Room = { x: 1, y: 1, w: 5, h: 4 };
@@ -65,14 +79,48 @@ export function generateDungeon(seed = createDungeonSeed()): MapDefinition {
   const spawn = { x: 1, y: 1 };
   const reserved = new Set<string>([positionKey(spawn)]);
   const enemies: EnemySpawn[] = [];
+  const portals: PortalDefinition[] = [
+    floor === 1
+      ? { x: spawn.x, y: spawn.y, toMap: "field", toX: 2, toY: 13, kind: "stairs-up" }
+      : {
+          x: spawn.x,
+          y: spawn.y,
+          toMap: "dungeon",
+          toFloor: floor - 1,
+          toX: options.upTarget?.x ?? 1,
+          toY: options.upTarget?.y ?? 1,
+          kind: "stairs-up"
+        }
+  ];
+  const requiredTiles: TilePosition[] = [spawn];
   const endCenter = roomCenter(endRoom);
-  const chest = { x: endCenter.x, y: Math.max(endRoom.y + 1, endCenter.y - 1) };
-  placeMarker(grid, chest, "B");
-  reserved.add(positionKey(chest));
 
-  const guardian = findOpenFloorNear(grid, { x: chest.x, y: chest.y + 1 }, reserved);
-  placeMarker(grid, guardian, "D");
-  reserved.add(positionKey(guardian));
+  let chest: TilePosition | undefined;
+  let guardian: TilePosition | undefined;
+  if (isFinalFloor) {
+    chest = { x: endCenter.x, y: Math.max(endRoom.y + 1, endCenter.y - 1) };
+    placeMarker(grid, chest, "B");
+    reserved.add(positionKey(chest));
+
+    guardian = findOpenFloorNear(grid, { x: chest.x, y: chest.y + 1 }, reserved);
+    placeMarker(grid, guardian, "D");
+    reserved.add(positionKey(guardian));
+    requiredTiles.push(guardian);
+  } else {
+    const downStairs = findOpenFloorNear(grid, endCenter, reserved);
+    placeMarker(grid, downStairs, "V");
+    reserved.add(positionKey(downStairs));
+    requiredTiles.push(downStairs);
+    portals.push({
+      x: downStairs.x,
+      y: downStairs.y,
+      toMap: "dungeon",
+      toFloor: floor + 1,
+      toX: 1,
+      toY: 1,
+      kind: "stairs-down"
+    });
+  }
 
   const regularEnemyPositions = shuffled(midRooms, rng)
     .slice(0, REGULAR_ENEMY_COUNT)
@@ -85,42 +133,45 @@ export function generateDungeon(seed = createDungeonSeed()): MapDefinition {
       const enemyKey = pickDungeonEnemyKey(rng);
       reserved.add(positionKey(position));
       enemies.push({
-        id: `dungeon-${enemyKey}-${index + 1}`,
+        id: `dungeon-b${floor}-${enemyKey}-${index + 1}`,
         enemyKey,
         x: position.x,
         y: position.y
       });
       return position;
     });
+  requiredTiles.push(...regularEnemyPositions);
 
-  enemies.push({
-    id: "dungeon-guardian",
-    enemyKey: "guardian",
-    x: guardian.x,
-    y: guardian.y
-  });
+  if (guardian) {
+    enemies.push({
+      id: "dungeon-guardian",
+      enemyKey: "guardian",
+      x: guardian.x,
+      y: guardian.y
+    });
+  }
 
-  const chestAccessTiles = adjacentTiles(chest).filter((position) =>
-    isWalkableForGeneration(grid, position)
-  );
-  chestAccessTiles.forEach((position) => reserved.add(positionKey(position)));
-  addWaterPools(grid, rng, midRooms, reserved, [
-    spawn,
-    guardian,
-    ...regularEnemyPositions,
-    ...chestAccessTiles
-  ]);
+  if (chest) {
+    const chestAccessTiles = adjacentTiles(chest).filter((position) =>
+      isWalkableForGeneration(grid, position)
+    );
+    chestAccessTiles.forEach((position) => reserved.add(positionKey(position)));
+    requiredTiles.push(...chestAccessTiles);
+  }
 
-  placeMarker(grid, spawn, "O");
+  addWaterPools(grid, rng, midRooms, reserved, requiredTiles);
+  placeMarker(grid, spawn, "U");
 
   return {
     id: "dungeon",
-    name: DUNGEON_NAME,
+    name: `${DUNGEON_NAME} B${floor}F`,
+    floor,
+    floorCount,
     spawn,
     rows: grid.map((row) => row.join("")),
-    portals: [{ x: spawn.x, y: spawn.y, toMap: "field", toX: 2, toY: 13 }],
+    portals,
     npcs: [],
-    chests: [{ id: "relic-chest", x: chest.x, y: chest.y }],
+    chests: chest ? [{ id: "relic-chest", x: chest.x, y: chest.y }] : [],
     enemies
   };
 }
@@ -291,7 +342,7 @@ function canReachAll(grid: Grid, start: TilePosition, targets: TilePosition[]): 
 
 function isWalkableForGeneration(grid: Grid, position: TilePosition): boolean {
   const tile = grid[position.y]?.[position.x];
-  return tile === "." || tile === "O" || tile === "D";
+  return tile === "." || tile === "U" || tile === "V" || tile === "D";
 }
 
 function adjacentTiles(position: TilePosition): TilePosition[] {

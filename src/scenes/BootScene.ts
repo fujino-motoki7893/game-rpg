@@ -26,6 +26,8 @@ export class BootScene extends Phaser.Scene {
     this.createTile("tile-cave", "#312c35", "#1c1920", "cave");
     this.createTile("tile-floor", "#6a5d48", "#423b31", "floor");
     this.createTile("tile-portal", "#614c9a", "#d9cfff", "portal");
+    this.createTile("tile-stairs-up", "#6a5d48", "#423b31", "stairsUp");
+    this.createTile("tile-stairs-down", "#6a5d48", "#423b31", "stairsDown");
     this.createTile("tile-chest", "#6f4628", "#d9a441", "chest");
 
     this.createHero("player", "#2c5d9e", "#f2d2a9", "#ead45e");
@@ -49,7 +51,20 @@ export class BootScene extends Phaser.Scene {
     key: string,
     baseColor: string,
     shadeColor: string,
-    pattern: "grass" | "tallGrass" | "path" | "water" | "house" | "tree" | "rock" | "cave" | "floor" | "portal" | "chest"
+    pattern:
+      | "grass"
+      | "tallGrass"
+      | "path"
+      | "water"
+      | "house"
+      | "tree"
+      | "rock"
+      | "cave"
+      | "floor"
+      | "portal"
+      | "stairsUp"
+      | "stairsDown"
+      | "chest"
   ): void {
     const texture = this.textures.createCanvas(key, 32, 32);
     if (!texture) {
@@ -98,6 +113,12 @@ export class BootScene extends Phaser.Scene {
         break;
       case "portal":
         this.drawPortal(ctx, shadeColor);
+        break;
+      case "stairsUp":
+        this.drawStairs(ctx, shadeColor, "#d6b56a", true);
+        break;
+      case "stairsDown":
+        this.drawStairs(ctx, shadeColor, "#d6b56a", false);
         break;
       case "chest":
         this.drawPlanks(ctx, shadeColor, "#a16230");
@@ -263,6 +284,25 @@ export class BootScene extends Phaser.Scene {
     ctx.moveTo(10, 23);
     ctx.bezierCurveTo(17, 7, 23, 25, 13, 11);
     ctx.stroke();
+  }
+
+  private drawStairs(
+    ctx: CanvasRenderingContext2D,
+    shadeColor: string,
+    highlightColor: string,
+    up: boolean
+  ): void {
+    this.drawDungeonFloor(ctx, shadeColor, "#7c6f56");
+    const steps = up ? [20, 16, 12, 8] : [8, 12, 16, 20];
+    ctx.fillStyle = "#211c1a";
+    steps.forEach((y, index) => {
+      const inset = 5 + index * 2;
+      ctx.fillRect(inset, y, 22 - index * 4, 3);
+    });
+    ctx.fillStyle = highlightColor;
+    ctx.globalAlpha = 0.58;
+    ctx.fillRect(8, up ? 18 : 6, 16, 2);
+    ctx.globalAlpha = 1;
   }
 
   private createHero(key: string, cloak: string, skin: string, accent: string): void {

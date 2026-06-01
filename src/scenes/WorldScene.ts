@@ -5,14 +5,16 @@ import { ENEMIES } from "../data/enemies";
 import { BLOCKING_TILES, MAPS } from "../data/maps";
 import { GAME_EVENTS, MAP_OFFSET_X, MAP_OFFSET_Y, TILE_SIZE } from "../game/constants";
 import {
-  getGeneratedDungeon,
+  ensureDungeonProgress,
+  getGeneratedDungeonFloor,
   getSave,
   hasFlag,
   healPlayer,
   markFlag,
   persistSave,
   resetSave,
-  setGeneratedDungeon,
+  setCurrentDungeonFloor,
+  setGeneratedDungeonFloor,
   setPlayerPosition
 } from "../game/GameState";
 import type {
@@ -136,17 +138,28 @@ export class WorldScene extends Phaser.Scene {
       return MAPS[mapId];
     }
 
-    const generatedDungeon = getGeneratedDungeon();
+    const { floorCount, currentFloor } = ensureDungeonProgress();
+    const generatedDungeon = getGeneratedDungeonFloor(currentFloor);
     if (generatedDungeon) {
       return generatedDungeon;
     }
 
-    this.game.events.emit(GAME_EVENTS.toast, "洞窟を生成中...");
-    const { dungeon, source } = await createDungeon();
-    setGeneratedDungeon(dungeon);
+    const previousFloor = currentFloor > 1 ? getGeneratedDungeonFloor(currentFloor - 1) : undefined;
+    const previousDownStairs = previousFloor?.portals.find(
+      (portal) => portal.kind === "stairs-down" && portal.toFloor === currentFloor
+    );
+    const upTarget = previousDownStairs
+      ? { x: previousDownStairs.x, y: previousDownStairs.y }
+      : undefined;
+
+    this.game.events.emit(GAME_EVENTS.toast, `B${currentFloor}Fを生成中...`);
+    const { dungeon, source } = await createDungeon(currentFloor, floorCount, upTarget);
+    setGeneratedDungeonFloor(currentFloor, dungeon);
     this.game.events.emit(
       GAME_EVENTS.toast,
-      source === "groq" ? "AIが洞窟を描き替えた" : "洞窟の地形が変化した"
+      source === "groq"
+        ? `AIがB${currentFloor}Fを描き替えた`
+        : `B${currentFloor}Fの地形が変化した`
     );
     return dungeon;
   }
@@ -180,10 +193,16 @@ export class WorldScene extends Phaser.Scene {
 
   private createObjects(): void {
     this.currentMap.portals.forEach((portal) => {
+      const texture =
+        portal.kind === "stairs-up"
+          ? "tile-stairs-up"
+          : portal.kind === "stairs-down"
+            ? "tile-stairs-down"
+            : "tile-portal";
       const portalImage = this.add
-        .image(this.toWorldX(portal.x), this.toWorldY(portal.y), "tile-portal")
+        .image(this.toWorldX(portal.x), this.toWorldY(portal.y), texture)
         .setDepth(5)
-        .setAlpha(0.72);
+        .setAlpha(portal.kind ? 0.92 : 0.72);
       this.objectGroup?.add(portalImage);
       this.tweens.add({
         targets: portalImage,
@@ -395,9 +414,15 @@ export class WorldScene extends Phaser.Scene {
       (candidate) => candidate.x === this.playerTile.x && candidate.y === this.playerTile.y
     );
 
-    if (portal) {
-      await this.loadMap(portal.toMap, { x: portal.toX, y: portal.toY });
+    if (!portal) {
+      return;
     }
+
+    if (portal.toMap === "dungeon") {
+      ensureDungeonProgress();
+      setCurrentDungeonFloor(portal.toFloor ?? 1);
+    }
+    await this.loadMap(portal.toMap, { x: portal.toX, y: portal.toY });
   }
 
   private isBlocked(position: TilePosition): boolean {
@@ -514,6 +539,8 @@ export class WorldScene extends Phaser.Scene {
       case "B":
       case "D":
       case "T":
+      case "U":
+      case "V":
         return "tile-floor";
       default:
         return this.currentMap.id === "dungeon" ? "tile-floor" : "tile-grass";

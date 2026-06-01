@@ -37,11 +37,15 @@ export interface PortalDefinition extends TilePosition {
   toMap: MapId;
   toX: number;
   toY: number;
+  toFloor?: number;
+  kind?: "map" | "stairs-up" | "stairs-down";
 }
 
 export interface MapDefinition {
   id: MapId;
   name: string;
+  floor?: number;
+  floorCount?: number;
   rows: string[];
   spawn: TilePosition;
   portals: PortalDefinition[];
@@ -64,6 +68,9 @@ export interface GameSave {
   flags: Record<string, boolean>;
   defeatedEnemies: string[];
   generatedDungeon?: MapDefinition;
+  dungeonFloorCount?: number;
+  currentDungeonFloor?: number;
+  generatedDungeonFloors?: Record<string, MapDefinition>;
 }
 
 export interface BattlePayload {

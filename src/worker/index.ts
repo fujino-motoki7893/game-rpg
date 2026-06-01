@@ -1,6 +1,6 @@
 import { generateDungeon } from "../data/dungeonGenerator";
 import { DUNGEON_ENEMY_KEYS, isDungeonEnemyKey, type DungeonEnemyKey } from "../data/enemies";
-import type { EnemySpawn, MapDefinition, TilePosition } from "../game/types";
+import type { EnemySpawn, MapDefinition, PortalDefinition, TilePosition } from "../game/types";
 
 interface Env {
   ASSETS: {
@@ -23,6 +23,12 @@ const HEIGHT = 15;
 const DEFAULT_MODEL = "llama-3.1-8b-instant";
 const DUNGEON_NAME = "エンバーフォール洞窟";
 const REGULAR_ENEMY_COUNT = 3;
+
+interface DungeonRequest {
+  floor: number;
+  floorCount: number;
+  upTarget?: TilePosition;
+}
 
 interface NormalizedEnemySpawn extends TilePosition {
   enemyKey: DungeonEnemyKey;
@@ -48,7 +54,7 @@ export default {
       if (request.method !== "POST" && request.method !== "GET") {
         return jsonResponse({ error: "Method not allowed" }, 405);
       }
-      return createDungeonResponse(env);
+      return createDungeonResponse(request, env);
     }
 
     if (url.pathname.startsWith("/api/")) {
@@ -59,13 +65,14 @@ export default {
   }
 };
 
-async function createDungeonResponse(env: Env): Promise<Response> {
+async function createDungeonResponse(request: Request, env: Env): Promise<Response> {
+  const context = await readDungeonRequest(request);
   if (!env.GROQ_API_KEY) {
-    return jsonResponse({ map: generateDungeon(), source: "worker-local" });
+    return jsonResponse({ map: generateDungeon(context), source: "worker-local" });
   }
 
   try {
-    const map = await generateGroqDungeon(env);
+    const map = await generateGroqDungeon(env, context);
     return jsonResponse({ map, source: "groq" });
   } catch (error) {
     console.warn(
@@ -73,14 +80,66 @@ async function createDungeonResponse(env: Env): Promise<Response> {
       error instanceof Error ? error.message : "unknown error"
     );
     return jsonResponse({
-      map: generateDungeon(),
+      map: generateDungeon(context),
       source: "worker-local",
       warning: "groq-unavailable"
     });
   }
 }
 
-async function generateGroqDungeon(env: Env): Promise<MapDefinition> {
+async function readDungeonRequest(request: Request): Promise<DungeonRequest> {
+  if (request.method === "GET") {
+    return { floor: 1, floorCount: 1 };
+  }
+
+  let raw: unknown = {};
+  try {
+    raw = await request.json();
+  } catch {
+    raw = {};
+  }
+
+  const body =
+    raw && typeof raw === "object"
+      ? (raw as { floor?: unknown; floorCount?: unknown; upTarget?: unknown })
+      : {};
+  const floorCount = readBoundedInteger(body.floorCount, 1, 8, 1);
+  const floor = readBoundedInteger(body.floor, 1, floorCount, 1);
+  const upTarget = readPlayablePosition(body.upTarget);
+
+  return upTarget ? { floor, floorCount, upTarget } : { floor, floorCount };
+}
+
+function readBoundedInteger(
+  value: unknown,
+  min: number,
+  max: number,
+  fallback: number
+): number {
+  const parsed =
+    typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return clamp(Math.floor(parsed), min, max);
+}
+
+function readPlayablePosition(value: unknown): TilePosition | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const position = value as { x?: unknown; y?: unknown };
+  if (!Number.isInteger(position.x) || !Number.isInteger(position.y)) {
+    return undefined;
+  }
+
+  const tilePosition = { x: position.x, y: position.y } as TilePosition;
+  return isPlayable(tilePosition) ? tilePosition : undefined;
+}
+
+async function generateGroqDungeon(env: Env, context: DungeonRequest): Promise<MapDefinition> {
+  const isFinalFloor = context.floor >= context.floorCount;
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -101,18 +160,26 @@ async function generateGroqDungeon(env: Env): Promise<MapDefinition> {
         {
           role: "user",
           content: [
-            "Create a 20x15 classic fantasy cave dungeon.",
-            "Return a JSON object with rows, chests, and enemies.",
+            `Create floor B${context.floor}F of a ${context.floorCount}-floor classic fantasy cave dungeon.`,
+            "Return a JSON object with rows, chests, enemies, and optionally stairsDown.",
             "rows must be exactly 15 strings, each exactly 20 characters.",
-            "Allowed row characters: # wall, . floor, ~ water, O exit portal, B relic chest, D guardian floor.",
-            "The outer border must be #. Put O at x=1,y=1.",
-            "Put one B chest and one D guardian near the deeper side of the dungeon.",
-            `Add exactly ${REGULAR_ENEMY_COUNT} regular enemies and one guardian enemy in enemies.`,
+            "Allowed row characters: # wall, . floor, ~ water, U up stairs, V down stairs, B relic chest, D guardian floor.",
+            "The outer border must be #. Put U at x=1,y=1.",
+            isFinalFloor
+              ? "This is the final floor. Put one B chest and one D guardian near the deeper side of the dungeon. Do not place V."
+              : "This is not the final floor. Put one V down stairs near the deeper side of the dungeon. Do not place B or D.",
+            isFinalFloor
+              ? `Add exactly ${REGULAR_ENEMY_COUNT} regular enemies and one guardian enemy in enemies.`
+              : `Add exactly ${REGULAR_ENEMY_COUNT} regular enemies in enemies.`,
             `Regular enemyKey values must come from: ${DUNGEON_ENEMY_KEYS.join(", ")}.`,
-            "The guardian enemyKey must be guardian.",
-            "Every enemy and at least one tile next to the chest must be reachable from O without crossing #, ~, or B.",
+            isFinalFloor
+              ? "The guardian enemyKey must be guardian."
+              : "Do not add a guardian enemy on this floor.",
+            "Every enemy, stairs, and at least one tile next to the final chest must be reachable from U without crossing #, ~, or B.",
             "Also include a numeric seed field for deterministic fallback.",
-            "Example shape: {\"rows\":[\"####################\",...],\"chests\":[{\"x\":15,\"y\":12}],\"enemies\":[{\"enemyKey\":\"bat\",\"x\":7,\"y\":4},{\"enemyKey\":\"skeleton\",\"x\":12,\"y\":8},{\"enemyKey\":\"mimic\",\"x\":10,\"y\":11},{\"enemyKey\":\"guardian\",\"x\":15,\"y\":13}]}"
+            isFinalFloor
+              ? "Example shape: {\"rows\":[\"####################\",...],\"chests\":[{\"x\":15,\"y\":12}],\"enemies\":[{\"enemyKey\":\"bat\",\"x\":7,\"y\":4},{\"enemyKey\":\"skeleton\",\"x\":12,\"y\":8},{\"enemyKey\":\"mimic\",\"x\":10,\"y\":11},{\"enemyKey\":\"guardian\",\"x\":15,\"y\":13}]}"
+              : "Example shape: {\"rows\":[\"####################\",...],\"stairsDown\":{\"x\":15,\"y\":12},\"chests\":[],\"enemies\":[{\"enemyKey\":\"bat\",\"x\":7,\"y\":4},{\"enemyKey\":\"skeleton\",\"x\":12,\"y\":8},{\"enemyKey\":\"mimic\",\"x\":10,\"y\":11}]}"
           ].join(" ")
         }
       ]
@@ -130,16 +197,17 @@ async function generateGroqDungeon(env: Env): Promise<MapDefinition> {
   }
 
   const parsed = JSON.parse(extractJson(content)) as unknown;
-  const map = normalizeDungeon(parsed);
-  return map ?? generateDungeon(readSeed(parsed) ?? hashString(content));
+  const map = normalizeDungeon(parsed, context);
+  return map ?? generateDungeon({ ...context, seed: readSeed(parsed) ?? hashString(content) });
 }
 
-function normalizeDungeon(value: unknown): MapDefinition | undefined {
+function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinition | undefined {
   if (!value || typeof value !== "object") {
     return undefined;
   }
 
-  const raw = value as { rows?: unknown; chests?: unknown; enemies?: unknown };
+  const isFinalFloor = context.floor >= context.floorCount;
+  const raw = value as { rows?: unknown; chests?: unknown; enemies?: unknown; stairsDown?: unknown };
   if (!Array.isArray(raw.rows) || raw.rows.length !== HEIGHT) {
     return undefined;
   }
@@ -161,7 +229,7 @@ function normalizeDungeon(value: unknown): MapDefinition | undefined {
       if (y === 0 || y === HEIGHT - 1 || x === 0 || x === WIDTH - 1) {
         rows[y][x] = "#";
       }
-      if (rows[y][x] === "O" || rows[y][x] === "B" || rows[y][x] === "D") {
+      if (rows[y][x] === "U" || rows[y][x] === "V" || rows[y][x] === "B" || rows[y][x] === "D") {
         rows[y][x] = ".";
       }
     }
@@ -170,19 +238,56 @@ function normalizeDungeon(value: unknown): MapDefinition | undefined {
   const spawn = { x: 1, y: 1 };
   rows[spawn.y][spawn.x] = ".";
   const reserved = new Set<string>([positionKey(spawn)]);
-  const chest = pickChest(raw.chests, rows, reserved) ?? findOpenFloorNear(rows, { x: 15, y: 12 }, reserved);
-  if (!chest) {
-    return undefined;
-  }
-  reserved.add(positionKey(chest));
+  const portals: PortalDefinition[] = [
+    context.floor === 1
+      ? { x: spawn.x, y: spawn.y, toMap: "field", toX: 2, toY: 13, kind: "stairs-up" }
+      : {
+          x: spawn.x,
+          y: spawn.y,
+          toMap: "dungeon",
+          toFloor: context.floor - 1,
+          toX: context.upTarget?.x ?? 1,
+          toY: context.upTarget?.y ?? 1,
+          kind: "stairs-up"
+        }
+  ];
+  let chest: TilePosition | undefined;
+  let guardian: TilePosition | undefined;
+  let downStairs: TilePosition | undefined;
 
-  const guardian =
-    pickEnemy(raw.enemies, "guardian", rows, reserved) ??
-    findOpenFloorNear(rows, { x: chest.x, y: chest.y + 1 }, reserved);
-  if (!guardian) {
-    return undefined;
+  if (isFinalFloor) {
+    chest = pickPosition(raw.chests, rows, reserved) ?? findOpenFloorNear(rows, { x: 15, y: 12 }, reserved);
+    if (!chest) {
+      return undefined;
+    }
+    reserved.add(positionKey(chest));
+
+    guardian =
+      pickEnemy(raw.enemies, "guardian", rows, reserved) ??
+      findOpenFloorNear(rows, { x: chest.x, y: chest.y + 1 }, reserved);
+    if (!guardian) {
+      return undefined;
+    }
+    reserved.add(positionKey(guardian));
+  } else {
+    downStairs =
+      readPosition(raw.stairsDown, rows, reserved) ??
+      findMarker(raw.rows, "V", rows, reserved) ??
+      findOpenFloorNear(rows, { x: 15, y: 12 }, reserved);
+    if (!downStairs) {
+      return undefined;
+    }
+    reserved.add(positionKey(downStairs));
+    portals.push({
+      x: downStairs.x,
+      y: downStairs.y,
+      toMap: "dungeon",
+      toFloor: context.floor + 1,
+      toX: 1,
+      toY: 1,
+      kind: "stairs-down"
+    });
   }
-  reserved.add(positionKey(guardian));
 
   const regularEnemies = pickRegularEnemies(raw.enemies, rows, reserved);
   while (regularEnemies.length < REGULAR_ENEMY_COUNT) {
@@ -201,55 +306,122 @@ function normalizeDungeon(value: unknown): MapDefinition | undefined {
     });
   }
 
-  rows[spawn.y][spawn.x] = "O";
-  rows[chest.y][chest.x] = "B";
-  rows[guardian.y][guardian.x] = "D";
-
-  let chestAccessTiles = ensureChestAccess(rows, chest, guardian);
-  if (chestAccessTiles.length === 0) {
-    return undefined;
+  rows[spawn.y][spawn.x] = "U";
+  if (chest) {
+    rows[chest.y][chest.x] = "B";
+  }
+  if (guardian) {
+    rows[guardian.y][guardian.x] = "D";
+  }
+  if (downStairs) {
+    rows[downStairs.y][downStairs.x] = "V";
   }
 
-  const requiredTiles = [guardian, ...regularEnemies, ...chestAccessTiles];
+  let chestAccessTiles: TilePosition[] = [];
+  if (chest && guardian) {
+    chestAccessTiles = ensureChestAccess(rows, chest, guardian);
+    if (chestAccessTiles.length === 0) {
+      return undefined;
+    }
+  }
+
+  const requiredTiles = [
+    ...(guardian ? [guardian] : []),
+    ...(downStairs ? [downStairs] : []),
+    ...regularEnemies,
+    ...chestAccessTiles
+  ];
   if (!canReachAll(rows, spawn, requiredTiles)) {
     requiredTiles.forEach((target) => carveCorridor(rows, spawn, target));
-    rows[spawn.y][spawn.x] = "O";
-    rows[chest.y][chest.x] = "B";
-    rows[guardian.y][guardian.x] = "D";
-    chestAccessTiles = ensureChestAccess(rows, chest, guardian);
+    rows[spawn.y][spawn.x] = "U";
+    if (chest) {
+      rows[chest.y][chest.x] = "B";
+    }
+    if (guardian) {
+      rows[guardian.y][guardian.x] = "D";
+    }
+    if (downStairs) {
+      rows[downStairs.y][downStairs.x] = "V";
+    }
+    if (chest && guardian) {
+      chestAccessTiles = ensureChestAccess(rows, chest, guardian);
+    }
   }
 
-  if (!canReachAll(rows, spawn, [guardian, ...regularEnemies, ...chestAccessTiles])) {
+  if (!canReachAll(rows, spawn, requiredTiles)) {
     return undefined;
   }
 
   return {
     id: "dungeon",
-    name: DUNGEON_NAME,
+    name: `${DUNGEON_NAME} B${context.floor}F`,
+    floor: context.floor,
+    floorCount: context.floorCount,
     spawn,
     rows: rows.map((row) => row.join("")),
-    portals: [{ x: spawn.x, y: spawn.y, toMap: "field", toX: 2, toY: 13 }],
+    portals,
     npcs: [],
-    chests: [{ id: "relic-chest", x: chest.x, y: chest.y }],
+    chests: chest ? [{ id: "relic-chest", x: chest.x, y: chest.y }] : [],
     enemies: [
       ...regularEnemies.map((enemy, index) => ({
-        id: `dungeon-${enemy.enemyKey}-${index + 1}`,
+        id: `dungeon-b${context.floor}-${enemy.enemyKey}-${index + 1}`,
         enemyKey: enemy.enemyKey,
         x: enemy.x,
         y: enemy.y
       })),
-      { id: "dungeon-guardian", enemyKey: "guardian", x: guardian.x, y: guardian.y }
+      ...(guardian
+        ? [{ id: "dungeon-guardian", enemyKey: "guardian", x: guardian.x, y: guardian.y }]
+        : [])
     ]
   };
 }
 
-function pickChest(
+function pickPosition(
   value: unknown,
   grid: string[][],
   reserved: Set<string>
 ): TilePosition | undefined {
   const positions = readPositions(value);
   return positions.find((position) => isOpenFloor(grid, position, reserved));
+}
+
+function readPosition(
+  value: unknown,
+  grid: string[][],
+  reserved: Set<string>
+): TilePosition | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const position = value as { x?: unknown; y?: unknown };
+  return isOpenFloor(grid, position, reserved) ? position : undefined;
+}
+
+function findMarker(
+  rows: unknown,
+  marker: string,
+  grid: string[][],
+  reserved: Set<string>
+): TilePosition | undefined {
+  if (!Array.isArray(rows)) {
+    return undefined;
+  }
+
+  for (let y = 0; y < rows.length; y += 1) {
+    const row = rows[y];
+    if (typeof row !== "string") {
+      continue;
+    }
+    const x = row.indexOf(marker);
+    if (x >= 0) {
+      const position = { x: clamp(x, 1, WIDTH - 2), y: clamp(y, 1, HEIGHT - 2) };
+      if (isOpenFloor(grid, position, reserved)) {
+        return position;
+      }
+    }
+  }
+  return undefined;
 }
 
 function pickEnemy(
@@ -362,7 +534,14 @@ function isOpenFloor(
 }
 
 function sanitizeTile(tile: string): string {
-  return tile === "#" || tile === "." || tile === "~" || tile === "O" || tile === "B" || tile === "D"
+  return tile === "#" ||
+    tile === "." ||
+    tile === "~" ||
+    tile === "O" ||
+    tile === "U" ||
+    tile === "V" ||
+    tile === "B" ||
+    tile === "D"
     ? tile
     : ".";
 }
@@ -439,7 +618,7 @@ function canReachAll(grid: string[][], start: TilePosition, targets: TilePositio
 
 function isWalkableForGeneration(grid: string[][], position: TilePosition): boolean {
   const tile = grid[position.y]?.[position.x];
-  return tile === "." || tile === "O" || tile === "D";
+  return tile === "." || tile === "O" || tile === "U" || tile === "V" || tile === "D";
 }
 
 function adjacentTiles(position: TilePosition): TilePosition[] {
@@ -472,6 +651,10 @@ function hashString(value: string): number {
     hash = Math.imul(hash, 16777619);
   }
   return hash >>> 0;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function jsonResponse(body: unknown, status = 200): Response {

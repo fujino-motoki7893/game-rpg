@@ -1,6 +1,9 @@
 import { SAVE_KEY } from "./constants";
 import type { GameSave, MapDefinition, MapId } from "./types";
 
+const MIN_DUNGEON_FLOORS = 3;
+const MAX_DUNGEON_FLOORS = 5;
+
 export const initialSave = (): GameSave => ({
   mapId: "village",
   x: 9,
@@ -30,7 +33,8 @@ function loadSave(): GameSave {
       ...initialSave(),
       ...parsed,
       flags: parsed.flags ?? {},
-      defeatedEnemies: parsed.defeatedEnemies ?? []
+      defeatedEnemies: parsed.defeatedEnemies ?? [],
+      generatedDungeonFloors: parsed.generatedDungeonFloors ?? undefined
     };
   } catch {
     return initialSave();
@@ -57,6 +61,54 @@ export function getGeneratedDungeon(): MapDefinition | undefined {
 
 export function setGeneratedDungeon(dungeon: MapDefinition): void {
   save.generatedDungeon = dungeon;
+  persistSave();
+}
+
+export function ensureDungeonProgress(): { floorCount: number; currentFloor: number } {
+  if (!save.dungeonFloorCount) {
+    save.dungeonFloorCount = randomInt(MIN_DUNGEON_FLOORS, MAX_DUNGEON_FLOORS);
+  }
+
+  if (!save.currentDungeonFloor) {
+    save.currentDungeonFloor = 1;
+  }
+
+  if (!save.generatedDungeonFloors) {
+    save.generatedDungeonFloors = {};
+  }
+
+  save.currentDungeonFloor = clampFloor(save.currentDungeonFloor, save.dungeonFloorCount);
+  persistSave();
+  return {
+    floorCount: save.dungeonFloorCount,
+    currentFloor: save.currentDungeonFloor
+  };
+}
+
+export function getCurrentDungeonFloor(): number {
+  return save.currentDungeonFloor ?? 1;
+}
+
+export function getDungeonFloorCount(): number | undefined {
+  return save.dungeonFloorCount;
+}
+
+export function setCurrentDungeonFloor(floor: number): void {
+  const floorCount = save.dungeonFloorCount ?? MAX_DUNGEON_FLOORS;
+  save.currentDungeonFloor = clampFloor(floor, floorCount);
+  persistSave();
+}
+
+export function getGeneratedDungeonFloor(floor: number): MapDefinition | undefined {
+  return save.generatedDungeonFloors?.[String(floor)];
+}
+
+export function setGeneratedDungeonFloor(floor: number, dungeon: MapDefinition): void {
+  save.generatedDungeonFloors = save.generatedDungeonFloors ?? {};
+  save.generatedDungeonFloors[String(floor)] = dungeon;
+  if (floor === 1) {
+    save.generatedDungeon = dungeon;
+  }
   persistSave();
 }
 
@@ -126,4 +178,12 @@ export function grantReward(exp: number, gold: number): { leveledUp: boolean } {
 
   persistSave();
   return { leveledUp };
+}
+
+function randomInt(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function clampFloor(floor: number, floorCount: number): number {
+  return Math.min(floorCount, Math.max(1, floor));
 }

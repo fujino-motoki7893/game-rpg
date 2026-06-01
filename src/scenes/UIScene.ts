@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { MAPS } from "../data/maps";
 import { GAME_EVENTS } from "../game/constants";
-import { getSave } from "../game/GameState";
+import { getCurrentDungeonFloor, getDungeonFloorCount, getSave } from "../game/GameState";
 import { getObjective } from "../data/dialogues";
 
 export class UIScene extends Phaser.Scene {
@@ -63,7 +63,11 @@ export class UIScene extends Phaser.Scene {
     const hpRatio = Phaser.Math.Clamp(save.hp / save.maxHp, 0, 1);
     this.hpBarFill?.setDisplaySize(146 * hpRatio, 6);
     this.objectiveText?.setText(getObjective());
-    this.mapText?.setText(MAPS[save.mapId].name);
+    const mapName =
+      save.mapId === "dungeon"
+        ? `${MAPS.dungeon.name} B${getCurrentDungeonFloor()}F/${getDungeonFloorCount() ?? "?"}F`
+        : MAPS[save.mapId].name;
+    this.mapText?.setText(mapName);
   }
 
   private setMapName(mapName: string): void {
