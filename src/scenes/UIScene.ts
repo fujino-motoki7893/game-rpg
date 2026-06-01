@@ -21,8 +21,14 @@ export class UIScene extends Phaser.Scene {
     this.add.rectangle(400, 608, 800, 64, 0x11181f, 0.86);
     this.hpText = this.add.text(24, 15, "", this.textStyle(18, "#f4df7e"));
     this.statsText = this.add.text(210, 15, "", this.textStyle(18, "#f4f0db"));
-    this.objectiveText = this.add.text(24, 590, "", this.textStyle(17, "#e6d7a8"));
+    this.objectiveText = this.add.text(24, 584, "", this.textStyle(17, "#e6d7a8"));
     this.mapText = this.add.text(776, 15, "", this.textStyle(18, "#a9d8ff")).setOrigin(1, 0);
+    this.add.text(
+      24,
+      616,
+      "操作: 移動 矢印/WASD  決定 Space/Enter  リセット R",
+      this.textStyle(14, "#9fb4c6")
+    );
     this.toastText = this.add
       .text(400, 565, "", this.textStyle(16, "#ffffff"))
       .setOrigin(0.5, 0.5)
