@@ -6,5 +6,6 @@ export const SAVE_KEY = "tiny-turn-rpg-save-v1";
 export const GAME_EVENTS = {
   stateChanged: "state-changed",
   mapChanged: "map-changed",
-  toast: "toast"
+  toast: "toast",
+  menuClosed: "menu-closed"
 } as const;

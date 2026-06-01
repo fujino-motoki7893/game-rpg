@@ -34,7 +34,7 @@ export class UIScene extends Phaser.Scene {
     this.add.text(
       24,
       616,
-      "操作: 移動 矢印/WASD  決定 Space/Enter  リセット R",
+      "操作: 移動 矢印/WASD  決定 Space/Enter  メニュー M/Esc  リセット R",
       this.textStyle(14, "#9fb4c6")
     );
     this.toastText = this.add

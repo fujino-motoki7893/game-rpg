@@ -52,6 +52,7 @@ export class WorldScene extends Phaser.Scene {
   private actionKeys?: Phaser.Input.Keyboard.Key[];
   private resetKey?: Phaser.Input.Keyboard.Key;
   private loadingMap = false;
+  private menuOpen = false;
 
   constructor() {
     super("WorldScene");
@@ -72,13 +73,21 @@ export class WorldScene extends Phaser.Scene {
 
     this.input.keyboard?.on("keydown", this.handleKeyDown, this);
     this.events.on("resume", this.refreshAfterBattle, this);
+    this.game.events.on(GAME_EVENTS.menuClosed, this.handleMenuClosed, this);
+    this.events.once("shutdown", this.shutdown, this);
 
     const save = getSave();
     void this.loadMap(save.mapId, { x: save.x, y: save.y });
   }
 
+  private shutdown(): void {
+    this.input.keyboard?.off("keydown", this.handleKeyDown, this);
+    this.events.off("resume", this.refreshAfterBattle, this);
+    this.game.events.off(GAME_EVENTS.menuClosed, this.handleMenuClosed, this);
+  }
+
   update(): void {
-    if (this.loadingMap || this.dialogueLines.length > 0 || this.moving) {
+    if (this.loadingMap || this.menuOpen || this.dialogueLines.length > 0 || this.moving) {
       return;
     }
 
@@ -256,7 +265,12 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private handleKeyDown(event: KeyboardEvent): void {
-    if (this.loadingMap) {
+    if (this.loadingMap || this.menuOpen) {
+      return;
+    }
+
+    if ((event.code === "KeyM" || event.code === "Escape") && this.canOpenMenu()) {
+      this.openMenu();
       return;
     }
 
@@ -331,7 +345,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private tryInteract(): void {
-    if (this.loadingMap || this.dialogueLines.length > 0 || this.moving) {
+    if (this.loadingMap || this.menuOpen || this.dialogueLines.length > 0 || this.moving) {
       return;
     }
 
@@ -402,11 +416,28 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private startBattle(enemy: EnemySpawn): void {
+    if (this.menuOpen) {
+      return;
+    }
+
     this.scene.launch("BattleScene", {
       enemyInstanceId: enemy.id,
       enemyKey: enemy.enemyKey
     });
     this.scene.pause();
+  }
+
+  private canOpenMenu(): boolean {
+    return !this.loadingMap && !this.menuOpen && this.dialogueLines.length === 0 && !this.moving;
+  }
+
+  private openMenu(): void {
+    this.menuOpen = true;
+    this.scene.launch("MenuScene");
+  }
+
+  private handleMenuClosed(): void {
+    this.menuOpen = false;
   }
 
   private async checkPortal(): Promise<void> {
