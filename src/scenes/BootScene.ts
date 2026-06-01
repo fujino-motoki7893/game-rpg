@@ -6,17 +6,17 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.createTile("tile-grass", "#3f8f5b", "#2f7447");
-    this.createTile("tile-tall-grass", "#4a9d4f", "#2c7139", true);
-    this.createTile("tile-path", "#b78c58", "#8f6b3e");
-    this.createTile("tile-water", "#2c7fb8", "#175c8d", true);
-    this.createTile("tile-house", "#86533d", "#5e382c");
-    this.createTile("tile-tree", "#1f5e38", "#153f2a", true);
-    this.createTile("tile-rock", "#58606b", "#3c424a", true);
-    this.createTile("tile-cave", "#312c35", "#1c1920");
-    this.createTile("tile-floor", "#6a5d48", "#423b31");
-    this.createTile("tile-portal", "#614c9a", "#d9cfff", true);
-    this.createTile("tile-chest", "#6f4628", "#d9a441");
+    this.createTile("tile-grass", "#3f8f5b", "#2f7447", "grass");
+    this.createTile("tile-tall-grass", "#4a9d4f", "#2c7139", "tallGrass");
+    this.createTile("tile-path", "#b78c58", "#8f6b3e", "path");
+    this.createTile("tile-water", "#2c7fb8", "#175c8d", "water");
+    this.createTile("tile-house", "#86533d", "#5e382c", "house");
+    this.createTile("tile-tree", "#1f5e38", "#153f2a", "tree");
+    this.createTile("tile-rock", "#58606b", "#3c424a", "rock");
+    this.createTile("tile-cave", "#312c35", "#1c1920", "cave");
+    this.createTile("tile-floor", "#6a5d48", "#423b31", "floor");
+    this.createTile("tile-portal", "#614c9a", "#d9cfff", "portal");
+    this.createTile("tile-chest", "#6f4628", "#d9a441", "chest");
 
     this.createHero("player", "#2c5d9e", "#f2d2a9", "#ead45e");
     this.createHero("npc-elder", "#70563f", "#f2d2a9", "#d5d0c8");
@@ -34,7 +34,7 @@ export class BootScene extends Phaser.Scene {
     key: string,
     baseColor: string,
     shadeColor: string,
-    extraPattern = false
+    pattern: "grass" | "tallGrass" | "path" | "water" | "house" | "tree" | "rock" | "cave" | "floor" | "portal" | "chest"
   ): void {
     const texture = this.textures.createCanvas(key, 32, 32);
     if (!texture) {
@@ -45,26 +45,209 @@ export class BootScene extends Phaser.Scene {
     ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = baseColor;
     ctx.fillRect(0, 0, 32, 32);
-    ctx.fillStyle = shadeColor;
-    ctx.fillRect(0, 28, 32, 4);
-    ctx.fillRect(28, 0, 4, 32);
-    ctx.globalAlpha = 0.35;
-    ctx.fillRect(2, 2, 8, 3);
-    ctx.fillRect(17, 13, 10, 3);
-    ctx.globalAlpha = 1;
 
-    if (extraPattern) {
-      ctx.strokeStyle = shadeColor;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(7, 25);
-      ctx.lineTo(12, 11);
-      ctx.moveTo(17, 26);
-      ctx.lineTo(22, 8);
-      ctx.stroke();
+    ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.fillRect(0, 0, 32, 2);
+    ctx.fillRect(0, 0, 2, 32);
+    ctx.fillStyle = shadeColor;
+    ctx.fillRect(0, 29, 32, 3);
+    ctx.fillRect(29, 0, 3, 32);
+
+    switch (pattern) {
+      case "grass":
+        this.drawGrass(ctx, shadeColor, "#6dbb6f", false);
+        break;
+      case "tallGrass":
+        this.drawGrass(ctx, shadeColor, "#77c85e", true);
+        break;
+      case "path":
+        this.drawPebbles(ctx, shadeColor, "#d0a26a");
+        break;
+      case "water":
+        this.drawWater(ctx, shadeColor, "#60b7dc");
+        break;
+      case "house":
+        this.drawPlanks(ctx, shadeColor, "#9f674c");
+        break;
+      case "tree":
+        this.drawLeaves(ctx, shadeColor, "#2e7a49");
+        break;
+      case "rock":
+        this.drawRock(ctx, shadeColor, "#727b86");
+        break;
+      case "cave":
+        this.drawDungeonStone(ctx, shadeColor, "#4a4250");
+        break;
+      case "floor":
+        this.drawDungeonFloor(ctx, shadeColor, "#7c6f56");
+        break;
+      case "portal":
+        this.drawPortal(ctx, shadeColor);
+        break;
+      case "chest":
+        this.drawPlanks(ctx, shadeColor, "#a16230");
+        break;
     }
 
     texture.refresh();
+  }
+
+  private drawGrass(
+    ctx: CanvasRenderingContext2D,
+    shadeColor: string,
+    highlightColor: string,
+    tall: boolean
+  ): void {
+    ctx.strokeStyle = shadeColor;
+    ctx.lineWidth = 1;
+    const blades = tall
+      ? [
+          [6, 26, 9, 14],
+          [12, 27, 16, 11],
+          [22, 26, 25, 10],
+          [27, 26, 29, 16]
+        ]
+      : [
+          [8, 25, 10, 20],
+          [18, 23, 20, 18],
+          [26, 25, 27, 21]
+        ];
+    blades.forEach(([x1, y1, x2, y2]) => {
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    });
+    ctx.fillStyle = highlightColor;
+    ctx.globalAlpha = 0.34;
+    ctx.fillRect(4, 5, 6, 2);
+    ctx.fillRect(17, 12, 8, 2);
+    ctx.globalAlpha = 1;
+  }
+
+  private drawPebbles(ctx: CanvasRenderingContext2D, shadeColor: string, highlightColor: string): void {
+    ctx.fillStyle = shadeColor;
+    ctx.globalAlpha = 0.42;
+    ctx.fillRect(7, 8, 5, 3);
+    ctx.fillRect(22, 19, 4, 3);
+    ctx.fillRect(13, 25, 8, 2);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = highlightColor;
+    ctx.fillRect(4, 4, 9, 2);
+    ctx.fillRect(17, 13, 7, 2);
+  }
+
+  private drawWater(ctx: CanvasRenderingContext2D, shadeColor: string, highlightColor: string): void {
+    ctx.strokeStyle = highlightColor;
+    ctx.lineWidth = 2;
+    [[4, 9], [15, 18], [22, 7]].forEach(([x, y]) => {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + 5, y - 2);
+      ctx.lineTo(x + 10, y);
+      ctx.stroke();
+    });
+    ctx.strokeStyle = shadeColor;
+    ctx.beginPath();
+    ctx.moveTo(5, 26);
+    ctx.lineTo(15, 24);
+    ctx.lineTo(24, 26);
+    ctx.stroke();
+  }
+
+  private drawPlanks(ctx: CanvasRenderingContext2D, shadeColor: string, highlightColor: string): void {
+    ctx.strokeStyle = shadeColor;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(10, 0);
+    ctx.lineTo(10, 32);
+    ctx.moveTo(21, 0);
+    ctx.lineTo(21, 32);
+    ctx.stroke();
+    ctx.fillStyle = highlightColor;
+    ctx.globalAlpha = 0.4;
+    ctx.fillRect(3, 6, 7, 2);
+    ctx.fillRect(13, 17, 7, 2);
+    ctx.fillRect(23, 9, 5, 2);
+    ctx.globalAlpha = 1;
+  }
+
+  private drawLeaves(ctx: CanvasRenderingContext2D, shadeColor: string, highlightColor: string): void {
+    ctx.fillStyle = shadeColor;
+    ctx.fillRect(4, 18, 8, 7);
+    ctx.fillRect(19, 6, 8, 8);
+    ctx.fillStyle = highlightColor;
+    ctx.globalAlpha = 0.55;
+    ctx.fillRect(7, 7, 9, 5);
+    ctx.fillRect(15, 18, 8, 4);
+    ctx.globalAlpha = 1;
+  }
+
+  private drawRock(ctx: CanvasRenderingContext2D, shadeColor: string, highlightColor: string): void {
+    ctx.strokeStyle = shadeColor;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(6, 24);
+    ctx.lineTo(13, 15);
+    ctx.lineTo(20, 19);
+    ctx.lineTo(27, 9);
+    ctx.stroke();
+    ctx.fillStyle = highlightColor;
+    ctx.globalAlpha = 0.28;
+    ctx.fillRect(6, 6, 10, 3);
+    ctx.fillRect(17, 22, 8, 2);
+    ctx.globalAlpha = 1;
+  }
+
+  private drawDungeonStone(ctx: CanvasRenderingContext2D, shadeColor: string, highlightColor: string): void {
+    ctx.strokeStyle = shadeColor;
+    ctx.lineWidth = 1;
+    [8, 18, 28].forEach((y) => {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(32, y);
+      ctx.stroke();
+    });
+    ctx.fillStyle = highlightColor;
+    ctx.globalAlpha = 0.22;
+    ctx.fillRect(3, 4, 10, 2);
+    ctx.fillRect(19, 20, 8, 2);
+    ctx.globalAlpha = 1;
+  }
+
+  private drawDungeonFloor(ctx: CanvasRenderingContext2D, shadeColor: string, highlightColor: string): void {
+    ctx.strokeStyle = shadeColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, 12);
+    ctx.lineTo(32, 12);
+    ctx.moveTo(0, 24);
+    ctx.lineTo(32, 24);
+    ctx.moveTo(15, 0);
+    ctx.lineTo(15, 12);
+    ctx.moveTo(7, 12);
+    ctx.lineTo(7, 24);
+    ctx.moveTo(24, 24);
+    ctx.lineTo(24, 32);
+    ctx.stroke();
+    ctx.fillStyle = highlightColor;
+    ctx.globalAlpha = 0.2;
+    ctx.fillRect(4, 4, 8, 2);
+    ctx.fillRect(18, 16, 8, 2);
+    ctx.globalAlpha = 1;
+  }
+
+  private drawPortal(ctx: CanvasRenderingContext2D, shadeColor: string): void {
+    ctx.fillStyle = shadeColor;
+    ctx.globalAlpha = 0.48;
+    ctx.fillRect(7, 7, 18, 18);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "#f0e6ff";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(10, 23);
+    ctx.bezierCurveTo(17, 7, 23, 25, 13, 11);
+    ctx.stroke();
   }
 
   private createHero(key: string, cloak: string, skin: string, accent: string): void {
@@ -77,15 +260,21 @@ export class BootScene extends Phaser.Scene {
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, 32, 32);
     ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
-    ctx.fillRect(8, 27, 16, 3);
+    ctx.fillRect(7, 27, 18, 3);
+    ctx.fillStyle = "#1a2026";
+    ctx.fillRect(8, 12, 16, 16);
     ctx.fillStyle = cloak;
     ctx.fillRect(9, 13, 14, 14);
     ctx.fillStyle = accent;
     ctx.fillRect(12, 18, 8, 3);
+    ctx.fillRect(10, 25, 4, 3);
+    ctx.fillRect(19, 25, 4, 3);
     ctx.fillStyle = skin;
     ctx.fillRect(10, 6, 12, 10);
     ctx.fillStyle = "#2b1d18";
     ctx.fillRect(10, 5, 12, 3);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
+    ctx.fillRect(11, 14, 4, 2);
     ctx.fillStyle = "#151515";
     ctx.fillRect(13, 10, 2, 2);
     ctx.fillRect(18, 10, 2, 2);
@@ -116,7 +305,12 @@ export class BootScene extends Phaser.Scene {
       ctx.fill();
       ctx.fillStyle = shadeColor;
       ctx.fillRect(10, 22, 12, 2);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
+      ctx.fillRect(10, 15, 7, 2);
     } else {
+      ctx.fillStyle = "#1a1616";
+      ctx.fillRect(7, 10, 18, 18);
+      ctx.fillStyle = baseColor;
       ctx.fillRect(8, 11, 16, 16);
       ctx.fillStyle = shadeColor;
       ctx.fillRect(6, 9, 7, 5);
@@ -124,6 +318,8 @@ export class BootScene extends Phaser.Scene {
       if (type === "guardian") {
         ctx.fillStyle = "#f0c14b";
         ctx.fillRect(10, 6, 12, 4);
+        ctx.fillStyle = "#f4d977";
+        ctx.fillRect(12, 4, 8, 2);
       }
     }
 
@@ -144,6 +340,8 @@ export class BootScene extends Phaser.Scene {
     ctx.clearRect(0, 0, 32, 32);
     ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
     ctx.fillRect(6, 26, 20, 3);
+    ctx.fillStyle = "#2c1d14";
+    ctx.fillRect(6, open ? 14 : 10, 20, open ? 12 : 16);
     ctx.fillStyle = "#75421f";
     ctx.fillRect(7, open ? 15 : 11, 18, open ? 10 : 15);
     ctx.fillStyle = "#d7a640";

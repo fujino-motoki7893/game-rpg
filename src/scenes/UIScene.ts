@@ -9,6 +9,7 @@ export class UIScene extends Phaser.Scene {
   private statsText?: Phaser.GameObjects.Text;
   private objectiveText?: Phaser.GameObjects.Text;
   private mapText?: Phaser.GameObjects.Text;
+  private hpBarFill?: Phaser.GameObjects.Rectangle;
   private toastText?: Phaser.GameObjects.Text;
   private toastTimer?: Phaser.Time.TimerEvent;
 
@@ -17,11 +18,18 @@ export class UIScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.add.rectangle(400, 30, 800, 60, 0x11181f, 0.94);
-    this.add.rectangle(400, 608, 800, 64, 0x11181f, 0.86);
+    this.add.rectangle(400, 30, 800, 60, 0x0c1319, 0.96);
+    this.add.rectangle(400, 60, 800, 2, 0xd6b56a, 0.72);
+    this.add.rectangle(400, 64, 800, 3, 0x000000, 0.22);
+    this.add.rectangle(400, 608, 800, 64, 0x0c1319, 0.9);
+    this.add.rectangle(400, 576, 800, 2, 0xd6b56a, 0.65);
     this.hpText = this.add.text(24, 15, "", this.textStyle(18, "#f4df7e"));
-    this.statsText = this.add.text(210, 15, "", this.textStyle(18, "#f4f0db"));
-    this.objectiveText = this.add.text(24, 584, "", this.textStyle(17, "#e6d7a8"));
+    this.add.rectangle(24, 46, 150, 10, 0x1b232c, 1).setOrigin(0, 0.5);
+    this.hpBarFill = this.add.rectangle(26, 46, 146, 6, 0xd95745, 1).setOrigin(0, 0.5);
+    this.add.rectangle(24, 46, 150, 10).setStrokeStyle(1, 0xf1d585, 0.8).setOrigin(0, 0.5);
+    this.statsText = this.add.text(206, 18, "", this.textStyle(17, "#f4f0db"));
+    this.add.text(24, 582, "目的", this.textStyle(13, "#d6b56a"));
+    this.objectiveText = this.add.text(76, 582, "", this.textStyle(17, "#e6d7a8"));
     this.mapText = this.add.text(776, 15, "", this.textStyle(18, "#a9d8ff")).setOrigin(1, 0);
     this.add.text(
       24,
@@ -52,6 +60,8 @@ export class UIScene extends Phaser.Scene {
     this.statsText?.setText(
       `Lv ${save.level}  攻撃 ${save.attack}  薬草 ${save.potions}  G ${save.gold}`
     );
+    const hpRatio = Phaser.Math.Clamp(save.hp / save.maxHp, 0, 1);
+    this.hpBarFill?.setDisplaySize(146 * hpRatio, 6);
     this.objectiveText?.setText(getObjective());
     this.mapText?.setText(MAPS[save.mapId].name);
   }

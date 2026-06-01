@@ -20,6 +20,10 @@ export class BattleScene extends Phaser.Scene {
   private battleOver = false;
   private pendingEnemyTurnAt?: number;
   private pendingPlayerTurnAt?: number;
+  private playerSprite?: Phaser.GameObjects.Image;
+  private enemySprite?: Phaser.GameObjects.Image;
+  private playerHpFill?: Phaser.GameObjects.Rectangle;
+  private enemyHpFill?: Phaser.GameObjects.Rectangle;
   private logText?: Phaser.GameObjects.Text;
   private playerHpText?: Phaser.GameObjects.Text;
   private enemyHpText?: Phaser.GameObjects.Text;
@@ -38,14 +42,23 @@ export class BattleScene extends Phaser.Scene {
     this.pendingEnemyTurnAt = undefined;
     this.pendingPlayerTurnAt = undefined;
 
-    this.add.rectangle(400, 320, 800, 640, 0x090b0e, 0.86);
-    this.add.rectangle(400, 324, 640, 440, 0x18202a, 0.98).setStrokeStyle(2, 0xd8bc72);
-    this.add.text(116, 124, "ターンバトル", this.textStyle(24, "#f6e4a4"));
-    this.add.image(560, 218, this.enemy.texture).setScale(3).setDepth(5);
-    this.add.image(205, 258, "player").setScale(2.6).setDepth(5);
+    this.add.rectangle(400, 320, 800, 640, 0x07090d, 0.88);
+    this.add.rectangle(400, 324, 660, 456, 0x101923, 0.98).setStrokeStyle(3, 0xd8bc72);
+    this.add.rectangle(400, 134, 600, 2, 0xf0d98a, 0.75);
+    this.add.text(116, 112, "ターンバトル", this.textStyle(24, "#f6e4a4")).setShadow(2, 2, "#000000", 3);
+    this.add.ellipse(560, 286, 106, 22, 0x05080b, 0.36);
+    this.add.ellipse(205, 308, 80, 18, 0x05080b, 0.36);
+    this.enemySprite = this.add.image(560, 218, this.enemy.texture).setScale(3).setDepth(5);
+    this.playerSprite = this.add.image(205, 258, "player").setScale(2.6).setDepth(5);
 
     this.playerHpText = this.add.text(116, 338, "", this.textStyle(18, "#f5f1dc"));
     this.enemyHpText = this.add.text(448, 338, "", this.textStyle(18, "#f5f1dc"));
+    this.add.rectangle(116, 370, 188, 10, 0x1c2732, 1).setOrigin(0, 0.5);
+    this.add.rectangle(448, 370, 188, 10, 0x1c2732, 1).setOrigin(0, 0.5);
+    this.playerHpFill = this.add.rectangle(118, 370, 184, 6, 0xd95745, 1).setOrigin(0, 0.5);
+    this.enemyHpFill = this.add.rectangle(450, 370, 184, 6, 0xd95745, 1).setOrigin(0, 0.5);
+    this.add.rectangle(116, 370, 188, 10).setStrokeStyle(1, 0xf1d585, 0.8).setOrigin(0, 0.5);
+    this.add.rectangle(448, 370, 188, 10).setStrokeStyle(1, 0xf1d585, 0.8).setOrigin(0, 0.5);
     this.logText = this.add.text(116, 384, "", {
       ...this.textStyle(18, "#fff4cf"),
       wordWrap: { width: 568, useAdvancedWrap: true },
@@ -92,6 +105,7 @@ export class BattleScene extends Phaser.Scene {
           fixedWidth: 122,
           align: "center"
         })
+        .setShadow(1, 1, "#d2a856", 0)
         .setInteractive({ useHandCursor: true })
         .on("pointerdown", action.run);
       this.buttons.push(button);
@@ -107,6 +121,8 @@ export class BattleScene extends Phaser.Scene {
     const damage = Phaser.Math.Between(Math.max(2, save.attack - 2), save.attack + 3);
     this.enemyHp = Math.max(0, this.enemyHp - damage);
     this.refreshHud();
+    this.flashTarget(this.enemySprite);
+    this.showDamageNumber(damage, 560, 146, "#ffe08a");
 
     if (this.enemyHp <= 0) {
       this.winBattle(damage);
@@ -176,6 +192,8 @@ export class BattleScene extends Phaser.Scene {
     const damage = Phaser.Math.Between(Math.max(1, this.enemy.attack - 2), this.enemy.attack + 2);
     damagePlayer(damage);
     this.refreshHud();
+    this.flashTarget(this.playerSprite);
+    this.showDamageNumber(damage, 205, 190, "#ff9a7a");
 
     if (getSave().hp <= 0) {
       this.loseBattle(damage);
@@ -237,6 +255,11 @@ export class BattleScene extends Phaser.Scene {
     const save = getSave();
     this.playerHpText?.setText(`勇者 HP ${save.hp}/${save.maxHp}  薬草 ${save.potions}`);
     this.enemyHpText?.setText(`${this.enemy.name} HP ${this.enemyHp}/${this.enemy.maxHp}`);
+    this.playerHpFill?.setDisplaySize(184 * Phaser.Math.Clamp(save.hp / save.maxHp, 0, 1), 6);
+    this.enemyHpFill?.setDisplaySize(
+      184 * Phaser.Math.Clamp(this.enemyHp / this.enemy.maxHp, 0, 1),
+      6
+    );
   }
 
   private setLog(message: string): void {
@@ -251,6 +274,44 @@ export class BattleScene extends Phaser.Scene {
       } else {
         button.disableInteractive();
       }
+    });
+  }
+
+  private flashTarget(target?: Phaser.GameObjects.Image): void {
+    if (!target) {
+      return;
+    }
+
+    target.setTint(0xffffff);
+    this.tweens.add({
+      targets: target,
+      x: target.x + 6,
+      duration: 55,
+      yoyo: true,
+      repeat: 3,
+      onComplete: () => {
+        target.clearTint();
+      }
+    });
+  }
+
+  private showDamageNumber(amount: number, x: number, y: number, color: string): void {
+    const text = this.add
+      .text(x, y, `-${amount}`, {
+        ...this.textStyle(22, color),
+        fontStyle: "bold"
+      })
+      .setOrigin(0.5, 0.5)
+      .setDepth(20)
+      .setShadow(2, 2, "#000000", 3);
+
+    this.tweens.add({
+      targets: text,
+      y: y - 26,
+      alpha: 0,
+      duration: 650,
+      ease: "Sine.easeOut",
+      onComplete: () => text.destroy()
     });
   }
 

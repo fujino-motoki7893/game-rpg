@@ -31,12 +31,14 @@ const directionVectors: Record<Direction, TilePosition> = {
 export class WorldScene extends Phaser.Scene {
   private currentMap!: MapDefinition;
   private player!: Phaser.GameObjects.Image;
+  private playerShadow?: Phaser.GameObjects.Ellipse;
   private playerTile: TilePosition = { x: 0, y: 0 };
   private facing: Direction = "down";
   private moving = false;
   private dialogueLines: string[] = [];
   private dialogueIndex = 0;
   private dialogueBox?: Phaser.GameObjects.Rectangle;
+  private dialogueAccent?: Phaser.GameObjects.Rectangle;
   private dialogueText?: Phaser.GameObjects.Text;
   private objectGroup?: Phaser.GameObjects.Group;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -95,6 +97,16 @@ export class WorldScene extends Phaser.Scene {
     this.drawMap();
     this.createObjects();
     this.playerTile = { ...spawn };
+    this.playerShadow = this.add
+      .ellipse(
+        this.toWorldX(this.playerTile.x),
+        this.toWorldY(this.playerTile.y) + 13,
+        20,
+        6,
+        0x05080b,
+        0.3
+      )
+      .setDepth(19);
     this.player = this.add.image(
       this.toWorldX(this.playerTile.x),
       this.toWorldY(this.playerTile.y),
@@ -108,6 +120,20 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private drawMap(): void {
+    const mapWidth = this.currentMap.rows[0].length * TILE_SIZE;
+    const mapHeight = this.currentMap.rows.length * TILE_SIZE;
+    this.add
+      .rectangle(
+        MAP_OFFSET_X + mapWidth / 2,
+        MAP_OFFSET_Y + mapHeight / 2,
+        mapWidth + 14,
+        mapHeight + 14,
+        0x070b0f,
+        0.55
+      )
+      .setStrokeStyle(2, 0xd6b56a, 0.28)
+      .setDepth(-2);
+
     for (let y = 0; y < this.currentMap.rows.length; y += 1) {
       for (let x = 0; x < this.currentMap.rows[y].length; x += 1) {
         const tile = this.currentMap.rows[y][x];
@@ -122,16 +148,24 @@ export class WorldScene extends Phaser.Scene {
 
   private createObjects(): void {
     this.currentMap.portals.forEach((portal) => {
-      this.objectGroup
-        ?.add(
-          this.add
-            .image(this.toWorldX(portal.x), this.toWorldY(portal.y), "tile-portal")
-            .setDepth(5)
-            .setAlpha(0.78)
-        );
+      const portalImage = this.add
+        .image(this.toWorldX(portal.x), this.toWorldY(portal.y), "tile-portal")
+        .setDepth(5)
+        .setAlpha(0.72);
+      this.objectGroup?.add(portalImage);
+      this.tweens.add({
+        targets: portalImage,
+        alpha: 1,
+        scale: 1.08,
+        yoyo: true,
+        repeat: -1,
+        duration: 900,
+        ease: "Sine.easeInOut"
+      });
     });
 
     this.currentMap.npcs.forEach((npc) => {
+      this.addShadow(npc.x, npc.y, 11);
       this.objectGroup?.add(
         this.add.image(this.toWorldX(npc.x), this.toWorldY(npc.y), npc.texture).setDepth(12)
       );
@@ -139,6 +173,7 @@ export class WorldScene extends Phaser.Scene {
 
     this.currentMap.chests.forEach((chest) => {
       const opened = hasFlag(`${chest.id}-opened`);
+      this.addShadow(chest.x, chest.y, 10);
       this.objectGroup?.add(
         this.add
           .image(this.toWorldX(chest.x), this.toWorldY(chest.y), opened ? "chest-open" : "chest-closed")
@@ -150,10 +185,19 @@ export class WorldScene extends Phaser.Scene {
       .filter((enemy) => !getSave().defeatedEnemies.includes(enemy.id))
       .forEach((enemy) => {
         const texture = enemy.enemyKey === "slime" ? "enemy-slime" : enemy.enemyKey === "goblin" ? "enemy-goblin" : "enemy-guardian";
+        this.addShadow(enemy.x, enemy.y, 10);
         this.objectGroup?.add(
           this.add.image(this.toWorldX(enemy.x), this.toWorldY(enemy.y), texture).setDepth(11)
         );
       });
+  }
+
+  private addShadow(tileX: number, tileY: number, depth: number): void {
+    this.objectGroup?.add(
+      this.add
+        .ellipse(this.toWorldX(tileX), this.toWorldY(tileY) + 13, 20, 6, 0x05080b, 0.28)
+        .setDepth(depth)
+    );
   }
 
   private refreshAfterBattle(): void {
@@ -219,6 +263,16 @@ export class WorldScene extends Phaser.Scene {
         this.checkPortal();
       }
     });
+
+    if (this.playerShadow) {
+      this.tweens.add({
+        targets: this.playerShadow,
+        x: this.toWorldX(target.x),
+        y: this.toWorldY(target.y) + 13,
+        duration: 125,
+        ease: "Sine.easeInOut"
+      });
+    }
   }
 
   private tryInteract(): void {
@@ -353,6 +407,7 @@ export class WorldScene extends Phaser.Scene {
     this.dialogueLines = lines;
     this.dialogueIndex = 0;
     this.dialogueBox?.setVisible(true);
+    this.dialogueAccent?.setVisible(true);
     this.dialogueText?.setVisible(true);
     this.dialogueText?.setText(lines[0]);
   }
@@ -362,6 +417,7 @@ export class WorldScene extends Phaser.Scene {
     if (this.dialogueIndex >= this.dialogueLines.length) {
       this.dialogueLines = [];
       this.dialogueBox?.setVisible(false);
+      this.dialogueAccent?.setVisible(false);
       this.dialogueText?.setVisible(false);
       return;
     }
@@ -371,9 +427,13 @@ export class WorldScene extends Phaser.Scene {
 
   private createDialoguePanel(): void {
     this.dialogueBox = this.add
-      .rectangle(400, 535, 672, 86, 0x17171f, 0.96)
-      .setStrokeStyle(2, 0xd1bb78)
+      .rectangle(400, 535, 688, 92, 0x101722, 0.97)
+      .setStrokeStyle(2, 0xd6b56a, 0.95)
       .setDepth(40)
+      .setVisible(false);
+    this.dialogueAccent = this.add
+      .rectangle(400, 493, 650, 2, 0xf0d98a, 0.8)
+      .setDepth(41)
       .setVisible(false);
     this.dialogueText = this.add
       .text(96, 504, "", {
