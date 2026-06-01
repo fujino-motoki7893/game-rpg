@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "game-rpg",
+  "main": "./src/worker/index.ts",
+  "compatibility_date": "2026-06-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    "GROQ_MODEL": "llama-3.1-8b-instant"
+  },
+  "secrets": {
+    "required": ["GROQ_API_KEY"]
+  },
+  "observability": {
+    "enabled": true
+  }
+}

@@ -1,5 +1,5 @@
 import { SAVE_KEY } from "./constants";
-import type { GameSave, MapId } from "./types";
+import type { GameSave, MapDefinition, MapId } from "./types";
 
 export const initialSave = (): GameSave => ({
   mapId: "village",
@@ -49,6 +49,15 @@ export function resetSave(): GameSave {
   save = initialSave();
   persistSave();
   return save;
+}
+
+export function getGeneratedDungeon(): MapDefinition | undefined {
+  return save.generatedDungeon;
+}
+
+export function setGeneratedDungeon(dungeon: MapDefinition): void {
+  save.generatedDungeon = dungeon;
+  persistSave();
 }
 
 export function setPlayerPosition(mapId: MapId, x: number, y: number): void {

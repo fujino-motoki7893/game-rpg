@@ -63,6 +63,7 @@ export interface GameSave {
   potions: number;
   flags: Record<string, boolean>;
   defeatedEnemies: string[];
+  generatedDungeon?: MapDefinition;
 }
 
 export interface BattlePayload {

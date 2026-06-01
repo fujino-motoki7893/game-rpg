@@ -34,7 +34,15 @@ export class BattleScene extends Phaser.Scene {
   }
 
   create(payload: BattlePayload): void {
-    this.enemy = ENEMIES[payload.enemyKey];
+    this.buttons = [];
+    this.playerSprite = undefined;
+    this.enemySprite = undefined;
+    this.playerHpFill = undefined;
+    this.enemyHpFill = undefined;
+    this.logText = undefined;
+    this.playerHpText = undefined;
+    this.enemyHpText = undefined;
+    this.enemy = ENEMIES[payload.enemyKey] ?? ENEMIES.goblin;
     this.enemyInstanceId = payload.enemyInstanceId;
     this.enemyHp = this.enemy.maxHp;
     this.playerTurn = true;
@@ -171,8 +179,8 @@ export class BattleScene extends Phaser.Scene {
 
   private endPlayerTurn(): void {
     this.playerTurn = false;
-    this.setButtonsEnabled(false);
     this.pendingEnemyTurnAt = this.time.now + 700;
+    this.setButtonsEnabled(false);
   }
 
   private runEnemyTurn(): void {
@@ -267,6 +275,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private setButtonsEnabled(enabled: boolean): void {
+    this.buttons = this.buttons.filter((button) => button.active && button.scene === this);
     this.buttons.forEach((button) => {
       button.setAlpha(enabled ? 1 : 0.55);
       if (enabled) {

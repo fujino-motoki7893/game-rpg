@@ -1,5 +1,15 @@
 import Phaser from "phaser";
 
+type CreatureType =
+  | "slime"
+  | "goblin"
+  | "bat"
+  | "skeleton"
+  | "wolf"
+  | "mage"
+  | "mimic"
+  | "guardian";
+
 export class BootScene extends Phaser.Scene {
   constructor() {
     super("BootScene");
@@ -23,6 +33,11 @@ export class BootScene extends Phaser.Scene {
     this.createHero("npc-healer", "#8f3d67", "#f2d2a9", "#f2f4ff");
     this.createCreature("enemy-slime", "#69c36d", "#2a7138", "slime");
     this.createCreature("enemy-goblin", "#748c3d", "#3f5220", "goblin");
+    this.createCreature("enemy-bat", "#4b4a72", "#252640", "bat");
+    this.createCreature("enemy-skeleton", "#d2c8a8", "#6d6757", "skeleton");
+    this.createCreature("enemy-wolf", "#7c7f86", "#3f444c", "wolf");
+    this.createCreature("enemy-mage", "#6e4fa3", "#2f244d", "mage");
+    this.createCreature("enemy-mimic", "#9a552f", "#3a2115", "mimic");
     this.createCreature("enemy-guardian", "#a14f3d", "#4b2825", "guardian");
     this.createChest("chest-closed", false);
     this.createChest("chest-open", true);
@@ -285,7 +300,7 @@ export class BootScene extends Phaser.Scene {
     key: string,
     baseColor: string,
     shadeColor: string,
-    type: "slime" | "goblin" | "guardian"
+    type: CreatureType
   ): void {
     const texture = this.textures.createCanvas(key, 32, 32);
     if (!texture) {
@@ -299,34 +314,110 @@ export class BootScene extends Phaser.Scene {
     ctx.fillRect(7, 27, 18, 3);
     ctx.fillStyle = baseColor;
 
-    if (type === "slime") {
-      ctx.beginPath();
-      ctx.ellipse(16, 20, 12, 9, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = shadeColor;
-      ctx.fillRect(10, 22, 12, 2);
-      ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
-      ctx.fillRect(10, 15, 7, 2);
-    } else {
-      ctx.fillStyle = "#1a1616";
-      ctx.fillRect(7, 10, 18, 18);
-      ctx.fillStyle = baseColor;
-      ctx.fillRect(8, 11, 16, 16);
-      ctx.fillStyle = shadeColor;
-      ctx.fillRect(6, 9, 7, 5);
-      ctx.fillRect(19, 9, 7, 5);
-      if (type === "guardian") {
-        ctx.fillStyle = "#f0c14b";
-        ctx.fillRect(10, 6, 12, 4);
-        ctx.fillStyle = "#f4d977";
-        ctx.fillRect(12, 4, 8, 2);
-      }
+    switch (type) {
+      case "slime":
+        ctx.beginPath();
+        ctx.ellipse(16, 20, 12, 9, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = shadeColor;
+        ctx.fillRect(10, 22, 12, 2);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
+        ctx.fillRect(10, 15, 7, 2);
+        this.drawCreatureEyes(ctx, 12, 16);
+        break;
+      case "bat":
+        ctx.fillStyle = shadeColor;
+        ctx.beginPath();
+        ctx.moveTo(4, 18);
+        ctx.lineTo(13, 11);
+        ctx.lineTo(16, 19);
+        ctx.lineTo(19, 11);
+        ctx.lineTo(28, 18);
+        ctx.lineTo(21, 23);
+        ctx.lineTo(16, 20);
+        ctx.lineTo(11, 23);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = baseColor;
+        ctx.fillRect(12, 13, 8, 10);
+        this.drawCreatureEyes(ctx, 12, 16);
+        break;
+      case "skeleton":
+        ctx.fillStyle = shadeColor;
+        ctx.fillRect(10, 19, 12, 8);
+        ctx.fillStyle = baseColor;
+        ctx.fillRect(9, 8, 14, 12);
+        ctx.fillRect(12, 21, 3, 6);
+        ctx.fillRect(18, 21, 3, 6);
+        ctx.fillStyle = "#2b2824";
+        ctx.fillRect(12, 13, 3, 3);
+        ctx.fillRect(18, 13, 3, 3);
+        ctx.fillRect(15, 17, 3, 2);
+        break;
+      case "wolf":
+        ctx.fillStyle = "#1a1616";
+        ctx.fillRect(7, 13, 18, 14);
+        ctx.fillStyle = baseColor;
+        ctx.fillRect(8, 14, 16, 13);
+        ctx.fillStyle = shadeColor;
+        ctx.fillRect(8, 9, 5, 6);
+        ctx.fillRect(20, 9, 5, 6);
+        ctx.fillRect(17, 19, 7, 3);
+        ctx.fillStyle = "#e5dfd2";
+        ctx.fillRect(20, 22, 3, 2);
+        this.drawCreatureEyes(ctx, 11, 16);
+        break;
+      case "mage":
+        ctx.fillStyle = "#1a1616";
+        ctx.fillRect(8, 12, 16, 16);
+        ctx.fillStyle = baseColor;
+        ctx.fillRect(9, 13, 14, 15);
+        ctx.fillStyle = shadeColor;
+        ctx.fillRect(10, 6, 12, 8);
+        ctx.fillStyle = "#86d9ff";
+        ctx.fillRect(14, 18, 5, 5);
+        this.drawCreatureEyes(ctx, 12, 16);
+        break;
+      case "mimic":
+        ctx.fillStyle = "#1a1616";
+        ctx.fillRect(6, 12, 20, 14);
+        ctx.fillStyle = baseColor;
+        ctx.fillRect(7, 13, 18, 12);
+        ctx.fillStyle = "#d5a33f";
+        ctx.fillRect(7, 13, 18, 3);
+        ctx.fillRect(15, 13, 3, 12);
+        ctx.fillStyle = "#f1ead8";
+        ctx.fillRect(10, 18, 3, 3);
+        ctx.fillRect(19, 18, 3, 3);
+        ctx.fillStyle = "#111111";
+        ctx.fillRect(12, 15, 2, 2);
+        ctx.fillRect(19, 15, 2, 2);
+        break;
+      case "goblin":
+      case "guardian":
+        ctx.fillStyle = "#1a1616";
+        ctx.fillRect(7, 10, 18, 18);
+        ctx.fillStyle = baseColor;
+        ctx.fillRect(8, 11, 16, 16);
+        ctx.fillStyle = shadeColor;
+        ctx.fillRect(6, 9, 7, 5);
+        ctx.fillRect(19, 9, 7, 5);
+        if (type === "guardian") {
+          ctx.fillStyle = "#f0c14b";
+          ctx.fillRect(10, 6, 12, 4);
+          ctx.fillStyle = "#f4d977";
+          ctx.fillRect(12, 4, 8, 2);
+        }
+        this.drawCreatureEyes(ctx, 12, 16);
+        break;
     }
-
-    ctx.fillStyle = "#111111";
-    ctx.fillRect(12, 16, 3, 3);
-    ctx.fillRect(19, 16, 3, 3);
     texture.refresh();
+  }
+
+  private drawCreatureEyes(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+    ctx.fillStyle = "#111111";
+    ctx.fillRect(x, y, 3, 3);
+    ctx.fillRect(x + 7, y, 3, 3);
   }
 
   private createChest(key: string, open: boolean): void {

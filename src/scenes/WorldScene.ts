@@ -1,14 +1,18 @@
 import Phaser from "phaser";
 import { getNpcDialogue } from "../data/dialogues";
+import { createDungeon } from "../data/dungeonService";
+import { ENEMIES } from "../data/enemies";
 import { BLOCKING_TILES, MAPS } from "../data/maps";
 import { GAME_EVENTS, MAP_OFFSET_X, MAP_OFFSET_Y, TILE_SIZE } from "../game/constants";
 import {
+  getGeneratedDungeon,
   getSave,
   hasFlag,
   healPlayer,
   markFlag,
   persistSave,
   resetSave,
+  setGeneratedDungeon,
   setPlayerPosition
 } from "../game/GameState";
 import type {
@@ -45,6 +49,7 @@ export class WorldScene extends Phaser.Scene {
   private wasd?: Record<string, Phaser.Input.Keyboard.Key>;
   private actionKeys?: Phaser.Input.Keyboard.Key[];
   private resetKey?: Phaser.Input.Keyboard.Key;
+  private loadingMap = false;
 
   constructor() {
     super("WorldScene");
@@ -67,17 +72,17 @@ export class WorldScene extends Phaser.Scene {
     this.events.on("resume", this.refreshAfterBattle, this);
 
     const save = getSave();
-    this.loadMap(save.mapId, { x: save.x, y: save.y });
+    void this.loadMap(save.mapId, { x: save.x, y: save.y });
   }
 
   update(): void {
-    if (this.dialogueLines.length > 0 || this.moving) {
+    if (this.loadingMap || this.dialogueLines.length > 0 || this.moving) {
       return;
     }
 
     if (this.resetKey && Phaser.Input.Keyboard.JustDown(this.resetKey)) {
       resetSave();
-      this.loadMap("village", MAPS.village.spawn);
+      void this.loadMap("village", MAPS.village.spawn);
       this.game.events.emit(GAME_EVENTS.toast, "新しい冒険");
       this.game.events.emit(GAME_EVENTS.stateChanged);
       return;
@@ -89,34 +94,61 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  private loadMap(mapId: MapId, spawn: TilePosition): void {
-    this.children.removeAll(true);
-    this.currentMap = MAPS[mapId];
-    this.objectGroup = this.add.group();
+  private async loadMap(mapId: MapId, spawn: TilePosition): Promise<void> {
+    this.loadingMap = true;
+    try {
+      const nextMap = await this.resolveMap(mapId);
+      this.children.removeAll(true);
+      this.currentMap = nextMap;
+      this.objectGroup = this.add.group();
+      const entryTile = this.isTerrainBlocked(spawn) ? this.currentMap.spawn : spawn;
 
-    this.drawMap();
-    this.createObjects();
-    this.playerTile = { ...spawn };
-    this.playerShadow = this.add
-      .ellipse(
+      this.drawMap();
+      this.createObjects();
+      this.playerTile = { ...entryTile };
+      this.playerShadow = this.add
+        .ellipse(
+          this.toWorldX(this.playerTile.x),
+          this.toWorldY(this.playerTile.y) + 13,
+          20,
+          6,
+          0x05080b,
+          0.3
+        )
+        .setDepth(19);
+      this.player = this.add.image(
         this.toWorldX(this.playerTile.x),
-        this.toWorldY(this.playerTile.y) + 13,
-        20,
-        6,
-        0x05080b,
-        0.3
-      )
-      .setDepth(19);
-    this.player = this.add.image(
-      this.toWorldX(this.playerTile.x),
-      this.toWorldY(this.playerTile.y),
-      "player"
+        this.toWorldY(this.playerTile.y),
+        "player"
+      );
+      this.player.setDepth(20);
+      this.createDialoguePanel();
+      setPlayerPosition(mapId, entryTile.x, entryTile.y);
+      this.game.events.emit(GAME_EVENTS.mapChanged, this.currentMap.name);
+      this.game.events.emit(GAME_EVENTS.stateChanged);
+    } finally {
+      this.loadingMap = false;
+    }
+  }
+
+  private async resolveMap(mapId: MapId): Promise<MapDefinition> {
+    if (mapId !== "dungeon") {
+      return MAPS[mapId];
+    }
+
+    const generatedDungeon = getGeneratedDungeon();
+    if (generatedDungeon) {
+      return generatedDungeon;
+    }
+
+    this.game.events.emit(GAME_EVENTS.toast, "洞窟を生成中...");
+    const { dungeon, source } = await createDungeon();
+    setGeneratedDungeon(dungeon);
+    this.game.events.emit(
+      GAME_EVENTS.toast,
+      source === "groq" ? "AIが洞窟を描き替えた" : "洞窟の地形が変化した"
     );
-    this.player.setDepth(20);
-    this.createDialoguePanel();
-    setPlayerPosition(mapId, spawn.x, spawn.y);
-    this.game.events.emit(GAME_EVENTS.mapChanged, this.currentMap.name);
-    this.game.events.emit(GAME_EVENTS.stateChanged);
+    return dungeon;
   }
 
   private drawMap(): void {
@@ -184,7 +216,7 @@ export class WorldScene extends Phaser.Scene {
     this.currentMap.enemies
       .filter((enemy) => !getSave().defeatedEnemies.includes(enemy.id))
       .forEach((enemy) => {
-        const texture = enemy.enemyKey === "slime" ? "enemy-slime" : enemy.enemyKey === "goblin" ? "enemy-goblin" : "enemy-guardian";
+        const texture = ENEMIES[enemy.enemyKey]?.texture ?? "enemy-goblin";
         this.addShadow(enemy.x, enemy.y, 10);
         this.objectGroup?.add(
           this.add.image(this.toWorldX(enemy.x), this.toWorldY(enemy.y), texture).setDepth(11)
@@ -201,10 +233,14 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private refreshAfterBattle(): void {
-    this.loadMap(this.currentMap.id, this.playerTile);
+    void this.loadMap(this.currentMap.id, this.playerTile);
   }
 
   private handleKeyDown(event: KeyboardEvent): void {
+    if (this.loadingMap) {
+      return;
+    }
+
     if (this.dialogueLines.length > 0 && (event.code === "Space" || event.code === "Enter")) {
       this.advanceDialogue();
       return;
@@ -260,7 +296,7 @@ export class WorldScene extends Phaser.Scene {
       ease: "Sine.easeInOut",
       onComplete: () => {
         this.moving = false;
-        this.checkPortal();
+        void this.checkPortal();
       }
     });
 
@@ -276,7 +312,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private tryInteract(): void {
-    if (this.dialogueLines.length > 0 || this.moving) {
+    if (this.loadingMap || this.dialogueLines.length > 0 || this.moving) {
       return;
     }
 
@@ -289,7 +325,7 @@ export class WorldScene extends Phaser.Scene {
 
     const chest = this.chestAt(target);
     if (chest) {
-      this.openChest(chest);
+      void this.openChest(chest);
     }
   }
 
@@ -325,7 +361,7 @@ export class WorldScene extends Phaser.Scene {
     this.showDialogue(dialogue);
   }
 
-  private openChest(chest: ChestDefinition): void {
+  private async openChest(chest: ChestDefinition): Promise<void> {
     if (hasFlag(`${chest.id}-opened`)) {
       this.showDialogue(["宝箱は空だ。"]);
       return;
@@ -339,7 +375,7 @@ export class WorldScene extends Phaser.Scene {
     markFlag(`${chest.id}-opened`);
     markFlag("treasureFound");
     this.game.events.emit(GAME_EVENTS.stateChanged);
-    this.loadMap(this.currentMap.id, this.playerTile);
+    await this.loadMap(this.currentMap.id, this.playerTile);
     this.showDialogue([
       "太陽石を手に入れた。",
       "あたたかな光がストーンブルックへの帰路を照らしている。"
@@ -354,13 +390,13 @@ export class WorldScene extends Phaser.Scene {
     this.scene.pause();
   }
 
-  private checkPortal(): void {
+  private async checkPortal(): Promise<void> {
     const portal = this.currentMap.portals.find(
       (candidate) => candidate.x === this.playerTile.x && candidate.y === this.playerTile.y
     );
 
     if (portal) {
-      this.loadMap(portal.toMap, { x: portal.toX, y: portal.toY });
+      await this.loadMap(portal.toMap, { x: portal.toX, y: portal.toY });
     }
   }
 
@@ -376,6 +412,15 @@ export class WorldScene extends Phaser.Scene {
     }
 
     return Boolean(this.npcAt(position) || this.chestAt(position));
+  }
+
+  private isTerrainBlocked(position: TilePosition): boolean {
+    const row = this.currentMap.rows[position.y];
+    if (!row || position.x < 0 || position.x >= row.length) {
+      return true;
+    }
+
+    return BLOCKING_TILES.has(row[position.x]);
   }
 
   private enemyAt(position: TilePosition): EnemySpawn | undefined {

@@ -89,8 +89,9 @@ export const MAPS: Record<string, MapDefinition> = {
     npcs: [],
     chests: [{ id: "relic-chest", x: 15, y: 12 }],
     enemies: [
-      { id: "dungeon-goblin-a", enemyKey: "goblin", x: 17, y: 7 },
-      { id: "dungeon-goblin-b", enemyKey: "goblin", x: 5, y: 11 },
+      { id: "dungeon-bat-1", enemyKey: "bat", x: 17, y: 7 },
+      { id: "dungeon-skeleton-2", enemyKey: "skeleton", x: 5, y: 11 },
+      { id: "dungeon-mage-3", enemyKey: "mage", x: 10, y: 10 },
       { id: "dungeon-guardian", enemyKey: "guardian", x: 15, y: 13 }
     ]
   }
