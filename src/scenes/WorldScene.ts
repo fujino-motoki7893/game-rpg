@@ -559,11 +559,13 @@ export class WorldScene extends Phaser.Scene {
     markFlag(`${chest.id}-opened`);
     if (isRelicChest) {
       markFlag("treasureFound");
+      resetDungeonEnemyDefeats();
+      setCurrentDungeonFloor(1);
       this.game.events.emit(GAME_EVENTS.stateChanged);
-      await this.loadMap(this.currentMap.id, this.playerTile);
+      await this.loadMap("field", FIELD_DUNGEON_ENTRANCE);
       this.showDialogue([
         "太陽石を手に入れた。",
-        "あたたかな光がストーンブルックへの帰路を照らしている。"
+        "あたたかな光に包まれ、洞窟の外へ導かれた。"
       ]);
       return;
     }
