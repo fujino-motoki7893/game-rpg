@@ -1,5 +1,13 @@
 import Phaser from "phaser";
 import {
+  EQUIPMENT,
+  EQUIPMENT_ORDER,
+  EQUIPMENT_SLOTS,
+  EQUIPMENT_SLOT_LABELS,
+  getEquipmentRarityLabel,
+  getEquipmentStatSummary
+} from "../data/equipment";
+import {
   canItemEscapeDungeon,
   canItemHealHp,
   canItemRestoreMp,
@@ -13,20 +21,28 @@ import { GAME_EVENTS } from "../game/constants";
 import {
   getCurrentDungeonFloor,
   getDungeonFloorCount,
+  getEquipmentCount,
+  getEquippedEquipment,
   getItemCount,
+  getPlayerAttack,
+  getPlayerDefense,
+  getPlayerMaxHp,
+  getPlayerMaxMp,
   getSave,
   consumeItem,
+  equipEquipment,
   useHealingSkill,
   useItem
 } from "../game/GameState";
-import type { ItemId } from "../game/types";
+import type { EquipmentId, ItemId } from "../game/types";
 
-type MenuTab = "items" | "skills" | "status";
+type MenuTab = "items" | "skills" | "equipment" | "status";
 
-const TABS: MenuTab[] = ["items", "skills", "status"];
+const TABS: MenuTab[] = ["items", "skills", "equipment", "status"];
 const TAB_LABELS: Record<MenuTab, string> = {
   items: "持ち物",
   skills: "スキル",
+  equipment: "装備",
   status: "強さ"
 };
 
@@ -34,6 +50,7 @@ export class MenuScene extends Phaser.Scene {
   private activeTab: MenuTab = "items";
   private selectedItemIndex = 0;
   private selectedSkillIndex = 0;
+  private selectedEquipmentIndex = 0;
   private tabButtons: Partial<Record<MenuTab, Phaser.GameObjects.Text>> = {};
   private contentObjects: Phaser.GameObjects.GameObject[] = [];
   private messageText?: Phaser.GameObjects.Text;
@@ -46,6 +63,7 @@ export class MenuScene extends Phaser.Scene {
     this.activeTab = "items";
     this.selectedItemIndex = 0;
     this.selectedSkillIndex = 0;
+    this.selectedEquipmentIndex = 0;
     this.contentObjects = [];
     this.tabButtons = {};
 
@@ -58,8 +76,9 @@ export class MenuScene extends Phaser.Scene {
     this.add.text(154, 120, "メニュー", this.textStyle(25, "#f6e4a4")).setDepth(102);
 
     this.createTabButton("items", 154, 176);
-    this.createTabButton("skills", 276, 176);
-    this.createTabButton("status", 398, 176);
+    this.createTabButton("skills", 266, 176);
+    this.createTabButton("equipment", 378, 176);
+    this.createTabButton("status", 490, 176);
     this.createCloseButton();
     this.messageText = this.add
       .text(154, 492, "", this.textStyle(16, "#f6e4a4"))
@@ -123,11 +142,18 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
+    if (this.activeTab === "equipment") {
+      this.renderEquipment();
+      return;
+    }
+
     this.renderStatus();
   }
 
   private renderItems(): void {
     const save = getSave();
+    const maxHp = getPlayerMaxHp();
+    const maxMp = getPlayerMaxMp();
     const selectedItem = ITEM_ORDER[this.selectedItemIndex];
     const canUseSelected = this.canUseInventoryItem(selectedItem);
 
@@ -164,7 +190,7 @@ export class MenuScene extends Phaser.Scene {
 
     this.addContent(
       this.add
-        .text(154, 416, `現在HP ${save.hp}/${save.maxHp}  MP ${save.mp}/${save.maxMp}`, this.textStyle(18, "#f4df7e"))
+        .text(154, 416, `現在HP ${save.hp}/${maxHp}  MP ${save.mp}/${maxMp}`, this.textStyle(18, "#f4df7e"))
         .setDepth(102)
     );
 
@@ -187,12 +213,14 @@ export class MenuScene extends Phaser.Scene {
 
   private renderSkills(): void {
     const save = getSave();
+    const maxHp = getPlayerMaxHp();
+    const maxMp = getPlayerMaxMp();
     const selectedSkillId = SKILL_ORDER[this.selectedSkillIndex];
     const selectedSkill = SKILLS[selectedSkillId];
     const selectedLearned = save.level >= selectedSkill.requiredLevel;
     const selectedIsHeal = selectedSkill.effect.type === "heal";
     const canUseSelected =
-      selectedLearned && selectedIsHeal && save.mp >= selectedSkill.mpCost && save.hp < save.maxHp;
+      selectedLearned && selectedIsHeal && save.mp >= selectedSkill.mpCost && save.hp < maxHp;
 
     SKILL_ORDER.forEach((skillId, index) => {
       const skill = SKILLS[skillId];
@@ -235,7 +263,7 @@ export class MenuScene extends Phaser.Scene {
 
     this.addContent(
       this.add
-        .text(154, 416, `現在HP ${save.hp}/${save.maxHp}  MP ${save.mp}/${save.maxMp}`, this.textStyle(18, "#f4df7e"))
+        .text(154, 416, `現在HP ${save.hp}/${maxHp}  MP ${save.mp}/${maxMp}`, this.textStyle(18, "#f4df7e"))
         .setDepth(102)
     );
 
@@ -262,7 +290,7 @@ export class MenuScene extends Phaser.Scene {
           .text(
             154,
             452,
-            `回復量 ${getSkillHealAmount(selectedSkill, save.maxHp)}`,
+            `回復量 ${getSkillHealAmount(selectedSkill, maxHp)}`,
             this.textStyle(15, "#9fb4c6")
           )
           .setDepth(102)
@@ -270,13 +298,107 @@ export class MenuScene extends Phaser.Scene {
     }
   }
 
+  private renderEquipment(): void {
+    const save = getSave();
+    const ownedEquipment = this.getOwnedEquipmentIds();
+    this.selectedEquipmentIndex = Phaser.Math.Clamp(
+      this.selectedEquipmentIndex,
+      0,
+      Math.max(0, ownedEquipment.length - 1)
+    );
+
+    this.addContent(
+      this.add.text(154, 214, "装備中", this.textStyle(16, "#f4df7e")).setDepth(102)
+    );
+    EQUIPMENT_SLOTS.forEach((slot, index) => {
+      const y = 238 + index * 24;
+      const equipmentId = getEquippedEquipment(slot);
+      const name = equipmentId ? EQUIPMENT[equipmentId].name : "-";
+      this.addContent(
+        this.add.text(154, y, EQUIPMENT_SLOT_LABELS[slot], this.textStyle(13, "#9fb4c6")).setDepth(102)
+      );
+      this.addContent(
+        this.add.text(228, y, name, this.textStyle(13, equipmentId ? "#fff4cf" : "#748393")).setDepth(102)
+      );
+    });
+
+    this.addContent(
+      this.add.text(404, 214, "所持装備", this.textStyle(16, "#f4df7e")).setDepth(102)
+    );
+
+    if (ownedEquipment.length === 0) {
+      this.addContent(
+        this.add.text(404, 242, "装備品なし", this.textStyle(15, "#748393")).setDepth(102)
+      );
+    } else {
+      const { start, visible } = this.getVisibleOwnedEquipment(ownedEquipment);
+      visible.forEach((equipmentId, visibleIndex) => {
+        const index = start + visibleIndex;
+        const equipment = EQUIPMENT[equipmentId];
+        const selected = index === this.selectedEquipmentIndex;
+        const y = 238 + visibleIndex * 32;
+        const row = this.add
+          .rectangle(516, y + 13, 236, 30, selected ? 0x263442 : 0x111a24, selected ? 0.95 : 0.58)
+          .setStrokeStyle(selected ? 2 : 1, selected ? 0xd8bc72 : 0x34475a, selected ? 0.9 : 0.45)
+          .setDepth(101)
+          .setInteractive({ useHandCursor: true })
+          .on("pointerdown", () => this.selectEquipment(index));
+        this.addContent(row);
+        this.addContent(
+          this.add.text(404, y, selected ? ">" : "", this.textStyle(14, "#f6e4a4")).setDepth(102)
+        );
+        this.addContent(
+          this.add.text(424, y, equipment.name, this.textStyle(13, "#fff4cf")).setDepth(102)
+        );
+        this.addContent(
+          this.add.text(548, y, getEquipmentRarityLabel(equipmentId), this.textStyle(12, "#f4df7e")).setDepth(102)
+        );
+        this.addContent(
+          this.add.text(594, y, `x${getEquipmentCount(equipmentId)}`, this.textStyle(12, "#d9e5ef")).setDepth(102)
+        );
+        this.addContent(
+          this.add.text(424, y + 14, getEquipmentStatSummary(equipmentId), this.textStyle(11, "#9fb4c6")).setDepth(102)
+        );
+      });
+    }
+
+    this.addContent(
+      this.add
+        .text(
+          154,
+          416,
+          `HP ${save.hp}/${getPlayerMaxHp()}  MP ${save.mp}/${getPlayerMaxMp()}  攻 ${getPlayerAttack()}  防 ${getPlayerDefense()}`,
+          this.textStyle(16, "#f4df7e")
+        )
+        .setDepth(102)
+    );
+
+    const canEquipSelected = ownedEquipment.length > 0;
+    const equipButton = this.add
+      .text(530, 412, "装備", {
+        ...this.textStyle(18, canEquipSelected ? "#101820" : "#2a3036"),
+        backgroundColor: canEquipSelected ? "#f2d27a" : "#66707a",
+        padding: { x: 18, y: 10 },
+        fixedWidth: 92,
+        align: "center"
+      })
+      .setAlpha(canEquipSelected ? 1 : 0.58)
+      .setDepth(102);
+
+    if (canEquipSelected) {
+      equipButton.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.equipSelectedEquipment());
+    }
+    this.addContent(equipButton);
+  }
+
   private renderStatus(): void {
     const save = getSave();
     const rows = [
       ["レベル", String(save.level)],
-      ["HP", `${save.hp}/${save.maxHp}`],
-      ["MP", `${save.mp}/${save.maxMp}`],
-      ["攻撃", String(save.attack)],
+      ["HP", `${save.hp}/${getPlayerMaxHp()}`],
+      ["MP", `${save.mp}/${getPlayerMaxMp()}`],
+      ["攻撃", String(getPlayerAttack())],
+      ["防御", String(getPlayerDefense())],
       ["EXP", String(save.exp)],
       ["次のレベルまで", String(Math.max(0, save.level * 12 - save.exp))],
       ["ゴールド", String(save.gold)],
@@ -284,7 +406,7 @@ export class MenuScene extends Phaser.Scene {
     ];
 
     rows.forEach(([label, value], index) => {
-      const y = 232 + index * 36;
+      const y = 226 + index * 32;
       this.addContent(
         this.add.text(154, y, label, this.textStyle(17, "#9fb4c6")).setDepth(102)
       );
@@ -302,6 +424,13 @@ export class MenuScene extends Phaser.Scene {
 
   private selectSkill(index: number): void {
     this.selectedSkillIndex = Phaser.Math.Clamp(index, 0, SKILL_ORDER.length - 1);
+    this.setMessage("");
+    this.renderContent();
+  }
+
+  private selectEquipment(index: number): void {
+    const ownedEquipment = this.getOwnedEquipmentIds();
+    this.selectedEquipmentIndex = Phaser.Math.Clamp(index, 0, Math.max(0, ownedEquipment.length - 1));
     this.setMessage("");
     this.renderContent();
   }
@@ -348,6 +477,25 @@ export class MenuScene extends Phaser.Scene {
     this.closeMenu();
   }
 
+  private equipSelectedEquipment(): void {
+    const equipmentId = this.getOwnedEquipmentIds()[this.selectedEquipmentIndex];
+    if (!equipmentId) {
+      this.setMessage("装備品を持っていない。");
+      return;
+    }
+
+    const equipment = EQUIPMENT[equipmentId];
+    const result = equipEquipment(equipmentId);
+    if (!result.equipped || !result.slot) {
+      this.setMessage(`${equipment.name}を装備できなかった。`);
+      return;
+    }
+
+    this.setMessage(`${equipment.name}を${EQUIPMENT_SLOT_LABELS[result.slot]}に装備した。`);
+    this.game.events.emit(GAME_EVENTS.stateChanged);
+    this.renderContent();
+  }
+
   private useSelectedSkill(): void {
     const skillId = SKILL_ORDER[this.selectedSkillIndex];
     const skill = SKILLS[skillId];
@@ -368,7 +516,7 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
-    if (save.hp >= save.maxHp) {
+    if (save.hp >= getPlayerMaxHp()) {
       this.setMessage("HPは満タンだ。");
       return;
     }
@@ -420,6 +568,16 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
+    if (this.activeTab === "equipment" && event.code === "ArrowUp") {
+      this.moveSelectedEquipment(-1);
+      return;
+    }
+
+    if (this.activeTab === "equipment" && event.code === "ArrowDown") {
+      this.moveSelectedEquipment(1);
+      return;
+    }
+
     if ((event.code === "Space" || event.code === "Enter") && this.activeTab === "items") {
       this.useSelectedItem();
       return;
@@ -427,6 +585,11 @@ export class MenuScene extends Phaser.Scene {
 
     if ((event.code === "Space" || event.code === "Enter") && this.activeTab === "skills") {
       this.useSelectedSkill();
+      return;
+    }
+
+    if ((event.code === "Space" || event.code === "Enter") && this.activeTab === "equipment") {
+      this.equipSelectedEquipment();
     }
   }
 
@@ -456,6 +619,21 @@ export class MenuScene extends Phaser.Scene {
     this.renderContent();
   }
 
+  private moveSelectedEquipment(direction: number): void {
+    const ownedEquipment = this.getOwnedEquipmentIds();
+    if (ownedEquipment.length === 0) {
+      return;
+    }
+
+    this.selectedEquipmentIndex = Phaser.Math.Wrap(
+      this.selectedEquipmentIndex + direction,
+      0,
+      ownedEquipment.length
+    );
+    this.setMessage("");
+    this.renderContent();
+  }
+
   private canUseInventoryItem(itemId: ItemId): boolean {
     const save = getSave();
     if (getItemCount(itemId) <= 0) {
@@ -467,8 +645,8 @@ export class MenuScene extends Phaser.Scene {
     }
 
     return (
-      (canItemHealHp(itemId) && save.hp < save.maxHp) ||
-      (canItemRestoreMp(itemId) && save.mp < save.maxMp)
+      (canItemHealHp(itemId) && save.hp < getPlayerMaxHp()) ||
+      (canItemRestoreMp(itemId) && save.mp < getPlayerMaxMp())
     );
   }
 
@@ -517,6 +695,26 @@ export class MenuScene extends Phaser.Scene {
     }
 
     return "満タン";
+  }
+
+  private getOwnedEquipmentIds(): EquipmentId[] {
+    return EQUIPMENT_ORDER.filter((equipmentId) => getEquipmentCount(equipmentId) > 0);
+  }
+
+  private getVisibleOwnedEquipment(ownedEquipment: EquipmentId[]): {
+    start: number;
+    visible: EquipmentId[];
+  } {
+    const visibleCount = 6;
+    const start = Phaser.Math.Clamp(
+      this.selectedEquipmentIndex - Math.floor(visibleCount / 2),
+      0,
+      Math.max(0, ownedEquipment.length - visibleCount)
+    );
+    return {
+      start,
+      visible: ownedEquipment.slice(start, start + visibleCount)
+    };
   }
 
   private updateTabs(): void {

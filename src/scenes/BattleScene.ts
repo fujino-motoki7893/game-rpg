@@ -11,6 +11,10 @@ import { SKILLS } from "../data/skills";
 import { GAME_EVENTS } from "../game/constants";
 import {
   damagePlayer,
+  getPlayerAttack,
+  getPlayerDefense,
+  getPlayerMaxHp,
+  getPlayerMaxMp,
   getKnownSkills,
   getItemCount,
   getSave,
@@ -164,7 +168,7 @@ export class BattleScene extends Phaser.Scene {
     }
 
     this.clearButtons();
-    this.setLog(`使うスキルを選んでください。MP ${getSave().mp}/${getSave().maxMp}`);
+    this.setLog(`使うスキルを選んでください。MP ${getSave().mp}/${getPlayerMaxMp()}`);
 
     skills.forEach((skill, index) => {
       const enabled = getSave().mp >= skill.mpCost;
@@ -218,7 +222,8 @@ export class BattleScene extends Phaser.Scene {
     }
 
     const save = getSave();
-    const damage = Phaser.Math.Between(Math.max(2, save.attack - 2), save.attack + 3);
+    const attack = getPlayerAttack();
+    const damage = Phaser.Math.Between(Math.max(2, attack - 2), attack + 3);
     this.enemyHp = Math.max(0, this.enemyHp - damage);
     this.refreshHud();
     this.flashTarget(this.enemySprite);
@@ -351,7 +356,8 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private enemyTurn(): void {
-    const damage = Phaser.Math.Between(Math.max(1, this.enemy.attack - 2), this.enemy.attack + 2);
+    const rawDamage = Phaser.Math.Between(Math.max(1, this.enemy.attack - 2), this.enemy.attack + 2);
+    const damage = Math.max(1, rawDamage - getPlayerDefense());
     damagePlayer(damage);
     this.refreshHud();
     this.flashTarget(this.playerSprite);
@@ -391,8 +397,8 @@ export class BattleScene extends Phaser.Scene {
     this.pendingEnemyTurnAt = undefined;
     this.pendingPlayerTurnAt = undefined;
     const save = getSave();
-    save.hp = Math.ceil(save.maxHp * 0.6);
-    save.mp = Math.ceil(save.maxMp * 0.5);
+    save.hp = Math.ceil(getPlayerMaxHp() * 0.6);
+    save.mp = Math.ceil(getPlayerMaxMp() * 0.5);
     save.gold = Math.floor(save.gold * 0.8);
     persistSave();
     this.setLog(
@@ -420,11 +426,13 @@ export class BattleScene extends Phaser.Scene {
 
   private refreshHud(): void {
     const save = getSave();
+    const maxHp = getPlayerMaxHp();
+    const maxMp = getPlayerMaxMp();
     this.playerHpText?.setText(
-      `勇者 HP ${save.hp}/${save.maxHp}  MP ${save.mp}/${save.maxMp}  道具 ${getTotalItemCount()}`
+      `勇者 HP ${save.hp}/${maxHp}  MP ${save.mp}/${maxMp}  道具 ${getTotalItemCount()}`
     );
     this.enemyHpText?.setText(`${this.enemy.name} HP ${this.enemyHp}/${this.enemy.maxHp}`);
-    this.playerHpFill?.setDisplaySize(184 * Phaser.Math.Clamp(save.hp / save.maxHp, 0, 1), 6);
+    this.playerHpFill?.setDisplaySize(184 * Phaser.Math.Clamp(save.hp / maxHp, 0, 1), 6);
     this.enemyHpFill?.setDisplaySize(
       184 * Phaser.Math.Clamp(this.enemyHp / this.enemy.maxHp, 0, 1),
       6
@@ -458,7 +466,7 @@ export class BattleScene extends Phaser.Scene {
     }
 
     const save = getSave();
-    const baseDamage = Math.round(save.attack * skill.effect.multiplier + skill.effect.bonus);
+    const baseDamage = Math.round(getPlayerAttack() * skill.effect.multiplier + skill.effect.bonus);
     return Phaser.Math.Between(Math.max(2, baseDamage - 3), baseDamage + 4);
   }
 
@@ -469,8 +477,8 @@ export class BattleScene extends Phaser.Scene {
     }
 
     return (
-      (canItemHealHp(itemId) && save.hp < save.maxHp) ||
-      (canItemRestoreMp(itemId) && save.mp < save.maxMp)
+      (canItemHealHp(itemId) && save.hp < getPlayerMaxHp()) ||
+      (canItemRestoreMp(itemId) && save.mp < getPlayerMaxMp())
     );
   }
 

@@ -2,14 +2,19 @@ import Phaser from "phaser";
 import { getNpcDialogue } from "../data/dialogues";
 import { createDungeon } from "../data/dungeonService";
 import { ENEMIES } from "../data/enemies";
+import { EQUIPMENT } from "../data/equipment";
 import { ITEMS } from "../data/items";
 import { BLOCKING_TILES, MAPS } from "../data/maps";
 import { GAME_EVENTS, MAP_OFFSET_X, MAP_OFFSET_Y, TILE_SIZE } from "../game/constants";
 import {
   addItem,
+  addEquipment,
   ensureDungeonProgress,
   getGeneratedDungeonFloor,
   getItemCount,
+  getPlayerAttack,
+  getPlayerMaxHp,
+  getPlayerMaxMp,
   getSave,
   hasFlag,
   healPlayer,
@@ -32,6 +37,8 @@ import type {
   NpcDefinition,
   TilePosition
 } from "../game/types";
+
+type ShopKind = "item" | "equipment";
 
 const directionVectors: Record<Direction, TilePosition> = {
   down: { x: 0, y: 1 },
@@ -493,7 +500,12 @@ export class WorldScene extends Phaser.Scene {
 
   private handleNpc(npc: NpcDefinition): void {
     if (npc.id === "shopkeeper") {
-      this.openShop();
+      this.openShop("item");
+      return;
+    }
+
+    if (npc.id === "equipmentShopkeeper") {
+      this.openShop("equipment");
       return;
     }
 
@@ -507,8 +519,8 @@ export class WorldScene extends Phaser.Scene {
       if (getItemCount("manaWater") < 2) {
         addItem("manaWater", 1);
       }
-      healPlayer(getSave().maxHp);
-      restorePlayerMp(getSave().maxMp);
+      healPlayer(getPlayerMaxHp());
+      restorePlayerMp(getPlayerMaxMp());
       stateChanged = true;
     }
 
@@ -566,6 +578,16 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
 
+    if (chest.reward?.type === "equipment") {
+      const equipment = EQUIPMENT[chest.reward.equipmentId];
+      addEquipment(chest.reward.equipmentId, chest.reward.quantity);
+      this.game.events.emit(GAME_EVENTS.stateChanged);
+      await this.loadMap(this.currentMap.id, this.playerTile);
+      const quantityText = chest.reward.quantity > 1 ? ` x${chest.reward.quantity}` : "";
+      this.showDialogue(["宝箱を開けた。", `${equipment.name}${quantityText}を手に入れた。`]);
+      return;
+    }
+
     this.game.events.emit(GAME_EVENTS.stateChanged);
     await this.loadMap(this.currentMap.id, this.playerTile);
     this.showDialogue(["宝箱を開けた。"]);
@@ -592,9 +614,9 @@ export class WorldScene extends Phaser.Scene {
     this.scene.launch("MenuScene");
   }
 
-  private openShop(): void {
+  private openShop(shopKind: ShopKind): void {
     this.menuOpen = true;
-    this.scene.launch("ShopScene");
+    this.scene.launch("ShopScene", { shopKind });
   }
 
   private handleMenuClosed(): void {
@@ -714,7 +736,7 @@ export class WorldScene extends Phaser.Scene {
     }
 
     const save = getSave();
-    const playerPower = save.maxHp + save.attack * 4 + save.level * 2;
+    const playerPower = getPlayerMaxHp() + getPlayerAttack() * 4 + save.level * 2;
     const enemyPower = definition.maxHp + definition.attack * 4;
     return enemyPower <= playerPower * ENEMY_WEAKNESS_RATIO;
   }
@@ -838,6 +860,8 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private hasSupplyChest(map: MapDefinition): boolean {
-    return map.chests.some((chest) => chest.reward?.type === "item");
+    return map.chests.some(
+      (chest) => chest.reward?.type === "item" || chest.reward?.type === "equipment"
+    );
   }
 }

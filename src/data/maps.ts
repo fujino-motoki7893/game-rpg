@@ -26,7 +26,8 @@ export const MAPS: Record<string, MapDefinition> = {
     npcs: [
       { id: "elder", name: "村長ローアン", texture: "npc-elder", x: 3, y: 4 },
       { id: "healer", name: "ミラ", texture: "npc-healer", x: 15, y: 5 },
-      { id: "shopkeeper", name: "道具屋ニコ", texture: "npc-shopkeeper", x: 6, y: 10 }
+      { id: "shopkeeper", name: "道具屋ニコ", texture: "npc-shopkeeper", x: 6, y: 10 },
+      { id: "equipmentShopkeeper", name: "装備屋ガロ", texture: "npc-armorer", x: 13, y: 10 }
     ],
     chests: [],
     enemies: []

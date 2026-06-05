@@ -37,9 +37,46 @@ export interface ChestDefinition extends TilePosition {
 export type ItemId = "herb" | "strongHerb" | "magicWater" | "manaWater" | "returnFeather";
 export type Inventory = Partial<Record<ItemId, number>>;
 
+export type EquipmentCategory =
+  | "weapon"
+  | "shield"
+  | "head"
+  | "bodyUpper"
+  | "bodyLower"
+  | "accessory";
+export type EquipmentSlot =
+  | "weapon"
+  | "shield"
+  | "head"
+  | "bodyUpper"
+  | "bodyLower"
+  | "accessory1"
+  | "accessory2";
+export type EquipmentId =
+  | "woodSword"
+  | "ironSword"
+  | "roundShield"
+  | "kiteShield"
+  | "clothCap"
+  | "ironHelm"
+  | "paddedVest"
+  | "chainMail"
+  | "travelerPants"
+  | "reinforcedGreaves"
+  | "silverRing"
+  | "emberCharm";
+export type EquipmentInventory = Partial<Record<EquipmentId, number>>;
+export type EquipmentLoadout = Partial<Record<EquipmentSlot, EquipmentId>>;
+
 export interface ItemReward {
   type: "item";
   itemId: ItemId;
+  quantity: number;
+}
+
+export interface EquipmentReward {
+  type: "equipment";
+  equipmentId: EquipmentId;
   quantity: number;
 }
 
@@ -47,7 +84,7 @@ export interface RelicReward {
   type: "relic";
 }
 
-export type ChestReward = ItemReward | RelicReward;
+export type ChestReward = ItemReward | EquipmentReward | RelicReward;
 
 export interface PortalDefinition extends TilePosition {
   toMap: MapId;
@@ -84,6 +121,8 @@ export interface GameSave {
   gold: number;
   potions: number;
   items: Inventory;
+  equipmentInventory: EquipmentInventory;
+  equipment: EquipmentLoadout;
   flags: Record<string, boolean>;
   defeatedEnemies: string[];
   generatedDungeon?: MapDefinition;

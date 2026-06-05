@@ -614,6 +614,9 @@ function ensureChestAccess(
 function pickSupplyChestReward(floor: number, floorCount: number): ChestReward {
   const depth = floor / floorCount;
   if (depth < 0.34) {
+    if (floor > 1 && floor % 4 === 0) {
+      return { type: "equipment", equipmentId: "clothCap", quantity: 1 };
+    }
     if (floor > 1 && floor % 3 === 0) {
       return { type: "item", itemId: "returnFeather", quantity: 1 };
     }
@@ -623,6 +626,9 @@ function pickSupplyChestReward(floor: number, floorCount: number): ChestReward {
     return { type: "item", itemId: "herb", quantity: floor === 1 ? 1 : 2 };
   }
   if (depth < 0.74) {
+    if (floor % 4 === 0) {
+      return { type: "equipment", equipmentId: "ironSword", quantity: 1 };
+    }
     if (floor % 3 === 0) {
       return { type: "item", itemId: "returnFeather", quantity: 1 };
     }
@@ -630,6 +636,9 @@ function pickSupplyChestReward(floor: number, floorCount: number): ChestReward {
       return { type: "item", itemId: "manaWater", quantity: 1 };
     }
     return { type: "item", itemId: "strongHerb", quantity: 1 };
+  }
+  if (floor % 5 === 0) {
+    return { type: "equipment", equipmentId: "emberCharm", quantity: 1 };
   }
   if (floor % 2 === 0) {
     return { type: "item", itemId: "returnFeather", quantity: 1 };

@@ -1,5 +1,6 @@
 import { generateDungeon } from "./dungeonGenerator";
 import { ENEMIES } from "./enemies";
+import { isEquipmentId } from "./equipment";
 import { isItemId } from "./items";
 import type { ChestDefinition, MapDefinition, TilePosition } from "../game/types";
 
@@ -124,9 +125,17 @@ function isChestDefinition(value: unknown): value is ChestDefinition {
     return true;
   }
 
+  if (chest.reward.type === "item") {
+    return (
+      isItemId(chest.reward.itemId) &&
+      Number.isInteger(chest.reward.quantity) &&
+      chest.reward.quantity > 0
+    );
+  }
+
   return (
-    chest.reward.type === "item" &&
-    isItemId(chest.reward.itemId) &&
+    chest.reward.type === "equipment" &&
+    isEquipmentId(chest.reward.equipmentId) &&
     Number.isInteger(chest.reward.quantity) &&
     chest.reward.quantity > 0
   );
@@ -134,8 +143,8 @@ function isChestDefinition(value: unknown): value is ChestDefinition {
 
 function isItemRewardChest(chest: ChestDefinition): boolean {
   return (
-    chest.reward?.type === "item" &&
-    isItemId(chest.reward.itemId) &&
+    ((chest.reward?.type === "item" && isItemId(chest.reward.itemId)) ||
+      (chest.reward?.type === "equipment" && isEquipmentId(chest.reward.equipmentId))) &&
     Number.isInteger(chest.reward.quantity) &&
     chest.reward.quantity > 0
   );

@@ -10,6 +10,16 @@ import {
   ITEM_ORDER
 } from "../data/items";
 import {
+  canEquipToSlot,
+  createEmptyEquipmentStats,
+  EQUIPMENT,
+  EQUIPMENT_ORDER,
+  getEquipmentBuyPrice,
+  getEquipmentSellPrice,
+  isEquipmentBuyable,
+  isEquipmentId
+} from "../data/equipment";
+import {
   getSkillHealAmount,
   getSkillIdsLearnedAtLevel,
   getSkillsForLevel,
@@ -17,8 +27,19 @@ import {
   SKILLS
 } from "../data/skills";
 import { SAVE_KEY } from "./constants";
+import type { EquipmentStats } from "../data/equipment";
 import type { SkillDefinition, SkillId } from "../data/skills";
-import type { GameSave, Inventory, ItemId, MapDefinition, MapId } from "./types";
+import type {
+  EquipmentId,
+  EquipmentInventory,
+  EquipmentLoadout,
+  EquipmentSlot,
+  GameSave,
+  Inventory,
+  ItemId,
+  MapDefinition,
+  MapId
+} from "./types";
 
 const MIN_DUNGEON_FLOORS = 3;
 const MAX_DUNGEON_FLOORS = 5;
@@ -39,6 +60,8 @@ export const initialSave = (): GameSave => ({
   gold: 0,
   potions: 2,
   items: { herb: 2 },
+  equipmentInventory: {},
+  equipment: {},
   flags: {},
   defeatedEnemies: []
 });
@@ -55,16 +78,27 @@ function loadSave(): GameSave {
     const parsed = JSON.parse(raw) as Partial<GameSave>;
     const base = initialSave();
     const items = normalizeInventory(parsed.items, parsed.potions);
+    const equipmentInventory = normalizeEquipmentInventory(parsed.equipmentInventory);
+    const equipment = normalizeEquipmentLoadout(parsed.equipment);
     const level = normalizePositiveInteger(parsed.level, base.level);
+    const maxHp = normalizePositiveInteger(parsed.maxHp, base.maxHp);
     const maxMp = normalizeMaxMp(parsed.maxMp, level);
-    const mp = normalizeMp(parsed.mp, maxMp);
+    const attack = normalizePositiveInteger(parsed.attack, base.attack);
+    const equipmentStats = calculateEquipmentStats(equipment);
+    const hp = normalizeHp(parsed.hp, maxHp + equipmentStats.maxHpBonus);
+    const mp = normalizeMp(parsed.mp, maxMp + equipmentStats.maxMpBonus);
     return {
       ...base,
       ...parsed,
       level,
+      maxHp,
       maxMp,
+      hp,
       mp,
+      attack,
       items,
+      equipmentInventory,
+      equipment,
       potions: items.herb ?? 0,
       flags: parsed.flags ?? {},
       defeatedEnemies: parsed.defeatedEnemies ?? [],
@@ -80,6 +114,8 @@ export function getSave(): GameSave {
 }
 
 export function persistSave(): void {
+  ensureEquipment();
+  clampVitalsToCurrentMax();
   syncLegacyPotionCount();
   localStorage.setItem(SAVE_KEY, JSON.stringify(save));
 }
@@ -156,14 +192,14 @@ export function setPlayerPosition(mapId: MapId, x: number, y: number): void {
 
 export function healPlayer(amount: number): number {
   const before = save.hp;
-  save.hp = Math.min(save.maxHp, save.hp + amount);
+  save.hp = Math.min(getPlayerMaxHp(), save.hp + amount);
   persistSave();
   return save.hp - before;
 }
 
 export function restorePlayerMp(amount: number): number {
   const before = save.mp;
-  save.mp = Math.min(save.maxMp, save.mp + amount);
+  save.mp = Math.min(getPlayerMaxMp(), save.mp + amount);
   persistSave();
   return save.mp - before;
 }
@@ -192,6 +228,25 @@ export interface SellItemResult {
   reason?: "no-item" | "unknown-item";
 }
 
+export interface BuyEquipmentResult {
+  bought: boolean;
+  price: number;
+  reason?: "not-enough-gold" | "not-for-sale" | "unknown-equipment";
+}
+
+export interface SellEquipmentResult {
+  sold: boolean;
+  price: number;
+  reason?: "no-equipment" | "unknown-equipment";
+}
+
+export interface EquipEquipmentResult {
+  equipped: boolean;
+  slot?: EquipmentSlot;
+  previousEquipmentId?: EquipmentId;
+  reason?: "no-equipment" | "unknown-equipment" | "incompatible-slot";
+}
+
 export interface UseSkillResult {
   used: boolean;
   healed: number;
@@ -214,6 +269,128 @@ export function addItem(itemId: ItemId, quantity = 1): number {
   save.items[itemId] = nextCount;
   persistSave();
   return nextCount;
+}
+
+export function getEquipmentCount(equipmentId: EquipmentId): number {
+  ensureEquipment();
+  return save.equipmentInventory[equipmentId] ?? 0;
+}
+
+export function getTotalEquipmentCount(): number {
+  ensureEquipment();
+  return EQUIPMENT_ORDER.reduce(
+    (total, equipmentId) => total + (save.equipmentInventory[equipmentId] ?? 0),
+    0
+  );
+}
+
+export function addEquipment(equipmentId: EquipmentId, quantity = 1): number {
+  ensureEquipment();
+  const nextCount = Math.max(0, (save.equipmentInventory[equipmentId] ?? 0) + quantity);
+  save.equipmentInventory[equipmentId] = nextCount;
+  persistSave();
+  return nextCount;
+}
+
+export function getEquippedEquipment(slot: EquipmentSlot): EquipmentId | undefined {
+  ensureEquipment();
+  return save.equipment[slot];
+}
+
+export function getEquipmentStatTotals(): EquipmentStats {
+  ensureEquipment();
+  return calculateEquipmentStats(save.equipment);
+}
+
+export function getPlayerMaxHp(): number {
+  return save.maxHp + getEquipmentStatTotals().maxHpBonus;
+}
+
+export function getPlayerMaxMp(): number {
+  return save.maxMp + getEquipmentStatTotals().maxMpBonus;
+}
+
+export function getPlayerAttack(): number {
+  return save.attack + getEquipmentStatTotals().attackBonus;
+}
+
+export function getPlayerDefense(): number {
+  return getEquipmentStatTotals().defenseBonus;
+}
+
+export function buyEquipment(equipmentId: EquipmentId): BuyEquipmentResult {
+  if (!isEquipmentId(equipmentId)) {
+    return { bought: false, price: 0, reason: "unknown-equipment" };
+  }
+
+  if (!isEquipmentBuyable(equipmentId)) {
+    return { bought: false, price: 0, reason: "not-for-sale" };
+  }
+
+  const price = getEquipmentBuyPrice(equipmentId);
+  if (save.gold < price) {
+    return { bought: false, price, reason: "not-enough-gold" };
+  }
+
+  save.gold -= price;
+  addEquipment(equipmentId, 1);
+  return { bought: true, price };
+}
+
+export function sellEquipment(equipmentId: EquipmentId): SellEquipmentResult {
+  if (!isEquipmentId(equipmentId)) {
+    return { sold: false, price: 0, reason: "unknown-equipment" };
+  }
+
+  ensureEquipment();
+  if ((save.equipmentInventory[equipmentId] ?? 0) <= 0) {
+    return { sold: false, price: getEquipmentSellPrice(equipmentId), reason: "no-equipment" };
+  }
+
+  const price = getEquipmentSellPrice(equipmentId);
+  save.equipmentInventory[equipmentId] = Math.max(0, (save.equipmentInventory[equipmentId] ?? 0) - 1);
+  save.gold += price;
+  persistSave();
+  return { sold: true, price };
+}
+
+export function equipEquipment(equipmentId: EquipmentId, preferredSlot?: EquipmentSlot): EquipEquipmentResult {
+  if (!isEquipmentId(equipmentId)) {
+    return { equipped: false, reason: "unknown-equipment" };
+  }
+
+  ensureEquipment();
+  if ((save.equipmentInventory[equipmentId] ?? 0) <= 0) {
+    return { equipped: false, reason: "no-equipment" };
+  }
+
+  const slot = preferredSlot ?? getDefaultEquipmentSlot(equipmentId);
+  if (!slot || !canEquipToSlot(equipmentId, slot)) {
+    return { equipped: false, reason: "incompatible-slot" };
+  }
+
+  const previousEquipmentId = save.equipment[slot];
+  save.equipmentInventory[equipmentId] = Math.max(0, (save.equipmentInventory[equipmentId] ?? 0) - 1);
+  if (previousEquipmentId) {
+    save.equipmentInventory[previousEquipmentId] = (save.equipmentInventory[previousEquipmentId] ?? 0) + 1;
+  }
+  save.equipment[slot] = equipmentId;
+  persistSave();
+  return { equipped: true, slot, previousEquipmentId };
+}
+
+export function unequipEquipment(slot: EquipmentSlot): EquipEquipmentResult {
+  ensureEquipment();
+  const previousEquipmentId = save.equipment[slot];
+  if (!previousEquipmentId) {
+    return { equipped: false, reason: "no-equipment" };
+  }
+
+  delete save.equipment[slot];
+  save.equipmentInventory[previousEquipmentId] =
+    (save.equipmentInventory[previousEquipmentId] ?? 0) + 1;
+  persistSave();
+  return { equipped: true, slot, previousEquipmentId };
 }
 
 export function buyItem(itemId: ItemId): BuyItemResult {
@@ -285,8 +462,10 @@ export function useItem(itemId: ItemId): UseItemResult {
     return { used: false, healed: 0, restoredMp: 0, reason: "no-effect" };
   }
 
-  const hpFull = !healsHp || save.hp >= save.maxHp;
-  const mpFull = !restoresMp || save.mp >= save.maxMp;
+  const maxHp = getPlayerMaxHp();
+  const maxMp = getPlayerMaxMp();
+  const hpFull = !healsHp || save.hp >= maxHp;
+  const mpFull = !restoresMp || save.mp >= maxMp;
   if (hpFull && mpFull) {
     return {
       used: false,
@@ -299,10 +478,10 @@ export function useItem(itemId: ItemId): UseItemResult {
   const beforeHp = save.hp;
   const beforeMp = save.mp;
   if (healsHp) {
-    save.hp = Math.min(save.maxHp, save.hp + getItemHealAmount(itemId, save.maxHp));
+    save.hp = Math.min(maxHp, save.hp + getItemHealAmount(itemId, maxHp));
   }
   if (restoresMp) {
-    save.mp = Math.min(save.maxMp, save.mp + getItemMpRestoreAmount(itemId, save.maxMp));
+    save.mp = Math.min(maxMp, save.mp + getItemMpRestoreAmount(itemId, maxMp));
   }
   save.items[itemId] = Math.max(0, (save.items[itemId] ?? 0) - 1);
   persistSave();
@@ -349,7 +528,8 @@ export function useHealingSkill(skillId: SkillId): UseSkillResult {
     return { used: false, healed: 0, reason: "not-healing" };
   }
 
-  if (save.hp >= save.maxHp) {
+  const maxHp = getPlayerMaxHp();
+  if (save.hp >= maxHp) {
     return { used: false, healed: 0, reason: "full-hp" };
   }
 
@@ -359,7 +539,7 @@ export function useHealingSkill(skillId: SkillId): UseSkillResult {
 
   const before = save.hp;
   save.mp = Math.max(0, save.mp - skill.mpCost);
-  save.hp = Math.min(save.maxHp, save.hp + getSkillHealAmount(skill, save.maxHp));
+  save.hp = Math.min(maxHp, save.hp + getSkillHealAmount(skill, maxHp));
   persistSave();
   return { used: true, healed: save.hp - before };
 }
@@ -404,8 +584,8 @@ export function grantReward(exp: number, gold: number): { leveledUp: boolean; le
     save.maxHp += 6;
     save.maxMp = Math.max(save.maxMp + 4, getBaseMaxMpForLevel(save.level));
     save.attack += 2;
-    save.hp = save.maxHp;
-    save.mp = save.maxMp;
+    save.hp = getPlayerMaxHp();
+    save.mp = getPlayerMaxMp();
     learnedSkillIds.push(...getSkillIdsLearnedAtLevel(save.level));
     leveledUp = true;
   }
@@ -443,6 +623,15 @@ function ensureInventory(): void {
   }
 }
 
+function ensureEquipment(): void {
+  if (!save.equipmentInventory) {
+    save.equipmentInventory = normalizeEquipmentInventory(undefined);
+  }
+  if (!save.equipment) {
+    save.equipment = normalizeEquipmentLoadout(undefined);
+  }
+}
+
 function normalizePositiveInteger(value: unknown, fallback: number): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 1) {
     return fallback;
@@ -468,6 +657,14 @@ function normalizeMp(value: unknown, maxMp: number): number {
   return Math.min(maxMp, Math.floor(value));
 }
 
+function normalizeHp(value: unknown, maxHp: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return maxHp;
+  }
+
+  return Math.min(maxHp, Math.floor(value));
+}
+
 function normalizeInventory(items: unknown, legacyPotions?: number): Inventory {
   const inventory: Inventory = {};
   if (items && typeof items === "object") {
@@ -485,6 +682,83 @@ function normalizeInventory(items: unknown, legacyPotions?: number): Inventory {
   }
 
   return inventory;
+}
+
+function normalizeEquipmentInventory(equipmentInventory: unknown): EquipmentInventory {
+  const inventory: EquipmentInventory = {};
+  if (equipmentInventory && typeof equipmentInventory === "object") {
+    const rawEquipment = equipmentInventory as Record<string, unknown>;
+    EQUIPMENT_ORDER.forEach((equipmentId) => {
+      const count = rawEquipment[equipmentId];
+      if (typeof count === "number" && Number.isFinite(count) && count > 0) {
+        inventory[equipmentId] = Math.floor(count);
+      }
+    });
+  }
+  return inventory;
+}
+
+function normalizeEquipmentLoadout(equipment: unknown): EquipmentLoadout {
+  const loadout: EquipmentLoadout = {};
+  if (!equipment || typeof equipment !== "object") {
+    return loadout;
+  }
+
+  const rawEquipment = equipment as Record<string, unknown>;
+  (Object.keys(rawEquipment) as EquipmentSlot[]).forEach((slot) => {
+    const equipmentId = rawEquipment[slot];
+    if (isEquipmentSlot(slot) && isEquipmentId(equipmentId) && canEquipToSlot(equipmentId, slot)) {
+      loadout[slot] = equipmentId;
+    }
+  });
+  return loadout;
+}
+
+function calculateEquipmentStats(equipment: EquipmentLoadout): EquipmentStats {
+  const stats = createEmptyEquipmentStats();
+  Object.values(equipment).forEach((equipmentId) => {
+    if (!equipmentId || !isEquipmentId(equipmentId)) {
+      return;
+    }
+
+    const definition = EQUIPMENT[equipmentId];
+    stats.attackBonus += definition.attackBonus ?? 0;
+    stats.defenseBonus += definition.defenseBonus ?? 0;
+    stats.maxHpBonus += definition.maxHpBonus ?? 0;
+    stats.maxMpBonus += definition.maxMpBonus ?? 0;
+  });
+  return stats;
+}
+
+function getDefaultEquipmentSlot(equipmentId: EquipmentId): EquipmentSlot | undefined {
+  const category = EQUIPMENT[equipmentId].category;
+  if (category === "accessory") {
+    if (!save.equipment.accessory1) {
+      return "accessory1";
+    }
+    if (!save.equipment.accessory2) {
+      return "accessory2";
+    }
+    return "accessory1";
+  }
+  return category;
+}
+
+function isEquipmentSlot(value: unknown): value is EquipmentSlot {
+  return (
+    value === "weapon" ||
+    value === "shield" ||
+    value === "head" ||
+    value === "bodyUpper" ||
+    value === "bodyLower" ||
+    value === "accessory1" ||
+    value === "accessory2"
+  );
+}
+
+function clampVitalsToCurrentMax(): void {
+  save.hp = Math.min(save.hp, getPlayerMaxHp());
+  save.mp = Math.min(save.mp, getPlayerMaxMp());
 }
 
 function syncLegacyPotionCount(): void {

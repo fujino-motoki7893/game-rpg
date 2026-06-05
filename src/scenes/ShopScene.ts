@@ -1,5 +1,16 @@
 import Phaser from "phaser";
 import {
+  EQUIPMENT,
+  EQUIPMENT_CATEGORY_LABELS,
+  EQUIPMENT_ORDER,
+  EQUIPMENT_SHOP_ORDER,
+  getEquipmentBuyPrice,
+  getEquipmentRarityLabel,
+  getEquipmentSellPrice,
+  getEquipmentStatSummary,
+  isEquipmentBuyable
+} from "../data/equipment";
+import {
   getItemBuyPrice,
   getItemRarityLabel,
   getItemSellPrice,
@@ -9,10 +20,23 @@ import {
   SHOP_BUY_ITEM_ORDER
 } from "../data/items";
 import { GAME_EVENTS } from "../game/constants";
-import { buyItem, getItemCount, getSave, sellItem } from "../game/GameState";
-import type { ItemId } from "../game/types";
+import {
+  buyEquipment,
+  buyItem,
+  getEquipmentCount,
+  getItemCount,
+  getSave,
+  sellEquipment,
+  sellItem
+} from "../game/GameState";
+import type { EquipmentId, ItemId } from "../game/types";
 
 type ShopTab = "buy" | "sell";
+type ShopKind = "item" | "equipment";
+type TradeEntry = { kind: "item"; id: ItemId } | { kind: "equipment"; id: EquipmentId };
+interface ShopPayload {
+  shopKind?: ShopKind;
+}
 
 const TABS: ShopTab[] = ["buy", "sell"];
 const TAB_LABELS: Record<ShopTab, string> = {
@@ -21,6 +45,7 @@ const TAB_LABELS: Record<ShopTab, string> = {
 };
 
 export class ShopScene extends Phaser.Scene {
+  private shopKind: ShopKind = "item";
   private activeTab: ShopTab = "buy";
   private selectedItemIndex = 0;
   private tabButtons: Partial<Record<ShopTab, Phaser.GameObjects.Text>> = {};
@@ -32,7 +57,8 @@ export class ShopScene extends Phaser.Scene {
     super("ShopScene");
   }
 
-  create(): void {
+  create(payload?: ShopPayload): void {
+    this.shopKind = payload?.shopKind ?? "item";
     this.activeTab = "buy";
     this.selectedItemIndex = 0;
     this.contentObjects = [];
@@ -44,7 +70,9 @@ export class ShopScene extends Phaser.Scene {
       .setStrokeStyle(3, 0xd8bc72)
       .setDepth(100);
     this.add.rectangle(400, 154, 508, 2, 0xf0d98a, 0.75).setDepth(101);
-    this.add.text(154, 120, "道具屋", this.textStyle(25, "#f6e4a4")).setDepth(102);
+    this.add
+      .text(154, 120, this.shopKind === "equipment" ? "装備屋" : "道具屋", this.textStyle(25, "#f6e4a4"))
+      .setDepth(102);
 
     this.createTabButton("buy", 154, 176);
     this.createTabButton("sell", 276, 176);
@@ -101,18 +129,19 @@ export class ShopScene extends Phaser.Scene {
     this.clearContent();
     this.updateTabs();
     this.goldText?.setText(`G ${getSave().gold}`);
-    const visibleItems = this.getVisibleItems();
+    const tradeEntries = this.getTradeEntries();
     this.clampSelectedItemIndex();
+    const { start, visible } = this.getVisibleTradeEntries(tradeEntries);
 
-    visibleItems.forEach((itemId, index) => {
-      const item = ITEMS[itemId];
+    visible.forEach((entry, visibleIndex) => {
+      const index = start + visibleIndex;
       const selected = index === this.selectedItemIndex;
-      const count = getItemCount(itemId);
-      const price = this.activeTab === "buy" ? getItemBuyPrice(itemId) : getItemSellPrice(itemId);
+      const count = this.getTradeCount(entry);
+      const price = this.getTradePrice(entry);
       const canTrade = this.canTradeSelected(index);
-      const y = 216 + index * 40;
+      const y = 214 + visibleIndex * 34;
       const row = this.add
-        .rectangle(388, y + 14, 468, 36, selected ? 0x263442 : 0x111a24, selected ? 0.95 : 0.58)
+        .rectangle(388, y + 13, 468, 31, selected ? 0x263442 : 0x111a24, selected ? 0.95 : 0.58)
         .setStrokeStyle(selected ? 2 : 1, selected ? 0xd8bc72 : 0x34475a, selected ? 0.9 : 0.45)
         .setDepth(101)
         .setInteractive({ useHandCursor: true })
@@ -122,28 +151,26 @@ export class ShopScene extends Phaser.Scene {
         this.add.text(164, y, selected ? ">" : "", this.textStyle(18, "#f6e4a4")).setDepth(102)
       );
       this.addContent(
-        this.add.text(190, y, item.name, this.textStyle(17, "#fff4cf")).setDepth(102)
+        this.add.text(190, y, this.getTradeName(entry), this.textStyle(16, "#fff4cf")).setDepth(102)
       );
       this.addContent(
-        this.add.text(286, y, getItemRarityLabel(itemId), this.textStyle(14, "#f4df7e")).setDepth(102)
+        this.add.text(300, y, this.getTradeRarityLabel(entry), this.textStyle(14, "#f4df7e")).setDepth(102)
       );
       this.addContent(
-        this.add.text(330, y, `${price}G`, this.textStyle(16, canTrade ? "#f4df7e" : "#748393")).setDepth(102)
+        this.add.text(340, y, `${price}G`, this.textStyle(16, canTrade ? "#f4df7e" : "#748393")).setDepth(102)
       );
       this.addContent(
-        this.add.text(406, y, `所持 x${count}`, this.textStyle(15, "#9fb4c6")).setDepth(102)
+        this.add.text(410, y, `所持 x${count}`, this.textStyle(15, "#9fb4c6")).setDepth(102)
       );
       this.addContent(
-        this.add.text(492, y, item.description, this.textStyle(12, "#9fb4c6")).setDepth(102)
+        this.add.text(492, y, this.getTradeDescription(entry), this.textStyle(12, "#9fb4c6")).setDepth(102)
       );
     });
 
-    const selectedItemId = visibleItems[this.selectedItemIndex];
+    const selectedEntry = tradeEntries[this.selectedItemIndex];
     const selectedCanTrade = this.canTradeSelected(this.selectedItemIndex);
     const actionLabel = this.activeTab === "buy" ? "買う" : "売る";
-    const selectedBuyPrice = isItemBuyable(selectedItemId)
-      ? `${getItemBuyPrice(selectedItemId)}G`
-      : "非売品";
+    const selectedBuyPrice = this.getTradeBuyPriceLabel(selectedEntry);
     const actionButton = this.add
       .text(530, 412, actionLabel, {
         ...this.textStyle(18, selectedCanTrade ? "#101820" : "#2a3036"),
@@ -164,51 +191,51 @@ export class ShopScene extends Phaser.Scene {
         .text(
           154,
           416,
-          `${ITEMS[selectedItemId].name} ${getItemRarityLabel(selectedItemId)}  買値 ${selectedBuyPrice}  売値 ${getItemSellPrice(selectedItemId)}G`,
-          this.textStyle(16, "#f4df7e")
+          `${this.getTradeName(selectedEntry)} ${this.getTradeRarityLabel(selectedEntry)}  買値 ${selectedBuyPrice}  売値 ${this.getTradeSellPrice(selectedEntry)}G`,
+          this.textStyle(15, "#f4df7e")
         )
         .setDepth(102)
     );
   }
 
   private selectItem(index: number): void {
-    this.selectedItemIndex = Phaser.Math.Clamp(index, 0, this.getVisibleItems().length - 1);
+    this.selectedItemIndex = Phaser.Math.Clamp(index, 0, this.getTradeEntries().length - 1);
     this.setMessage("");
     this.renderContent();
   }
 
   private tradeSelectedItem(): void {
-    const itemId = this.getVisibleItems()[this.selectedItemIndex];
-    const item = ITEMS[itemId];
+    const entry = this.getTradeEntries()[this.selectedItemIndex];
+    const name = this.getTradeName(entry);
 
     if (this.activeTab === "buy") {
-      const result = buyItem(itemId);
+      const result = entry.kind === "item" ? buyItem(entry.id) : buyEquipment(entry.id);
       if (!result.bought) {
         this.setMessage("ゴールドが足りない。");
         return;
       }
-      this.setMessage(`${item.name}を${result.price}Gで買った。`);
+      this.setMessage(`${name}を${result.price}Gで買った。`);
       this.game.events.emit(GAME_EVENTS.stateChanged);
       this.renderContent();
       return;
     }
 
-    const result = sellItem(itemId);
+    const result = entry.kind === "item" ? sellItem(entry.id) : sellEquipment(entry.id);
     if (!result.sold) {
-      this.setMessage(`${item.name}を持っていない。`);
+      this.setMessage(`${name}を持っていない。`);
       return;
     }
-    this.setMessage(`${item.name}を${result.price}Gで売った。`);
+    this.setMessage(`${name}を${result.price}Gで売った。`);
     this.game.events.emit(GAME_EVENTS.stateChanged);
     this.renderContent();
   }
 
   private canTradeSelected(index: number): boolean {
-    const itemId = this.getVisibleItems()[index];
+    const entry = this.getTradeEntries()[index];
     if (this.activeTab === "buy") {
-      return isItemBuyable(itemId) && getSave().gold >= getItemBuyPrice(itemId);
+      return this.isTradeBuyable(entry) && getSave().gold >= this.getTradePrice(entry);
     }
-    return getItemCount(itemId) > 0;
+    return this.getTradeCount(entry) > 0;
   }
 
   private handleKeyDown(event: KeyboardEvent): void {
@@ -252,21 +279,87 @@ export class ShopScene extends Phaser.Scene {
     this.selectedItemIndex = Phaser.Math.Wrap(
       this.selectedItemIndex + direction,
       0,
-      this.getVisibleItems().length
+      this.getTradeEntries().length
     );
     this.setMessage("");
     this.renderContent();
   }
 
-  private getVisibleItems(): ItemId[] {
-    return this.activeTab === "buy" ? SHOP_BUY_ITEM_ORDER : ITEM_ORDER;
+  private getTradeEntries(): TradeEntry[] {
+    if (this.shopKind === "equipment") {
+      const equipmentIds = this.activeTab === "buy" ? EQUIPMENT_SHOP_ORDER : EQUIPMENT_ORDER;
+      return equipmentIds.map((id) => ({ kind: "equipment", id }));
+    }
+
+    const itemIds = this.activeTab === "buy" ? SHOP_BUY_ITEM_ORDER : ITEM_ORDER;
+    return itemIds.map((id) => ({ kind: "item", id }));
+  }
+
+  private getVisibleTradeEntries(tradeEntries: TradeEntry[]): {
+    start: number;
+    visible: TradeEntry[];
+  } {
+    const visibleCount = 6;
+    const start = Phaser.Math.Clamp(
+      this.selectedItemIndex - Math.floor(visibleCount / 2),
+      0,
+      Math.max(0, tradeEntries.length - visibleCount)
+    );
+    return {
+      start,
+      visible: tradeEntries.slice(start, start + visibleCount)
+    };
+  }
+
+  private getTradeName(entry: TradeEntry): string {
+    return entry.kind === "item" ? ITEMS[entry.id].name : EQUIPMENT[entry.id].name;
+  }
+
+  private getTradeRarityLabel(entry: TradeEntry): string {
+    return entry.kind === "item" ? getItemRarityLabel(entry.id) : getEquipmentRarityLabel(entry.id);
+  }
+
+  private getTradeDescription(entry: TradeEntry): string {
+    if (entry.kind === "item") {
+      return ITEMS[entry.id].description;
+    }
+
+    return `${EQUIPMENT_CATEGORY_LABELS[EQUIPMENT[entry.id].category]} ${getEquipmentStatSummary(entry.id)}`;
+  }
+
+  private getTradeCount(entry: TradeEntry): number {
+    return entry.kind === "item" ? getItemCount(entry.id) : getEquipmentCount(entry.id);
+  }
+
+  private getTradePrice(entry: TradeEntry): number {
+    if (this.activeTab === "buy") {
+      return entry.kind === "item" ? getItemBuyPrice(entry.id) : getEquipmentBuyPrice(entry.id);
+    }
+
+    return this.getTradeSellPrice(entry);
+  }
+
+  private getTradeSellPrice(entry: TradeEntry): number {
+    return entry.kind === "item" ? getItemSellPrice(entry.id) : getEquipmentSellPrice(entry.id);
+  }
+
+  private getTradeBuyPriceLabel(entry: TradeEntry): string {
+    if (entry.kind === "item") {
+      return isItemBuyable(entry.id) ? `${getItemBuyPrice(entry.id)}G` : "非売品";
+    }
+
+    return isEquipmentBuyable(entry.id) ? `${getEquipmentBuyPrice(entry.id)}G` : "非売品";
+  }
+
+  private isTradeBuyable(entry: TradeEntry): boolean {
+    return entry.kind === "item" ? isItemBuyable(entry.id) : isEquipmentBuyable(entry.id);
   }
 
   private clampSelectedItemIndex(): void {
     this.selectedItemIndex = Phaser.Math.Clamp(
       this.selectedItemIndex,
       0,
-      this.getVisibleItems().length - 1
+      this.getTradeEntries().length - 1
     );
   }
 

@@ -329,33 +329,55 @@ function pickSupplyChestReward(floor: number, floorCount: number, rng: Rng): Che
   const depth = floor / floorCount;
   if (depth < 0.34) {
     const roll = rng();
-    if (roll < 0.12) {
+    if (roll < 0.1) {
+      return {
+        type: "equipment",
+        equipmentId: rng() < 0.5 ? "clothCap" : "roundShield",
+        quantity: 1
+      };
+    }
+    if (roll < 0.2) {
       return { type: "item", itemId: "returnFeather", quantity: 1 };
     }
-    return roll < 0.3
+    return roll < 0.36
       ? { type: "item", itemId: "manaWater", quantity: 1 }
       : { type: "item", itemId: "herb", quantity: rng() < 0.35 ? 2 : 1 };
   }
   if (depth < 0.74) {
     const roll = rng();
-    if (roll < 0.18) {
+    if (roll < 0.16) {
+      return {
+        type: "equipment",
+        equipmentId: rng() < 0.5 ? "ironSword" : "kiteShield",
+        quantity: 1
+      };
+    }
+    if (roll < 0.3) {
       return { type: "item", itemId: "returnFeather", quantity: 1 };
     }
-    if (roll < 0.45) {
+    if (roll < 0.52) {
       return { type: "item", itemId: "strongHerb", quantity: 1 };
     }
-    return roll < 0.75
+    return roll < 0.8
       ? { type: "item", itemId: "manaWater", quantity: 1 }
       : { type: "item", itemId: "herb", quantity: 2 };
   }
   const roll = rng();
-  if (roll < 0.25) {
+  if (roll < 0.22) {
+    const equipmentIds = ["chainMail", "reinforcedGreaves", "emberCharm"] as const;
+    return {
+      type: "equipment",
+      equipmentId: equipmentIds[randomInt(rng, 0, equipmentIds.length - 1)],
+      quantity: 1
+    };
+  }
+  if (roll < 0.42) {
     return { type: "item", itemId: "returnFeather", quantity: 1 };
   }
-  if (roll < 0.5) {
+  if (roll < 0.62) {
     return { type: "item", itemId: "magicWater", quantity: 1 };
   }
-  return roll < 0.8
+  return roll < 0.86
     ? { type: "item", itemId: "manaWater", quantity: 1 }
     : { type: "item", itemId: "strongHerb", quantity: 1 };
 }

@@ -1,7 +1,16 @@
 import Phaser from "phaser";
 import { MAPS } from "../data/maps";
 import { GAME_EVENTS } from "../game/constants";
-import { getCurrentDungeonFloor, getDungeonFloorCount, getSave, getTotalItemCount } from "../game/GameState";
+import {
+  getCurrentDungeonFloor,
+  getDungeonFloorCount,
+  getPlayerAttack,
+  getPlayerDefense,
+  getPlayerMaxHp,
+  getPlayerMaxMp,
+  getSave,
+  getTotalItemCount
+} from "../game/GameState";
 import { getObjective } from "../data/dialogues";
 
 export class UIScene extends Phaser.Scene {
@@ -60,12 +69,14 @@ export class UIScene extends Phaser.Scene {
 
   private refresh(): void {
     const save = getSave();
-    this.hpText?.setText(`HP ${save.hp}/${save.maxHp}  MP ${save.mp}/${save.maxMp}`);
+    const maxHp = getPlayerMaxHp();
+    const maxMp = getPlayerMaxMp();
+    this.hpText?.setText(`HP ${save.hp}/${maxHp}  MP ${save.mp}/${maxMp}`);
     this.statsText?.setText(
-      `Lv ${save.level}  攻撃 ${save.attack}  道具 ${getTotalItemCount()}  G ${save.gold}`
+      `Lv ${save.level}  攻 ${getPlayerAttack()}  防 ${getPlayerDefense()}  道具 ${getTotalItemCount()}  G ${save.gold}`
     );
-    const hpRatio = Phaser.Math.Clamp(save.hp / save.maxHp, 0, 1);
-    const mpRatio = Phaser.Math.Clamp(save.mp / save.maxMp, 0, 1);
+    const hpRatio = Phaser.Math.Clamp(save.hp / maxHp, 0, 1);
+    const mpRatio = Phaser.Math.Clamp(save.mp / maxMp, 0, 1);
     this.hpBarFill?.setDisplaySize(146 * hpRatio, 4);
     this.mpBarFill?.setDisplaySize(146 * mpRatio, 4);
     this.objectiveText?.setText(getObjective());
