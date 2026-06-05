@@ -1,4 +1,11 @@
-import { getItemHealAmount, isItemId, ITEM_ORDER } from "../data/items";
+import {
+  canItemHealHp,
+  canItemRestoreMp,
+  getItemHealAmount,
+  getItemMpRestoreAmount,
+  isItemId,
+  ITEM_ORDER
+} from "../data/items";
 import {
   getSkillHealAmount,
   getSkillIdsLearnedAtLevel,
@@ -164,7 +171,8 @@ export function damagePlayer(amount: number): void {
 export interface UseItemResult {
   used: boolean;
   healed: number;
-  reason?: "full-hp" | "no-item" | "unknown-item";
+  restoredMp: number;
+  reason?: "full-hp" | "full-mp" | "no-effect" | "no-item" | "unknown-item";
 }
 
 export interface UseSkillResult {
@@ -193,23 +201,42 @@ export function addItem(itemId: ItemId, quantity = 1): number {
 
 export function useItem(itemId: ItemId): UseItemResult {
   if (!isItemId(itemId)) {
-    return { used: false, healed: 0, reason: "unknown-item" };
+    return { used: false, healed: 0, restoredMp: 0, reason: "unknown-item" };
   }
 
   ensureInventory();
   if ((save.items[itemId] ?? 0) <= 0) {
-    return { used: false, healed: 0, reason: "no-item" };
+    return { used: false, healed: 0, restoredMp: 0, reason: "no-item" };
   }
 
-  if (save.hp >= save.maxHp) {
-    return { used: false, healed: 0, reason: "full-hp" };
+  const healsHp = canItemHealHp(itemId);
+  const restoresMp = canItemRestoreMp(itemId);
+  if (!healsHp && !restoresMp) {
+    return { used: false, healed: 0, restoredMp: 0, reason: "no-effect" };
   }
 
-  const before = save.hp;
-  save.hp = Math.min(save.maxHp, save.hp + getItemHealAmount(itemId, save.maxHp));
+  const hpFull = !healsHp || save.hp >= save.maxHp;
+  const mpFull = !restoresMp || save.mp >= save.maxMp;
+  if (hpFull && mpFull) {
+    return {
+      used: false,
+      healed: 0,
+      restoredMp: 0,
+      reason: restoresMp && !healsHp ? "full-mp" : "full-hp"
+    };
+  }
+
+  const beforeHp = save.hp;
+  const beforeMp = save.mp;
+  if (healsHp) {
+    save.hp = Math.min(save.maxHp, save.hp + getItemHealAmount(itemId, save.maxHp));
+  }
+  if (restoresMp) {
+    save.mp = Math.min(save.maxMp, save.mp + getItemMpRestoreAmount(itemId, save.maxMp));
+  }
   save.items[itemId] = Math.max(0, (save.items[itemId] ?? 0) - 1);
   persistSave();
-  return { used: true, healed: save.hp - before };
+  return { used: true, healed: save.hp - beforeHp, restoredMp: save.mp - beforeMp };
 }
 
 export function usePotion(): boolean {

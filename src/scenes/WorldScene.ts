@@ -374,6 +374,9 @@ export class WorldScene extends Phaser.Scene {
       if (getItemCount("herb") < 5) {
         addItem("herb", 1);
       }
+      if (getItemCount("manaWater") < 2) {
+        addItem("manaWater", 1);
+      }
       healPlayer(getSave().maxHp);
       restorePlayerMp(getSave().maxMp);
       stateChanged = true;

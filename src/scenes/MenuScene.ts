@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { ITEM_ORDER, ITEMS } from "../data/items";
+import { canItemHealHp, canItemRestoreMp, ITEM_ORDER, ITEMS } from "../data/items";
 import { MAPS } from "../data/maps";
 import { getSkillHealAmount, SKILL_ORDER, SKILLS } from "../data/skills";
 import { GAME_EVENTS } from "../game/constants";
@@ -11,6 +11,7 @@ import {
   useHealingSkill,
   useItem
 } from "../game/GameState";
+import type { ItemId } from "../game/types";
 
 type MenuTab = "items" | "skills" | "status";
 
@@ -120,15 +121,15 @@ export class MenuScene extends Phaser.Scene {
   private renderItems(): void {
     const save = getSave();
     const selectedItem = ITEM_ORDER[this.selectedItemIndex];
-    const canUseSelected = getItemCount(selectedItem) > 0 && save.hp < save.maxHp;
+    const canUseSelected = this.canUseInventoryItem(selectedItem);
 
     ITEM_ORDER.forEach((itemId, index) => {
       const item = ITEMS[itemId];
       const selected = index === this.selectedItemIndex;
       const count = getItemCount(itemId);
-      const y = 232 + index * 56;
+      const y = 224 + index * 48;
       const row = this.add
-        .rectangle(388, y + 15, 468, 46, selected ? 0x263442 : 0x111a24, selected ? 0.95 : 0.58)
+        .rectangle(388, y + 14, 468, 42, selected ? 0x263442 : 0x111a24, selected ? 0.95 : 0.58)
         .setStrokeStyle(selected ? 2 : 1, selected ? 0xd8bc72 : 0x34475a, selected ? 0.9 : 0.45)
         .setDepth(101)
         .setInteractive({ useHandCursor: true })
@@ -152,7 +153,7 @@ export class MenuScene extends Phaser.Scene {
 
     this.addContent(
       this.add
-        .text(154, 416, `現在HP ${save.hp}/${save.maxHp}`, this.textStyle(18, "#f4df7e"))
+        .text(154, 416, `現在HP ${save.hp}/${save.maxHp}  MP ${save.mp}/${save.maxMp}`, this.textStyle(18, "#f4df7e"))
         .setDepth(102)
     );
 
@@ -297,24 +298,18 @@ export class MenuScene extends Phaser.Scene {
   private useSelectedItem(): void {
     const itemId = ITEM_ORDER[this.selectedItemIndex];
     const item = ITEMS[itemId];
-    const save = getSave();
     if (getItemCount(itemId) <= 0) {
       this.setMessage(`${item.name}を持っていない。`);
       return;
     }
 
-    if (save.hp >= save.maxHp) {
-      this.setMessage("HPは満タンだ。");
-      return;
-    }
-
     const result = useItem(itemId);
     if (!result.used) {
-      this.setMessage(`${item.name}を使えなかった。`);
+      this.setMessage(this.getItemFailureMessage(result.reason));
       return;
     }
 
-    this.setMessage(`${item.name}でHPを${result.healed}回復した。`);
+    this.setMessage(this.getItemUseMessage(item.name, result.healed, result.restoredMp));
     this.game.events.emit(GAME_EVENTS.stateChanged);
     this.renderContent();
   }
@@ -425,6 +420,40 @@ export class MenuScene extends Phaser.Scene {
     );
     this.setMessage("");
     this.renderContent();
+  }
+
+  private canUseInventoryItem(itemId: ItemId): boolean {
+    const save = getSave();
+    if (getItemCount(itemId) <= 0) {
+      return false;
+    }
+
+    return (
+      (canItemHealHp(itemId) && save.hp < save.maxHp) ||
+      (canItemRestoreMp(itemId) && save.mp < save.maxMp)
+    );
+  }
+
+  private getItemUseMessage(itemName: string, healed: number, restoredMp: number): string {
+    const parts: string[] = [];
+    if (healed > 0) {
+      parts.push(`HPを${healed}`);
+    }
+    if (restoredMp > 0) {
+      parts.push(`MPを${restoredMp}`);
+    }
+
+    return `${itemName}で${parts.join("、")}回復した。`;
+  }
+
+  private getItemFailureMessage(reason?: string): string {
+    if (reason === "full-hp") {
+      return "HPは満タンだ。";
+    }
+    if (reason === "full-mp") {
+      return "MPは満タンだ。";
+    }
+    return "アイテムを使えなかった。";
   }
 
   private getSelectedSkillUseLabel(

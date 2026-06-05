@@ -34,7 +34,7 @@ export interface ChestDefinition extends TilePosition {
   reward?: ChestReward;
 }
 
-export type ItemId = "herb" | "strongHerb" | "magicWater";
+export type ItemId = "herb" | "strongHerb" | "magicWater" | "manaWater";
 export type Inventory = Partial<Record<ItemId, number>>;
 
 export interface ItemReward {

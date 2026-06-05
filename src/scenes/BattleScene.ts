@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { ENEMIES } from "../data/enemies";
+import { canItemHealHp, canItemRestoreMp, ITEM_ORDER, ITEMS } from "../data/items";
 import { SKILLS } from "../data/skills";
 import { GAME_EVENTS } from "../game/constants";
 import {
@@ -7,17 +8,18 @@ import {
   getKnownSkills,
   getItemCount,
   getSave,
+  getTotalItemCount,
   grantReward,
   hasLearnedSkill,
   markEnemyDefeated,
   persistSave,
   setPlayerPosition,
   spendMp,
+  useItem,
   useHealingSkill,
-  usePotion
 } from "../game/GameState";
 import type { SkillDefinition } from "../data/skills";
-import type { BattlePayload, EnemyDefinition } from "../game/types";
+import type { BattlePayload, EnemyDefinition, ItemId } from "../game/types";
 
 export class BattleScene extends Phaser.Scene {
   private enemy!: EnemyDefinition;
@@ -109,13 +111,39 @@ export class BattleScene extends Phaser.Scene {
     const actions = [
       { label: "攻撃", run: () => this.attack() },
       { label: "スキル", run: () => this.showSkillActions() },
-      { label: "薬草", run: () => this.drinkPotion() },
+      { label: "道具", run: () => this.showItemActions() },
       { label: "逃げる", run: () => this.flee() }
     ];
 
     actions.forEach((action, index) => {
       this.createBattleButton(action.label, index, action.run);
     });
+  }
+
+  private showItemActions(): void {
+    if (!this.playerTurn) {
+      return;
+    }
+
+    this.clearButtons();
+    this.setLog("使う道具を選んでください。");
+
+    ITEM_ORDER.forEach((itemId, index) => {
+      const item = ITEMS[itemId];
+      const count = getItemCount(itemId);
+      this.createBattleButton(
+        `${item.name}\nx${count}`,
+        index,
+        () => this.useBattleItem(itemId),
+        this.canUseBattleItem(itemId),
+        true
+      );
+    });
+
+    this.createBattleButton("戻る", ITEM_ORDER.length, () => {
+      this.renderMainActions();
+      this.setLog("あなたの番だ。");
+    }, true, true);
   }
 
   private showSkillActions(): void {
@@ -199,19 +227,28 @@ export class BattleScene extends Phaser.Scene {
     this.endPlayerTurn();
   }
 
-  private drinkPotion(): void {
+  private useBattleItem(itemId: ItemId): void {
     if (!this.playerTurn) {
       return;
     }
 
-    if (!usePotion()) {
-      this.setLog("使える薬草がない。");
+    const item = ITEMS[itemId];
+    const result = useItem(itemId);
+    if (!result.used) {
+      this.setLog(this.getItemFailureMessage(item.name, result.reason));
       this.refreshHud();
       return;
     }
 
-    this.setLog("薬草で傷を癒した。");
     this.refreshHud();
+    if (result.healed > 0) {
+      this.pulseTarget(this.playerSprite);
+      this.showDamageNumber(result.healed, 205, 190, "#a5ffb2", "+");
+    } else if (result.restoredMp > 0) {
+      this.pulseTarget(this.playerSprite);
+      this.showDamageNumber(result.restoredMp, 205, 190, "#8fc6ff", "+");
+    }
+    this.setLog(this.getItemUseMessage(item.name, result.healed, result.restoredMp));
     this.endPlayerTurn();
   }
 
@@ -378,7 +415,7 @@ export class BattleScene extends Phaser.Scene {
   private refreshHud(): void {
     const save = getSave();
     this.playerHpText?.setText(
-      `勇者 HP ${save.hp}/${save.maxHp}  MP ${save.mp}/${save.maxMp}  薬草 ${getItemCount("herb")}`
+      `勇者 HP ${save.hp}/${save.maxHp}  MP ${save.mp}/${save.maxMp}  道具 ${getTotalItemCount()}`
     );
     this.enemyHpText?.setText(`${this.enemy.name} HP ${this.enemyHp}/${this.enemy.maxHp}`);
     this.playerHpFill?.setDisplaySize(184 * Phaser.Math.Clamp(save.hp / save.maxHp, 0, 1), 6);
@@ -417,6 +454,40 @@ export class BattleScene extends Phaser.Scene {
     const save = getSave();
     const baseDamage = Math.round(save.attack * skill.effect.multiplier + skill.effect.bonus);
     return Phaser.Math.Between(Math.max(2, baseDamage - 3), baseDamage + 4);
+  }
+
+  private canUseBattleItem(itemId: ItemId): boolean {
+    const save = getSave();
+    if (getItemCount(itemId) <= 0) {
+      return false;
+    }
+
+    return (
+      (canItemHealHp(itemId) && save.hp < save.maxHp) ||
+      (canItemRestoreMp(itemId) && save.mp < save.maxMp)
+    );
+  }
+
+  private getItemUseMessage(itemName: string, healed: number, restoredMp: number): string {
+    const parts: string[] = [];
+    if (healed > 0) {
+      parts.push(`HPを${healed}`);
+    }
+    if (restoredMp > 0) {
+      parts.push(`MPを${restoredMp}`);
+    }
+
+    return `${itemName}で${parts.join("、")}回復した。`;
+  }
+
+  private getItemFailureMessage(itemName: string, reason?: string): string {
+    if (reason === "full-hp") {
+      return "HPは満タンだ。";
+    }
+    if (reason === "full-mp") {
+      return "MPは満タンだ。";
+    }
+    return `${itemName}を使えなかった。`;
   }
 
   private flashTarget(target?: Phaser.GameObjects.Image): void {

@@ -328,15 +328,25 @@ function addChestAccessRequirement(
 function pickSupplyChestReward(floor: number, floorCount: number, rng: Rng): ChestReward {
   const depth = floor / floorCount;
   if (depth < 0.34) {
-    return { type: "item", itemId: "herb", quantity: rng() < 0.35 ? 2 : 1 };
+    return rng() < 0.25
+      ? { type: "item", itemId: "manaWater", quantity: 1 }
+      : { type: "item", itemId: "herb", quantity: rng() < 0.35 ? 2 : 1 };
   }
   if (depth < 0.74) {
-    return rng() < 0.65
-      ? { type: "item", itemId: "strongHerb", quantity: 1 }
+    const roll = rng();
+    if (roll < 0.45) {
+      return { type: "item", itemId: "strongHerb", quantity: 1 };
+    }
+    return roll < 0.75
+      ? { type: "item", itemId: "manaWater", quantity: 1 }
       : { type: "item", itemId: "herb", quantity: 2 };
   }
-  return rng() < 0.55
-    ? { type: "item", itemId: "magicWater", quantity: 1 }
+  const roll = rng();
+  if (roll < 0.4) {
+    return { type: "item", itemId: "magicWater", quantity: 1 };
+  }
+  return roll < 0.75
+    ? { type: "item", itemId: "manaWater", quantity: 1 }
     : { type: "item", itemId: "strongHerb", quantity: 1 };
 }
 

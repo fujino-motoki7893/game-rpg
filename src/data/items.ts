@@ -6,9 +6,11 @@ export interface ItemDefinition {
   description: string;
   healAmount?: number;
   healRatio?: number;
+  mpRestoreAmount?: number;
+  mpRestoreRatio?: number;
 }
 
-export const ITEM_ORDER: ItemId[] = ["herb", "strongHerb", "magicWater"];
+export const ITEM_ORDER: ItemId[] = ["herb", "strongHerb", "magicWater", "manaWater"];
 
 export const ITEMS: Record<ItemId, ItemDefinition> = {
   herb: {
@@ -28,6 +30,12 @@ export const ITEMS: Record<ItemId, ItemDefinition> = {
     name: "まほうの水",
     description: "HPを最大値の半分回復",
     healRatio: 0.5
+  },
+  manaWater: {
+    id: "manaWater",
+    name: "魔力の水",
+    description: "MPを10回復",
+    mpRestoreAmount: 10
   }
 };
 
@@ -41,4 +49,22 @@ export function getItemHealAmount(itemId: ItemId, maxHp: number): number {
     return item.healAmount;
   }
   return Math.ceil(maxHp * (item.healRatio ?? 0));
+}
+
+export function getItemMpRestoreAmount(itemId: ItemId, maxMp: number): number {
+  const item = ITEMS[itemId];
+  if (item.mpRestoreAmount !== undefined) {
+    return item.mpRestoreAmount;
+  }
+  return Math.ceil(maxMp * (item.mpRestoreRatio ?? 0));
+}
+
+export function canItemHealHp(itemId: ItemId): boolean {
+  const item = ITEMS[itemId];
+  return item.healAmount !== undefined || item.healRatio !== undefined;
+}
+
+export function canItemRestoreMp(itemId: ItemId): boolean {
+  const item = ITEMS[itemId];
+  return item.mpRestoreAmount !== undefined || item.mpRestoreRatio !== undefined;
 }
