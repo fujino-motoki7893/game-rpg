@@ -16,6 +16,8 @@ import {
   markFlag,
   persistSave,
   resetSave,
+  resetDungeonEnemyDefeats,
+  resetFieldEnemyDefeats,
   restorePlayerMp,
   setCurrentDungeonFloor,
   setGeneratedDungeonFloor,
@@ -487,11 +489,27 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
 
+    this.applyRespawnRules(this.currentMap.id, portal.toMap);
+
     if (portal.toMap === "dungeon") {
       ensureDungeonProgress();
       setCurrentDungeonFloor(portal.toFloor ?? 1);
     }
     await this.loadMap(portal.toMap, { x: portal.toX, y: portal.toY });
+  }
+
+  private applyRespawnRules(fromMapId: MapId, toMapId: MapId): void {
+    if (fromMapId !== "field" && toMapId === "field") {
+      resetFieldEnemyDefeats();
+    }
+
+    if (fromMapId === "dungeon" && toMapId !== "dungeon") {
+      resetDungeonEnemyDefeats();
+    }
+
+    if (fromMapId !== "dungeon" && toMapId === "dungeon") {
+      resetDungeonEnemyDefeats();
+    }
   }
 
   private isBlocked(position: TilePosition): boolean {

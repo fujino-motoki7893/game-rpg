@@ -21,6 +21,8 @@ import type { GameSave, Inventory, ItemId, MapDefinition, MapId } from "./types"
 
 const MIN_DUNGEON_FLOORS = 3;
 const MAX_DUNGEON_FLOORS = 5;
+const FIELD_ENEMY_ID_PREFIX = "field-";
+const DUNGEON_ENEMY_ID_PREFIX = "dungeon-";
 
 export const initialSave = (): GameSave => ({
   mapId: "village",
@@ -362,6 +364,14 @@ export function isEnemyDefeated(enemyId: string): boolean {
   return save.defeatedEnemies.includes(enemyId);
 }
 
+export function resetFieldEnemyDefeats(): boolean {
+  return removeDefeatedEnemiesByPrefix(FIELD_ENEMY_ID_PREFIX);
+}
+
+export function resetDungeonEnemyDefeats(): boolean {
+  return removeDefeatedEnemiesByPrefix(DUNGEON_ENEMY_ID_PREFIX);
+}
+
 export function grantReward(exp: number, gold: number): { leveledUp: boolean; learnedSkillIds: SkillId[] } {
   save.exp += exp;
   save.gold += gold;
@@ -394,6 +404,17 @@ function randomInt(min: number, max: number): number {
 
 function clampFloor(floor: number, floorCount: number): number {
   return Math.min(floorCount, Math.max(1, floor));
+}
+
+function removeDefeatedEnemiesByPrefix(prefix: string): boolean {
+  const before = save.defeatedEnemies.length;
+  save.defeatedEnemies = save.defeatedEnemies.filter((enemyId) => !enemyId.startsWith(prefix));
+  if (save.defeatedEnemies.length === before) {
+    return false;
+  }
+
+  persistSave();
+  return true;
 }
 
 function ensureInventory(): void {
