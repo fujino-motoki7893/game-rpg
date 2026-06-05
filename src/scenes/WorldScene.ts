@@ -78,6 +78,7 @@ export class WorldScene extends Phaser.Scene {
     this.input.keyboard?.on("keydown", this.handleKeyDown, this);
     this.events.on("resume", this.refreshAfterBattle, this);
     this.game.events.on(GAME_EVENTS.menuClosed, this.handleMenuClosed, this);
+    this.game.events.on(GAME_EVENTS.shopClosed, this.handleMenuClosed, this);
     this.events.once("shutdown", this.shutdown, this);
 
     const save = getSave();
@@ -88,6 +89,7 @@ export class WorldScene extends Phaser.Scene {
     this.input.keyboard?.off("keydown", this.handleKeyDown, this);
     this.events.off("resume", this.refreshAfterBattle, this);
     this.game.events.off(GAME_EVENTS.menuClosed, this.handleMenuClosed, this);
+    this.game.events.off(GAME_EVENTS.shopClosed, this.handleMenuClosed, this);
   }
 
   update(): void {
@@ -367,6 +369,11 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private handleNpc(npc: NpcDefinition): void {
+    if (npc.id === "shopkeeper") {
+      this.openShop();
+      return;
+    }
+
     const dialogue = getNpcDialogue(npc.id);
     let stateChanged = false;
 
@@ -460,6 +467,11 @@ export class WorldScene extends Phaser.Scene {
   private openMenu(): void {
     this.menuOpen = true;
     this.scene.launch("MenuScene");
+  }
+
+  private openShop(): void {
+    this.menuOpen = true;
+    this.scene.launch("ShopScene");
   }
 
   private handleMenuClosed(): void {

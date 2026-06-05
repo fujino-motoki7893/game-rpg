@@ -33,6 +33,7 @@ export class BootScene extends Phaser.Scene {
     this.createHero("player", "#2c5d9e", "#f2d2a9", "#ead45e");
     this.createHero("npc-elder", "#70563f", "#f2d2a9", "#d5d0c8");
     this.createHero("npc-healer", "#8f3d67", "#f2d2a9", "#f2f4ff");
+    this.createHero("npc-shopkeeper", "#8a663e", "#f2d2a9", "#f0c14b");
     this.createCreature("enemy-slime", "#69c36d", "#2a7138", "slime");
     this.createCreature("enemy-goblin", "#748c3d", "#3f5220", "goblin");
     this.createCreature("enemy-bat", "#4b4a72", "#252640", "bat");

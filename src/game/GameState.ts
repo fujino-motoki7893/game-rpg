@@ -1,8 +1,10 @@
 import {
   canItemHealHp,
   canItemRestoreMp,
+  getItemBuyPrice,
   getItemHealAmount,
   getItemMpRestoreAmount,
+  getItemSellPrice,
   isItemId,
   ITEM_ORDER
 } from "../data/items";
@@ -175,6 +177,18 @@ export interface UseItemResult {
   reason?: "full-hp" | "full-mp" | "no-effect" | "no-item" | "unknown-item";
 }
 
+export interface BuyItemResult {
+  bought: boolean;
+  price: number;
+  reason?: "not-enough-gold" | "unknown-item";
+}
+
+export interface SellItemResult {
+  sold: boolean;
+  price: number;
+  reason?: "no-item" | "unknown-item";
+}
+
 export interface UseSkillResult {
   used: boolean;
   healed: number;
@@ -197,6 +211,40 @@ export function addItem(itemId: ItemId, quantity = 1): number {
   save.items[itemId] = nextCount;
   persistSave();
   return nextCount;
+}
+
+export function buyItem(itemId: ItemId): BuyItemResult {
+  if (!isItemId(itemId)) {
+    return { bought: false, price: 0, reason: "unknown-item" };
+  }
+
+  const price = getItemBuyPrice(itemId);
+  if (save.gold < price) {
+    return { bought: false, price, reason: "not-enough-gold" };
+  }
+
+  ensureInventory();
+  save.gold -= price;
+  save.items[itemId] = (save.items[itemId] ?? 0) + 1;
+  persistSave();
+  return { bought: true, price };
+}
+
+export function sellItem(itemId: ItemId): SellItemResult {
+  if (!isItemId(itemId)) {
+    return { sold: false, price: 0, reason: "unknown-item" };
+  }
+
+  ensureInventory();
+  if ((save.items[itemId] ?? 0) <= 0) {
+    return { sold: false, price: getItemSellPrice(itemId), reason: "no-item" };
+  }
+
+  const price = getItemSellPrice(itemId);
+  save.items[itemId] = Math.max(0, (save.items[itemId] ?? 0) - 1);
+  save.gold += price;
+  persistSave();
+  return { sold: true, price };
 }
 
 export function useItem(itemId: ItemId): UseItemResult {

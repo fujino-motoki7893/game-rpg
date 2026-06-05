@@ -38,6 +38,10 @@ export function getNpcDialogue(npcId: string): string[] {
     ];
   }
 
+  if (npcId === "shopkeeper") {
+    return ["道具屋ニコ: 旅の準備なら、うちに任せて。"];
+  }
+
   return ["返事はない。"];
 }
 

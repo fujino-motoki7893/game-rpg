@@ -4,6 +4,7 @@ export interface ItemDefinition {
   id: ItemId;
   name: string;
   description: string;
+  buyPrice: number;
   healAmount?: number;
   healRatio?: number;
   mpRestoreAmount?: number;
@@ -17,24 +18,28 @@ export const ITEMS: Record<ItemId, ItemDefinition> = {
     id: "herb",
     name: "薬草",
     description: "HPを16回復",
+    buyPrice: 8,
     healAmount: 16
   },
   strongHerb: {
     id: "strongHerb",
     name: "上薬草",
     description: "HPを32回復",
+    buyPrice: 18,
     healAmount: 32
   },
   magicWater: {
     id: "magicWater",
     name: "まほうの水",
     description: "HPを最大値の半分回復",
+    buyPrice: 28,
     healRatio: 0.5
   },
   manaWater: {
     id: "manaWater",
     name: "魔力の水",
     description: "MPを10回復",
+    buyPrice: 16,
     mpRestoreAmount: 10
   }
 };
@@ -67,4 +72,12 @@ export function canItemHealHp(itemId: ItemId): boolean {
 export function canItemRestoreMp(itemId: ItemId): boolean {
   const item = ITEMS[itemId];
   return item.mpRestoreAmount !== undefined || item.mpRestoreRatio !== undefined;
+}
+
+export function getItemBuyPrice(itemId: ItemId): number {
+  return ITEMS[itemId].buyPrice;
+}
+
+export function getItemSellPrice(itemId: ItemId): number {
+  return Math.floor(ITEMS[itemId].buyPrice / 2);
 }
