@@ -1,5 +1,13 @@
 import { getItemHealAmount, isItemId, ITEM_ORDER } from "../data/items";
+import {
+  getSkillHealAmount,
+  getSkillIdsLearnedAtLevel,
+  getSkillsForLevel,
+  isSkillId,
+  SKILLS
+} from "../data/skills";
 import { SAVE_KEY } from "./constants";
+import type { SkillDefinition, SkillId } from "../data/skills";
 import type { GameSave, Inventory, ItemId, MapDefinition, MapId } from "./types";
 
 const MIN_DUNGEON_FLOORS = 3;
@@ -11,6 +19,8 @@ export const initialSave = (): GameSave => ({
   y: 6,
   hp: 30,
   maxHp: 30,
+  mp: getBaseMaxMpForLevel(1),
+  maxMp: getBaseMaxMpForLevel(1),
   attack: 7,
   level: 1,
   exp: 0,
@@ -31,10 +41,17 @@ function loadSave(): GameSave {
     }
 
     const parsed = JSON.parse(raw) as Partial<GameSave>;
+    const base = initialSave();
     const items = normalizeInventory(parsed.items, parsed.potions);
+    const level = normalizePositiveInteger(parsed.level, base.level);
+    const maxMp = normalizeMaxMp(parsed.maxMp, level);
+    const mp = normalizeMp(parsed.mp, maxMp);
     return {
-      ...initialSave(),
+      ...base,
       ...parsed,
+      level,
+      maxMp,
+      mp,
       items,
       potions: items.herb ?? 0,
       flags: parsed.flags ?? {},
@@ -132,6 +149,13 @@ export function healPlayer(amount: number): number {
   return save.hp - before;
 }
 
+export function restorePlayerMp(amount: number): number {
+  const before = save.mp;
+  save.mp = Math.min(save.maxMp, save.mp + amount);
+  persistSave();
+  return save.mp - before;
+}
+
 export function damagePlayer(amount: number): void {
   save.hp = Math.max(0, save.hp - amount);
   persistSave();
@@ -141,6 +165,12 @@ export interface UseItemResult {
   used: boolean;
   healed: number;
   reason?: "full-hp" | "no-item" | "unknown-item";
+}
+
+export interface UseSkillResult {
+  used: boolean;
+  healed: number;
+  reason?: "unknown-skill" | "not-learned" | "not-healing" | "not-enough-mp" | "full-hp";
 }
 
 export function getItemCount(itemId: ItemId): number {
@@ -186,6 +216,57 @@ export function usePotion(): boolean {
   return useItem("herb").used;
 }
 
+export function getKnownSkills(): SkillDefinition[] {
+  return getSkillsForLevel(save.level);
+}
+
+export function hasLearnedSkill(skillId: SkillId): boolean {
+  return SKILLS[skillId].requiredLevel <= save.level;
+}
+
+export function spendMp(amount: number): boolean {
+  if (amount <= 0) {
+    return true;
+  }
+
+  if (save.mp < amount) {
+    return false;
+  }
+
+  save.mp = Math.max(0, save.mp - amount);
+  persistSave();
+  return true;
+}
+
+export function useHealingSkill(skillId: SkillId): UseSkillResult {
+  if (!isSkillId(skillId)) {
+    return { used: false, healed: 0, reason: "unknown-skill" };
+  }
+
+  const skill = SKILLS[skillId];
+  if (!hasLearnedSkill(skillId)) {
+    return { used: false, healed: 0, reason: "not-learned" };
+  }
+
+  if (skill.effect.type !== "heal") {
+    return { used: false, healed: 0, reason: "not-healing" };
+  }
+
+  if (save.hp >= save.maxHp) {
+    return { used: false, healed: 0, reason: "full-hp" };
+  }
+
+  if (save.mp < skill.mpCost) {
+    return { used: false, healed: 0, reason: "not-enough-mp" };
+  }
+
+  const before = save.hp;
+  save.mp = Math.max(0, save.mp - skill.mpCost);
+  save.hp = Math.min(save.maxHp, save.hp + getSkillHealAmount(skill, save.maxHp));
+  persistSave();
+  return { used: true, healed: save.hp - before };
+}
+
 export function markFlag(flag: string): void {
   save.flags[flag] = true;
   persistSave();
@@ -206,22 +287,30 @@ export function isEnemyDefeated(enemyId: string): boolean {
   return save.defeatedEnemies.includes(enemyId);
 }
 
-export function grantReward(exp: number, gold: number): { leveledUp: boolean } {
+export function grantReward(exp: number, gold: number): { leveledUp: boolean; learnedSkillIds: SkillId[] } {
   save.exp += exp;
   save.gold += gold;
 
   let leveledUp = false;
+  const learnedSkillIds: SkillId[] = [];
   while (save.exp >= save.level * 12) {
     save.exp -= save.level * 12;
     save.level += 1;
     save.maxHp += 6;
+    save.maxMp = Math.max(save.maxMp + 4, getBaseMaxMpForLevel(save.level));
     save.attack += 2;
     save.hp = save.maxHp;
+    save.mp = save.maxMp;
+    learnedSkillIds.push(...getSkillIdsLearnedAtLevel(save.level));
     leveledUp = true;
   }
 
   persistSave();
-  return { leveledUp };
+  return { leveledUp, learnedSkillIds };
+}
+
+function getBaseMaxMpForLevel(level: number): number {
+  return 8 + Math.max(0, level - 1) * 4;
 }
 
 function randomInt(min: number, max: number): number {
@@ -236,6 +325,31 @@ function ensureInventory(): void {
   if (!save.items) {
     save.items = normalizeInventory(undefined, save.potions);
   }
+}
+
+function normalizePositiveInteger(value: unknown, fallback: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 1) {
+    return fallback;
+  }
+
+  return Math.floor(value);
+}
+
+function normalizeMaxMp(value: unknown, level: number): number {
+  const expectedMaxMp = getBaseMaxMpForLevel(level);
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 1) {
+    return expectedMaxMp;
+  }
+
+  return Math.max(Math.floor(value), expectedMaxMp);
+}
+
+function normalizeMp(value: unknown, maxMp: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return maxMp;
+  }
+
+  return Math.min(maxMp, Math.floor(value));
 }
 
 function normalizeInventory(items: unknown, legacyPotions?: number): Inventory {

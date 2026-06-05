@@ -1,16 +1,22 @@
 import Phaser from "phaser";
 import { ENEMIES } from "../data/enemies";
+import { SKILLS } from "../data/skills";
 import { GAME_EVENTS } from "../game/constants";
 import {
   damagePlayer,
+  getKnownSkills,
   getItemCount,
   getSave,
   grantReward,
+  hasLearnedSkill,
   markEnemyDefeated,
   persistSave,
   setPlayerPosition,
+  spendMp,
+  useHealingSkill,
   usePotion
 } from "../game/GameState";
+import type { SkillDefinition } from "../data/skills";
 import type { BattlePayload, EnemyDefinition } from "../game/types";
 
 export class BattleScene extends Phaser.Scene {
@@ -74,7 +80,7 @@ export class BattleScene extends Phaser.Scene {
       lineSpacing: 8
     });
 
-    this.createButtons();
+    this.renderMainActions();
     this.refreshHud();
     this.setLog(`${this.enemy.name}が行く手をふさいだ。`);
   }
@@ -93,32 +99,83 @@ export class BattleScene extends Phaser.Scene {
     if (this.pendingPlayerTurnAt !== undefined && now >= this.pendingPlayerTurnAt) {
       this.pendingPlayerTurnAt = undefined;
       this.playerTurn = true;
-      this.setButtonsEnabled(true);
+      this.renderMainActions();
       this.setLog("あなたの番だ。");
     }
   }
 
-  private createButtons(): void {
+  private renderMainActions(): void {
+    this.clearButtons();
     const actions = [
       { label: "攻撃", run: () => this.attack() },
+      { label: "スキル", run: () => this.showSkillActions() },
       { label: "薬草", run: () => this.drinkPotion() },
       { label: "逃げる", run: () => this.flee() }
     ];
 
     actions.forEach((action, index) => {
-      const button = this.add
-        .text(116 + index * 154, 470, action.label, {
-          ...this.textStyle(19, "#101820"),
-          backgroundColor: "#f2d27a",
-          padding: { x: 18, y: 10 },
-          fixedWidth: 122,
-          align: "center"
-        })
-        .setShadow(1, 1, "#d2a856", 0)
-        .setInteractive({ useHandCursor: true })
-        .on("pointerdown", action.run);
-      this.buttons.push(button);
+      this.createBattleButton(action.label, index, action.run);
     });
+  }
+
+  private showSkillActions(): void {
+    if (!this.playerTurn) {
+      return;
+    }
+
+    const skills = getKnownSkills();
+    if (skills.length === 0) {
+      this.setLog("まだ使えるスキルを覚えていない。");
+      return;
+    }
+
+    this.clearButtons();
+    this.setLog(`使うスキルを選んでください。MP ${getSave().mp}/${getSave().maxMp}`);
+
+    skills.forEach((skill, index) => {
+      const enabled = getSave().mp >= skill.mpCost;
+      this.createBattleButton(
+        `${skill.name}\nMP${skill.mpCost}`,
+        index,
+        () => this.useSkill(skill),
+        enabled,
+        true
+      );
+    });
+
+    this.createBattleButton("戻る", skills.length, () => {
+      this.renderMainActions();
+      this.setLog("あなたの番だ。");
+    }, true, true);
+  }
+
+  private createBattleButton(
+    label: string,
+    index: number,
+    run: () => void,
+    enabled = true,
+    skillGrid = false
+  ): Phaser.GameObjects.Text {
+    const x = skillGrid ? 116 + (index % 3) * 184 : 116 + index * 154;
+    const y = skillGrid ? 432 + Math.floor(index / 3) * 62 : 470;
+    const button = this.add
+      .text(x, y, label, {
+        ...this.textStyle(label.includes("\n") ? 16 : 19, enabled ? "#101820" : "#2a3036"),
+        backgroundColor: enabled ? "#f2d27a" : "#66707a",
+        padding: { x: 14, y: skillGrid ? 7 : 10 },
+        fixedWidth: skillGrid ? 152 : 122,
+        fixedHeight: skillGrid ? 54 : 44,
+        align: "center"
+      })
+      .setAlpha(enabled ? 1 : 0.58)
+      .setShadow(1, 1, "#d2a856", 0);
+
+    if (enabled) {
+      button.setInteractive({ useHandCursor: true }).on("pointerdown", run);
+    }
+
+    this.buttons.push(button);
+    return button;
   }
 
   private attack(): void {
@@ -155,6 +212,59 @@ export class BattleScene extends Phaser.Scene {
 
     this.setLog("薬草で傷を癒した。");
     this.refreshHud();
+    this.endPlayerTurn();
+  }
+
+  private useSkill(skill: SkillDefinition): void {
+    if (!this.playerTurn) {
+      return;
+    }
+
+    if (!hasLearnedSkill(skill.id)) {
+      this.setLog(`${skill.name}はまだ覚えていない。`);
+      return;
+    }
+
+    if (getSave().mp < skill.mpCost) {
+      this.setLog(`${skill.name}を使うMPが足りない。`);
+      this.refreshHud();
+      return;
+    }
+
+    if (skill.effect.type === "heal") {
+      const result = useHealingSkill(skill.id);
+      if (!result.used) {
+        this.setLog(result.reason === "full-hp" ? "HPは満タンだ。" : `${skill.name}を使えなかった。`);
+        this.refreshHud();
+        return;
+      }
+
+      this.refreshHud();
+      this.pulseTarget(this.playerSprite);
+      this.showDamageNumber(result.healed, 205, 190, "#a5ffb2", "+");
+      this.setLog(`${skill.name}でHPを${result.healed}回復した。`);
+      this.endPlayerTurn();
+      return;
+    }
+
+    if (!spendMp(skill.mpCost)) {
+      this.setLog(`${skill.name}を使うMPが足りない。`);
+      this.refreshHud();
+      return;
+    }
+
+    const damage = this.calculateSkillDamage(skill);
+    this.enemyHp = Math.max(0, this.enemyHp - damage);
+    this.refreshHud();
+    this.flashTarget(this.enemySprite);
+    this.showDamageNumber(damage, 560, 146, "#ffe08a");
+
+    if (this.enemyHp <= 0) {
+      this.winBattle(damage);
+      return;
+    }
+
+    this.setLog(`${skill.name}！${damage}のダメージを与えた。`);
     this.endPlayerTurn();
   }
 
@@ -219,7 +329,11 @@ export class BattleScene extends Phaser.Scene {
     this.pendingPlayerTurnAt = undefined;
     markEnemyDefeated(this.enemyInstanceId);
     const reward = grantReward(this.enemy.exp, this.enemy.gold);
-    const levelText = reward.leveledUp ? " レベルアップ！" : "";
+    const learnedText =
+      reward.learnedSkillIds.length > 0
+        ? ` ${reward.learnedSkillIds.map((skillId) => SKILLS[skillId].name).join("、")}を覚えた！`
+        : "";
+    const levelText = reward.leveledUp ? ` レベルアップ！${learnedText}` : "";
     this.setLog(
       `${lastDamage}のダメージを与えた。${this.enemy.name}を倒した。EXP +${this.enemy.exp}、G +${this.enemy.gold}。${levelText}`
     );
@@ -235,6 +349,7 @@ export class BattleScene extends Phaser.Scene {
     this.pendingPlayerTurnAt = undefined;
     const save = getSave();
     save.hp = Math.ceil(save.maxHp * 0.6);
+    save.mp = Math.ceil(save.maxMp * 0.5);
     save.gold = Math.floor(save.gold * 0.8);
     persistSave();
     this.setLog(
@@ -262,7 +377,9 @@ export class BattleScene extends Phaser.Scene {
 
   private refreshHud(): void {
     const save = getSave();
-    this.playerHpText?.setText(`勇者 HP ${save.hp}/${save.maxHp}  薬草 ${getItemCount("herb")}`);
+    this.playerHpText?.setText(
+      `勇者 HP ${save.hp}/${save.maxHp}  MP ${save.mp}/${save.maxMp}  薬草 ${getItemCount("herb")}`
+    );
     this.enemyHpText?.setText(`${this.enemy.name} HP ${this.enemyHp}/${this.enemy.maxHp}`);
     this.playerHpFill?.setDisplaySize(184 * Phaser.Math.Clamp(save.hp / save.maxHp, 0, 1), 6);
     this.enemyHpFill?.setDisplaySize(
@@ -287,6 +404,21 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
+  private clearButtons(): void {
+    this.buttons.forEach((button) => button.destroy());
+    this.buttons = [];
+  }
+
+  private calculateSkillDamage(skill: SkillDefinition): number {
+    if (skill.effect.type !== "damage") {
+      return 0;
+    }
+
+    const save = getSave();
+    const baseDamage = Math.round(save.attack * skill.effect.multiplier + skill.effect.bonus);
+    return Phaser.Math.Between(Math.max(2, baseDamage - 3), baseDamage + 4);
+  }
+
   private flashTarget(target?: Phaser.GameObjects.Image): void {
     if (!target) {
       return;
@@ -305,9 +437,27 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
-  private showDamageNumber(amount: number, x: number, y: number, color: string): void {
+  private pulseTarget(target?: Phaser.GameObjects.Image): void {
+    if (!target) {
+      return;
+    }
+
+    target.setTint(0xa5ffb2);
+    this.tweens.add({
+      targets: target,
+      scale: target.scaleX + 0.12,
+      duration: 110,
+      yoyo: true,
+      repeat: 1,
+      onComplete: () => {
+        target.clearTint();
+      }
+    });
+  }
+
+  private showDamageNumber(amount: number, x: number, y: number, color: string, prefix = "-"): void {
     const text = this.add
-      .text(x, y, `-${amount}`, {
+      .text(x, y, `${prefix}${amount}`, {
         ...this.textStyle(22, color),
         fontStyle: "bold"
       })

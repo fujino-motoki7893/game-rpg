@@ -56,7 +56,7 @@ export class UIScene extends Phaser.Scene {
 
   private refresh(): void {
     const save = getSave();
-    this.hpText?.setText(`HP ${save.hp}/${save.maxHp}`);
+    this.hpText?.setText(`HP ${save.hp}/${save.maxHp}  MP ${save.mp}/${save.maxMp}`);
     this.statsText?.setText(
       `Lv ${save.level}  攻撃 ${save.attack}  道具 ${getTotalItemCount()}  G ${save.gold}`
     );

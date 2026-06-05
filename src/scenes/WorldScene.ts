@@ -16,6 +16,7 @@ import {
   markFlag,
   persistSave,
   resetSave,
+  restorePlayerMp,
   setCurrentDungeonFloor,
   setGeneratedDungeonFloor,
   setPlayerPosition
@@ -374,6 +375,7 @@ export class WorldScene extends Phaser.Scene {
         addItem("herb", 1);
       }
       healPlayer(getSave().maxHp);
+      restorePlayerMp(getSave().maxMp);
       stateChanged = true;
     }
 

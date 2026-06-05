@@ -1,26 +1,30 @@
 import Phaser from "phaser";
 import { ITEM_ORDER, ITEMS } from "../data/items";
 import { MAPS } from "../data/maps";
+import { getSkillHealAmount, SKILL_ORDER, SKILLS } from "../data/skills";
 import { GAME_EVENTS } from "../game/constants";
 import {
   getCurrentDungeonFloor,
   getDungeonFloorCount,
   getItemCount,
   getSave,
+  useHealingSkill,
   useItem
 } from "../game/GameState";
 
-type MenuTab = "items" | "status";
+type MenuTab = "items" | "skills" | "status";
 
-const TABS: MenuTab[] = ["items", "status"];
+const TABS: MenuTab[] = ["items", "skills", "status"];
 const TAB_LABELS: Record<MenuTab, string> = {
   items: "持ち物",
+  skills: "スキル",
   status: "強さ"
 };
 
 export class MenuScene extends Phaser.Scene {
   private activeTab: MenuTab = "items";
   private selectedItemIndex = 0;
+  private selectedSkillIndex = 0;
   private tabButtons: Partial<Record<MenuTab, Phaser.GameObjects.Text>> = {};
   private contentObjects: Phaser.GameObjects.GameObject[] = [];
   private messageText?: Phaser.GameObjects.Text;
@@ -32,6 +36,7 @@ export class MenuScene extends Phaser.Scene {
   create(): void {
     this.activeTab = "items";
     this.selectedItemIndex = 0;
+    this.selectedSkillIndex = 0;
     this.contentObjects = [];
     this.tabButtons = {};
 
@@ -44,7 +49,8 @@ export class MenuScene extends Phaser.Scene {
     this.add.text(154, 120, "メニュー", this.textStyle(25, "#f6e4a4")).setDepth(102);
 
     this.createTabButton("items", 154, 176);
-    this.createTabButton("status", 276, 176);
+    this.createTabButton("skills", 276, 176);
+    this.createTabButton("status", 398, 176);
     this.createCloseButton();
     this.messageText = this.add
       .text(154, 492, "", this.textStyle(16, "#f6e4a4"))
@@ -100,6 +106,11 @@ export class MenuScene extends Phaser.Scene {
 
     if (this.activeTab === "items") {
       this.renderItems();
+      return;
+    }
+
+    if (this.activeTab === "skills") {
+      this.renderSkills();
       return;
     }
 
@@ -162,11 +173,97 @@ export class MenuScene extends Phaser.Scene {
     this.addContent(useButton);
   }
 
+  private renderSkills(): void {
+    const save = getSave();
+    const selectedSkillId = SKILL_ORDER[this.selectedSkillIndex];
+    const selectedSkill = SKILLS[selectedSkillId];
+    const selectedLearned = save.level >= selectedSkill.requiredLevel;
+    const selectedIsHeal = selectedSkill.effect.type === "heal";
+    const canUseSelected =
+      selectedLearned && selectedIsHeal && save.mp >= selectedSkill.mpCost && save.hp < save.maxHp;
+
+    SKILL_ORDER.forEach((skillId, index) => {
+      const skill = SKILLS[skillId];
+      const selected = index === this.selectedSkillIndex;
+      const learned = save.level >= skill.requiredLevel;
+      const y = 224 + index * 48;
+      const row = this.add
+        .rectangle(388, y + 14, 468, 42, selected ? 0x263442 : 0x111a24, selected ? 0.95 : 0.58)
+        .setStrokeStyle(selected ? 2 : 1, selected ? 0xd8bc72 : 0x34475a, selected ? 0.9 : 0.45)
+        .setDepth(101)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerdown", () => this.selectSkill(index));
+      this.addContent(row);
+      this.addContent(
+        this.add
+          .text(164, y, selected ? ">" : "", this.textStyle(18, "#f6e4a4"))
+          .setDepth(102)
+      );
+      this.addContent(
+        this.add
+          .text(190, y, skill.name, this.textStyle(18, learned ? "#fff4cf" : "#748393"))
+          .setDepth(102)
+      );
+      this.addContent(
+        this.add
+          .text(306, y, `MP${skill.mpCost}`, this.textStyle(16, learned ? "#d9e5ef" : "#748393"))
+          .setDepth(102)
+      );
+      this.addContent(
+        this.add
+          .text(
+            376,
+            y,
+            learned ? skill.description : `Lv${skill.requiredLevel}で習得`,
+            this.textStyle(14, learned ? "#9fb4c6" : "#748393")
+          )
+          .setDepth(102)
+      );
+    });
+
+    this.addContent(
+      this.add
+        .text(154, 416, `現在HP ${save.hp}/${save.maxHp}  MP ${save.mp}/${save.maxMp}`, this.textStyle(18, "#f4df7e"))
+        .setDepth(102)
+    );
+
+    const useLabel = this.getSelectedSkillUseLabel(selectedLearned, selectedIsHeal, canUseSelected);
+    const useButton = this.add
+      .text(518, 412, useLabel, {
+        ...this.textStyle(17, canUseSelected ? "#101820" : "#2a3036"),
+        backgroundColor: canUseSelected ? "#f2d27a" : "#66707a",
+        padding: { x: 14, y: 10 },
+        fixedWidth: 104,
+        align: "center"
+      })
+      .setAlpha(canUseSelected ? 1 : 0.58)
+      .setDepth(102);
+
+    if (canUseSelected) {
+      useButton.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.useSelectedSkill());
+    }
+    this.addContent(useButton);
+
+    if (selectedSkill.effect.type === "heal") {
+      this.addContent(
+        this.add
+          .text(
+            154,
+            452,
+            `回復量 ${getSkillHealAmount(selectedSkill, save.maxHp)}`,
+            this.textStyle(15, "#9fb4c6")
+          )
+          .setDepth(102)
+      );
+    }
+  }
+
   private renderStatus(): void {
     const save = getSave();
     const rows = [
       ["レベル", String(save.level)],
       ["HP", `${save.hp}/${save.maxHp}`],
+      ["MP", `${save.mp}/${save.maxMp}`],
       ["攻撃", String(save.attack)],
       ["EXP", String(save.exp)],
       ["次のレベルまで", String(Math.max(0, save.level * 12 - save.exp))],
@@ -187,6 +284,12 @@ export class MenuScene extends Phaser.Scene {
 
   private selectItem(index: number): void {
     this.selectedItemIndex = Phaser.Math.Clamp(index, 0, ITEM_ORDER.length - 1);
+    this.setMessage("");
+    this.renderContent();
+  }
+
+  private selectSkill(index: number): void {
+    this.selectedSkillIndex = Phaser.Math.Clamp(index, 0, SKILL_ORDER.length - 1);
     this.setMessage("");
     this.renderContent();
   }
@@ -212,6 +315,42 @@ export class MenuScene extends Phaser.Scene {
     }
 
     this.setMessage(`${item.name}でHPを${result.healed}回復した。`);
+    this.game.events.emit(GAME_EVENTS.stateChanged);
+    this.renderContent();
+  }
+
+  private useSelectedSkill(): void {
+    const skillId = SKILL_ORDER[this.selectedSkillIndex];
+    const skill = SKILLS[skillId];
+    const save = getSave();
+
+    if (save.level < skill.requiredLevel) {
+      this.setMessage(`${skill.name}はLv${skill.requiredLevel}で覚える。`);
+      return;
+    }
+
+    if (skill.effect.type !== "heal") {
+      this.setMessage(`${skill.name}は戦闘中に使える技だ。`);
+      return;
+    }
+
+    if (save.mp < skill.mpCost) {
+      this.setMessage("MPが足りない。");
+      return;
+    }
+
+    if (save.hp >= save.maxHp) {
+      this.setMessage("HPは満タンだ。");
+      return;
+    }
+
+    const result = useHealingSkill(skillId);
+    if (!result.used) {
+      this.setMessage(`${skill.name}を使えなかった。`);
+      return;
+    }
+
+    this.setMessage(`${skill.name}でHPを${result.healed}回復した。`);
     this.game.events.emit(GAME_EVENTS.stateChanged);
     this.renderContent();
   }
@@ -242,8 +381,23 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
+    if (this.activeTab === "skills" && event.code === "ArrowUp") {
+      this.moveSelectedSkill(-1);
+      return;
+    }
+
+    if (this.activeTab === "skills" && event.code === "ArrowDown") {
+      this.moveSelectedSkill(1);
+      return;
+    }
+
     if ((event.code === "Space" || event.code === "Enter") && this.activeTab === "items") {
       this.useSelectedItem();
+      return;
+    }
+
+    if ((event.code === "Space" || event.code === "Enter") && this.activeTab === "skills") {
+      this.useSelectedSkill();
     }
   }
 
@@ -261,6 +415,41 @@ export class MenuScene extends Phaser.Scene {
     );
     this.setMessage("");
     this.renderContent();
+  }
+
+  private moveSelectedSkill(direction: number): void {
+    this.selectedSkillIndex = Phaser.Math.Wrap(
+      this.selectedSkillIndex + direction,
+      0,
+      SKILL_ORDER.length
+    );
+    this.setMessage("");
+    this.renderContent();
+  }
+
+  private getSelectedSkillUseLabel(
+    learned: boolean,
+    isHeal: boolean,
+    canUseSelected: boolean
+  ): string {
+    if (!learned) {
+      return "未習得";
+    }
+
+    if (!isHeal) {
+      return "戦闘専用";
+    }
+
+    if (canUseSelected) {
+      return "使う";
+    }
+
+    const save = getSave();
+    if (save.mp < SKILLS[SKILL_ORDER[this.selectedSkillIndex]].mpCost) {
+      return "MP不足";
+    }
+
+    return "満タン";
   }
 
   private updateTabs(): void {

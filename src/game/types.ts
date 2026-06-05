@@ -76,6 +76,8 @@ export interface GameSave {
   y: number;
   hp: number;
   maxHp: number;
+  mp: number;
+  maxMp: number;
   attack: number;
   level: number;
   exp: number;
