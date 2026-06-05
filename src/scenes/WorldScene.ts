@@ -40,6 +40,25 @@ const directionVectors: Record<Direction, TilePosition> = {
   up: { x: 0, y: -1 }
 };
 const FIELD_DUNGEON_ENTRANCE: TilePosition = { x: 2, y: 13 };
+const ENEMY_AWARENESS_RANGE = 4;
+const ENEMY_DECISION_INTERVAL_MS = 900;
+const ENEMY_MOVE_DURATION_MS = 180;
+const ENEMY_WEAKNESS_RATIO = 0.85;
+const ENEMY_PATROL_PATTERNS: Direction[][] = [
+  ["left", "right"],
+  ["up", "down"],
+  ["left", "up", "right", "down"],
+  ["right", "down", "left", "up"]
+];
+
+interface EnemyVisual {
+  enemy: EnemySpawn;
+  image: Phaser.GameObjects.Image;
+  shadow: Phaser.GameObjects.Ellipse;
+  tile: TilePosition;
+  patrolStep: number;
+  nextMoveAt: number;
+}
 
 export class WorldScene extends Phaser.Scene {
   private currentMap!: MapDefinition;
@@ -54,6 +73,7 @@ export class WorldScene extends Phaser.Scene {
   private dialogueAccent?: Phaser.GameObjects.Rectangle;
   private dialogueText?: Phaser.GameObjects.Text;
   private objectGroup?: Phaser.GameObjects.Group;
+  private enemyObjects = new Map<string, EnemyVisual>();
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd?: Record<string, Phaser.Input.Keyboard.Key>;
   private actionKeys?: Phaser.Input.Keyboard.Key[];
@@ -101,6 +121,8 @@ export class WorldScene extends Phaser.Scene {
     if (this.loadingMap || this.menuOpen || this.dialogueLines.length > 0 || this.moving) {
       return;
     }
+
+    this.updateEnemyMovement();
 
     if (this.resetKey && Phaser.Input.Keyboard.JustDown(this.resetKey)) {
       resetSave();
@@ -212,6 +234,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private createObjects(): void {
+    this.enemyObjects.clear();
     this.currentMap.portals.forEach((portal) => {
       const texture =
         portal.kind === "stairs-up"
@@ -254,21 +277,28 @@ export class WorldScene extends Phaser.Scene {
 
     this.currentMap.enemies
       .filter((enemy) => !getSave().defeatedEnemies.includes(enemy.id))
-      .forEach((enemy) => {
+      .forEach((enemy, index) => {
         const texture = ENEMIES[enemy.enemyKey]?.texture ?? "enemy-goblin";
-        this.addShadow(enemy.x, enemy.y, 10);
-        this.objectGroup?.add(
-          this.add.image(this.toWorldX(enemy.x), this.toWorldY(enemy.y), texture).setDepth(11)
-        );
+        const shadow = this.addShadow(enemy.x, enemy.y, 10);
+        const image = this.add.image(this.toWorldX(enemy.x), this.toWorldY(enemy.y), texture).setDepth(11);
+        this.objectGroup?.add(image);
+        this.enemyObjects.set(enemy.id, {
+          enemy,
+          image,
+          shadow,
+          tile: { x: enemy.x, y: enemy.y },
+          patrolStep: this.hashId(enemy.id) % 4,
+          nextMoveAt: this.time.now + ENEMY_DECISION_INTERVAL_MS + index * 160
+        });
       });
   }
 
-  private addShadow(tileX: number, tileY: number, depth: number): void {
-    this.objectGroup?.add(
-      this.add
-        .ellipse(this.toWorldX(tileX), this.toWorldY(tileY) + 13, 20, 6, 0x05080b, 0.28)
-        .setDepth(depth)
-    );
+  private addShadow(tileX: number, tileY: number, depth: number): Phaser.GameObjects.Ellipse {
+    const shadow = this.add
+      .ellipse(this.toWorldX(tileX), this.toWorldY(tileY) + 13, 20, 6, 0x05080b, 0.28)
+      .setDepth(depth);
+    this.objectGroup?.add(shadow);
+    return shadow;
   }
 
   private refreshAfterBattle(): void {
@@ -353,6 +383,94 @@ export class WorldScene extends Phaser.Scene {
         ease: "Sine.easeInOut"
       });
     }
+  }
+
+  private updateEnemyMovement(): void {
+    if (this.enemyObjects.size === 0) {
+      return;
+    }
+
+    const now = this.time.now;
+    this.enemyObjects.forEach((enemyObject) => {
+      if (now < enemyObject.nextMoveAt || !enemyObject.image.active) {
+        return;
+      }
+
+      enemyObject.nextMoveAt = now + ENEMY_DECISION_INTERVAL_MS;
+      const nextTile = this.chooseEnemyNextTile(enemyObject);
+      if (!nextTile) {
+        return;
+      }
+
+      this.moveEnemy(enemyObject, nextTile);
+    });
+  }
+
+  private chooseEnemyNextTile(enemyObject: EnemyVisual): TilePosition | undefined {
+    if (this.shouldEnemyFlee(enemyObject)) {
+      return this.chooseFleeTile(enemyObject);
+    }
+
+    return this.choosePatrolTile(enemyObject);
+  }
+
+  private shouldEnemyFlee(enemyObject: EnemyVisual): boolean {
+    return (
+      this.distance(enemyObject.tile, this.playerTile) <= ENEMY_AWARENESS_RANGE &&
+      this.isEnemyWeakerThanPlayer(enemyObject.enemy)
+    );
+  }
+
+  private chooseFleeTile(enemyObject: EnemyVisual): TilePosition | undefined {
+    const currentDistance = this.distance(enemyObject.tile, this.playerTile);
+    const options = this.getEnemyMoveOptions(enemyObject)
+      .map((position) => ({
+        position,
+        distance: this.distance(position, this.playerTile)
+      }))
+      .filter((option) => option.distance > currentDistance)
+      .sort((a, b) => b.distance - a.distance);
+
+    return options[0]?.position;
+  }
+
+  private choosePatrolTile(enemyObject: EnemyVisual): TilePosition | undefined {
+    const pattern = ENEMY_PATROL_PATTERNS[this.hashId(enemyObject.enemy.id) % ENEMY_PATROL_PATTERNS.length];
+    for (let attempts = 0; attempts < pattern.length; attempts += 1) {
+      const direction = pattern[(enemyObject.patrolStep + attempts) % pattern.length];
+      const candidate = this.offsetPosition(enemyObject.tile, direction);
+      if (this.canEnemyOccupy(candidate, enemyObject.enemy.id)) {
+        enemyObject.patrolStep = (enemyObject.patrolStep + attempts + 1) % pattern.length;
+        return candidate;
+      }
+    }
+
+    enemyObject.patrolStep = (enemyObject.patrolStep + 1) % pattern.length;
+    return undefined;
+  }
+
+  private getEnemyMoveOptions(enemyObject: EnemyVisual): TilePosition[] {
+    return (Object.keys(directionVectors) as Direction[])
+      .map((direction) => this.offsetPosition(enemyObject.tile, direction))
+      .filter((position) => this.canEnemyOccupy(position, enemyObject.enemy.id));
+  }
+
+  private moveEnemy(enemyObject: EnemyVisual, tile: TilePosition): void {
+    enemyObject.tile = tile;
+    this.tweens.add({
+      targets: enemyObject.image,
+      x: this.toWorldX(tile.x),
+      y: this.toWorldY(tile.y),
+      duration: ENEMY_MOVE_DURATION_MS,
+      ease: "Sine.easeInOut"
+    });
+    this.tweens.add({
+      targets: enemyObject.shadow,
+      x: this.toWorldX(tile.x),
+      y: this.toWorldY(tile.y) + 13,
+      duration: ENEMY_MOVE_DURATION_MS,
+      ease: "Sine.easeInOut"
+    });
   }
 
   private tryInteract(): void {
@@ -551,12 +669,74 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private enemyAt(position: TilePosition): EnemySpawn | undefined {
-    return this.currentMap.enemies.find(
-      (enemy) =>
-        enemy.x === position.x &&
-        enemy.y === position.y &&
-        !getSave().defeatedEnemies.includes(enemy.id)
+    return this.enemyObjectAt(position)?.enemy;
+  }
+
+  private enemyObjectAt(position: TilePosition, ignoredEnemyId?: string): EnemyVisual | undefined {
+    for (const enemyObject of this.enemyObjects.values()) {
+      if (
+        enemyObject.enemy.id !== ignoredEnemyId &&
+        enemyObject.tile.x === position.x &&
+        enemyObject.tile.y === position.y &&
+        !getSave().defeatedEnemies.includes(enemyObject.enemy.id)
+      ) {
+        return enemyObject;
+      }
+    }
+
+    return undefined;
+  }
+
+  private canEnemyOccupy(position: TilePosition, enemyId: string): boolean {
+    if (this.isTerrainBlocked(position)) {
+      return false;
+    }
+
+    if (position.x === this.playerTile.x && position.y === this.playerTile.y) {
+      return false;
+    }
+
+    if (this.currentMap.portals.some((portal) => portal.x === position.x && portal.y === position.y)) {
+      return false;
+    }
+
+    return !(
+      this.npcAt(position) ||
+      this.chestAt(position) ||
+      this.enemyObjectAt(position, enemyId)
     );
+  }
+
+  private isEnemyWeakerThanPlayer(enemy: EnemySpawn): boolean {
+    const definition = ENEMIES[enemy.enemyKey];
+    if (!definition?.maxHp || definition.boss) {
+      return false;
+    }
+
+    const save = getSave();
+    const playerPower = save.maxHp + save.attack * 4 + save.level * 2;
+    const enemyPower = definition.maxHp + definition.attack * 4;
+    return enemyPower <= playerPower * ENEMY_WEAKNESS_RATIO;
+  }
+
+  private offsetPosition(position: TilePosition, direction: Direction): TilePosition {
+    const vector = directionVectors[direction];
+    return {
+      x: position.x + vector.x,
+      y: position.y + vector.y
+    };
+  }
+
+  private distance(a: TilePosition, b: TilePosition): number {
+    return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+  }
+
+  private hashId(id: string): number {
+    let hash = 0;
+    for (let index = 0; index < id.length; index += 1) {
+      hash = (hash * 31 + id.charCodeAt(index)) >>> 0;
+    }
+    return hash;
   }
 
   private npcAt(position: TilePosition): NpcDefinition | undefined {
