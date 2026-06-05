@@ -70,6 +70,25 @@ http://127.0.0.1:8787/
 npm run build
 ```
 
+## キャラクター素材
+
+Asepriteで作るキャラクターは `public/assets/characters` に配置します。
+形式は透明PNGの固定グリッドで、人物系は48x48、スライムなど小型モンスターは32x32です。
+
+```text
+4列 x 4行
+行: 下 / 左 / 右 / 上
+列: 待機 / 歩き1 / 歩き2 / 歩き3
+```
+
+仮のスプライトシートを作り直す場合:
+
+```powershell
+npm run assets:characters
+```
+
+ファイル名や各キャラのフレームサイズは `public/assets/characters/README.md` を参照してください。
+
 ## デプロイ
 
 ```powershell

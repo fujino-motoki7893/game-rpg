@@ -1,4 +1,9 @@
 import Phaser from "phaser";
+import {
+  getCharacterIdleAnimationKey,
+  getCharacterOriginY,
+  getCharacterWalkAnimationKey
+} from "../data/characterSprites";
 import { getNpcDialogue } from "../data/dialogues";
 import { getFieldDungeonEntranceForTier } from "../data/dungeonGenerator";
 import { createDungeon } from "../data/dungeonService";
@@ -63,7 +68,7 @@ const ENEMY_PATROL_PATTERNS: Direction[][] = [
 
 interface EnemyVisual {
   enemy: EnemySpawn;
-  image: Phaser.GameObjects.Image;
+  image: Phaser.GameObjects.Sprite;
   shadow: Phaser.GameObjects.Ellipse;
   tile: TilePosition;
   patrolStep: number;
@@ -72,7 +77,7 @@ interface EnemyVisual {
 
 export class WorldScene extends Phaser.Scene {
   private currentMap!: MapDefinition;
-  private player!: Phaser.GameObjects.Image;
+  private player!: Phaser.GameObjects.Sprite;
   private playerShadow?: Phaser.GameObjects.Ellipse;
   private playerTile: TilePosition = { x: 0, y: 0 };
   private facing: Direction = "down";
@@ -178,12 +183,14 @@ export class WorldScene extends Phaser.Scene {
           0.3
         )
         .setDepth(19);
-      this.player = this.add.image(
+      this.player = this.add.sprite(
         this.toWorldX(this.playerTile.x),
         this.toWorldY(this.playerTile.y),
-        "player"
+        "player",
+        0
       );
-      this.player.setDepth(20);
+      this.alignCharacterSprite(this.player, "player").setDepth(20);
+      this.playCharacterIdle(this.player, "player", this.facing);
       this.createDialoguePanel();
       this.createTargetHintPanel();
       setPlayerPosition(mapId, entryTile.x, entryTile.y);
@@ -281,9 +288,10 @@ export class WorldScene extends Phaser.Scene {
 
     this.currentMap.npcs.forEach((npc) => {
       this.addShadow(npc.x, npc.y, 11);
-      this.objectGroup?.add(
-        this.add.image(this.toWorldX(npc.x), this.toWorldY(npc.y), npc.texture).setDepth(12)
-      );
+      const sprite = this.add.sprite(this.toWorldX(npc.x), this.toWorldY(npc.y), npc.texture, 0);
+      this.alignCharacterSprite(sprite, npc.texture).setDepth(12);
+      this.playCharacterIdle(sprite, npc.texture);
+      this.objectGroup?.add(sprite);
     });
 
     this.currentMap.chests.forEach((chest) => {
@@ -301,7 +309,9 @@ export class WorldScene extends Phaser.Scene {
       .forEach((enemy, index) => {
         const texture = ENEMIES[enemy.enemyKey]?.texture ?? "enemy-goblin";
         const shadow = this.addShadow(enemy.x, enemy.y, 10);
-        const image = this.add.image(this.toWorldX(enemy.x), this.toWorldY(enemy.y), texture).setDepth(11);
+        const image = this.add.sprite(this.toWorldX(enemy.x), this.toWorldY(enemy.y), texture, 0);
+        this.alignCharacterSprite(image, texture).setDepth(11);
+        this.playCharacterIdle(image, texture);
         this.objectGroup?.add(image);
         this.enemyObjects.set(enemy.id, {
           enemy,
@@ -364,6 +374,7 @@ export class WorldScene extends Phaser.Scene {
 
   private tryMove(direction: Direction): void {
     this.facing = direction;
+    this.playCharacterIdle(this.player, "player", direction);
     const vector = directionVectors[direction];
     const target = {
       x: this.playerTile.x + vector.x,
@@ -384,6 +395,7 @@ export class WorldScene extends Phaser.Scene {
     this.moving = true;
     this.hideTargetHint();
     this.playerTile = target;
+    this.playCharacterWalk(this.player, "player", direction);
     setPlayerPosition(this.currentMap.id, target.x, target.y);
     this.tweens.add({
       targets: this.player,
@@ -393,6 +405,7 @@ export class WorldScene extends Phaser.Scene {
       ease: "Sine.easeInOut",
       onComplete: () => {
         this.moving = false;
+        this.playCharacterIdle(this.player, "player", direction);
         void this.checkPortal();
         this.refreshTargetHint();
       }
@@ -480,13 +493,21 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private moveEnemy(enemyObject: EnemyVisual, tile: TilePosition): void {
+    const direction = this.getDirectionBetween(enemyObject.tile, tile);
     enemyObject.tile = tile;
+    const texture = ENEMIES[enemyObject.enemy.enemyKey]?.texture ?? "enemy-goblin";
+    if (direction) {
+      this.playCharacterWalk(enemyObject.image, texture, direction);
+    }
     this.tweens.add({
       targets: enemyObject.image,
       x: this.toWorldX(tile.x),
       y: this.toWorldY(tile.y),
       duration: ENEMY_MOVE_DURATION_MS,
-      ease: "Sine.easeInOut"
+      ease: "Sine.easeInOut",
+      onComplete: () => {
+        this.playCharacterIdle(enemyObject.image, texture, direction ?? "down");
+      }
     });
     this.tweens.add({
       targets: enemyObject.shadow,
@@ -809,6 +830,55 @@ export class WorldScene extends Phaser.Scene {
       x: position.x + vector.x,
       y: position.y + vector.y
     };
+  }
+
+  private getDirectionBetween(from: TilePosition, to: TilePosition): Direction | undefined {
+    const deltaX = to.x - from.x;
+    const deltaY = to.y - from.y;
+    if (deltaX === 1) {
+      return "right";
+    }
+    if (deltaX === -1) {
+      return "left";
+    }
+    if (deltaY === 1) {
+      return "down";
+    }
+    if (deltaY === -1) {
+      return "up";
+    }
+    return undefined;
+  }
+
+  private alignCharacterSprite(
+    sprite: Phaser.GameObjects.Sprite,
+    textureKey: string
+  ): Phaser.GameObjects.Sprite {
+    return sprite.setOrigin(0.5, getCharacterOriginY(textureKey));
+  }
+
+  private playCharacterIdle(
+    sprite: Phaser.GameObjects.Sprite,
+    textureKey: string,
+    direction: Direction = "down"
+  ): void {
+    this.playCharacterAnimation(sprite, getCharacterIdleAnimationKey(textureKey, direction));
+  }
+
+  private playCharacterWalk(
+    sprite: Phaser.GameObjects.Sprite,
+    textureKey: string,
+    direction: Direction
+  ): void {
+    this.playCharacterAnimation(sprite, getCharacterWalkAnimationKey(textureKey, direction));
+  }
+
+  private playCharacterAnimation(sprite: Phaser.GameObjects.Sprite, animationKey: string): void {
+    if (!this.anims.exists(animationKey)) {
+      return;
+    }
+
+    sprite.play(animationKey, true);
   }
 
   private distance(a: TilePosition, b: TilePosition): number {

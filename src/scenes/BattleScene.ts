@@ -1,4 +1,9 @@
 import Phaser from "phaser";
+import {
+  getCharacterBattleScale,
+  getCharacterIdleAnimationKey,
+  getCharacterOriginY
+} from "../data/characterSprites";
 import { ENEMIES } from "../data/enemies";
 import {
   canItemHealHp,
@@ -39,8 +44,8 @@ export class BattleScene extends Phaser.Scene {
   private battleOver = false;
   private pendingEnemyTurnAt?: number;
   private pendingPlayerTurnAt?: number;
-  private playerSprite?: Phaser.GameObjects.Image;
-  private enemySprite?: Phaser.GameObjects.Image;
+  private playerSprite?: Phaser.GameObjects.Sprite;
+  private enemySprite?: Phaser.GameObjects.Sprite;
   private playerHpFill?: Phaser.GameObjects.Rectangle;
   private enemyHpFill?: Phaser.GameObjects.Rectangle;
   private logText?: Phaser.GameObjects.Text;
@@ -75,8 +80,18 @@ export class BattleScene extends Phaser.Scene {
     this.add.text(116, 112, "ターンバトル", this.textStyle(24, "#f6e4a4")).setShadow(2, 2, "#000000", 3);
     this.add.ellipse(560, 286, 106, 22, 0x05080b, 0.36);
     this.add.ellipse(205, 308, 80, 18, 0x05080b, 0.36);
-    this.enemySprite = this.add.image(560, 218, this.enemy.texture).setScale(3).setDepth(5);
-    this.playerSprite = this.add.image(205, 258, "player").setScale(2.6).setDepth(5);
+    this.enemySprite = this.add
+      .sprite(560, 218, this.enemy.texture, 0)
+      .setOrigin(0.5, getCharacterOriginY(this.enemy.texture))
+      .setScale(getCharacterBattleScale(this.enemy.texture, 3))
+      .setDepth(5);
+    this.playerSprite = this.add
+      .sprite(205, 258, "player", 0)
+      .setOrigin(0.5, getCharacterOriginY("player"))
+      .setScale(getCharacterBattleScale("player", 2.6))
+      .setDepth(5);
+    this.playCharacterIdle(this.enemySprite, this.enemy.texture);
+    this.playCharacterIdle(this.playerSprite, "player");
 
     this.playerHpText = this.add.text(116, 338, "", this.textStyle(18, "#f5f1dc"));
     this.enemyHpText = this.add.text(448, 338, "", this.textStyle(18, "#f5f1dc"));
@@ -504,7 +519,14 @@ export class BattleScene extends Phaser.Scene {
     return `${itemName}を使えなかった。`;
   }
 
-  private flashTarget(target?: Phaser.GameObjects.Image): void {
+  private playCharacterIdle(sprite: Phaser.GameObjects.Sprite, textureKey: string): void {
+    const animationKey = getCharacterIdleAnimationKey(textureKey, "down");
+    if (this.anims.exists(animationKey)) {
+      sprite.play(animationKey, true);
+    }
+  }
+
+  private flashTarget(target?: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite): void {
     if (!target) {
       return;
     }
@@ -522,7 +544,7 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
-  private pulseTarget(target?: Phaser.GameObjects.Image): void {
+  private pulseTarget(target?: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite): void {
     if (!target) {
       return;
     }

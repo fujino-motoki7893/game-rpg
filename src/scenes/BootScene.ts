@@ -1,4 +1,11 @@
 import Phaser from "phaser";
+import {
+  CHARACTER_DIRECTION_ROWS,
+  CHARACTER_DIRECTIONS,
+  CHARACTER_SPRITES,
+  getCharacterIdleAnimationKey,
+  getCharacterWalkAnimationKey
+} from "../data/characterSprites";
 
 type CreatureType =
   | "slime"
@@ -13,6 +20,16 @@ type CreatureType =
 export class BootScene extends Phaser.Scene {
   constructor() {
     super("BootScene");
+  }
+
+  preload(): void {
+    CHARACTER_SPRITES.forEach((sprite) => {
+      this.load.spritesheet(sprite.key, sprite.path, {
+        frameWidth: sprite.frameWidth,
+        frameHeight: sprite.frameHeight,
+        endFrame: 15
+      });
+    });
   }
 
   create(): void {
@@ -43,6 +60,7 @@ export class BootScene extends Phaser.Scene {
     this.createCreature("enemy-mage", "#6e4fa3", "#2f244d", "mage");
     this.createCreature("enemy-mimic", "#9a552f", "#3a2115", "mimic");
     this.createCreature("enemy-guardian", "#a14f3d", "#4b2825", "guardian");
+    this.createCharacterAnimations();
     this.createChest("chest-closed", false);
     this.createChest("chest-open", true);
 
@@ -308,6 +326,10 @@ export class BootScene extends Phaser.Scene {
   }
 
   private createHero(key: string, cloak: string, skin: string, accent: string): void {
+    if (this.textures.exists(key)) {
+      return;
+    }
+
     const texture = this.textures.createCanvas(key, 32, 32);
     if (!texture) {
       return;
@@ -344,6 +366,10 @@ export class BootScene extends Phaser.Scene {
     shadeColor: string,
     type: CreatureType
   ): void {
+    if (this.textures.exists(key)) {
+      return;
+    }
+
     const texture = this.textures.createCanvas(key, 32, 32);
     if (!texture) {
       return;
@@ -454,6 +480,53 @@ export class BootScene extends Phaser.Scene {
         break;
     }
     texture.refresh();
+  }
+
+  private createCharacterAnimations(): void {
+    CHARACTER_SPRITES.forEach((sprite) => {
+      if (!this.hasSpriteFrame(sprite.key, 15)) {
+        return;
+      }
+
+      CHARACTER_DIRECTIONS.forEach((direction) => {
+        const start = CHARACTER_DIRECTION_ROWS[direction] * 4;
+        this.createAnimationIfMissing(getCharacterIdleAnimationKey(sprite.key, direction), sprite.key, [
+          start,
+          start + 1,
+          start,
+          start + 2
+        ], 3);
+        this.createAnimationIfMissing(getCharacterWalkAnimationKey(sprite.key, direction), sprite.key, [
+          start,
+          start + 1,
+          start + 2,
+          start + 3
+        ], 7);
+      });
+    });
+  }
+
+  private createAnimationIfMissing(
+    key: string,
+    textureKey: string,
+    frames: number[],
+    frameRate: number
+  ): void {
+    if (this.anims.exists(key)) {
+      return;
+    }
+
+    this.anims.create({
+      key,
+      frames: this.anims.generateFrameNumbers(textureKey, { frames }),
+      frameRate,
+      repeat: -1
+    });
+  }
+
+  private hasSpriteFrame(key: string, frame: number): boolean {
+    const texture = this.textures.get(key);
+    return Boolean((texture.frames as Record<string, unknown>)[String(frame)]);
   }
 
   private drawCreatureEyes(ctx: CanvasRenderingContext2D, x: number, y: number): void {
