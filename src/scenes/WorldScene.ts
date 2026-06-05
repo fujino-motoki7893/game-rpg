@@ -82,6 +82,8 @@ export class WorldScene extends Phaser.Scene {
   private dialogueBox?: Phaser.GameObjects.Rectangle;
   private dialogueAccent?: Phaser.GameObjects.Rectangle;
   private dialogueText?: Phaser.GameObjects.Text;
+  private targetHintBox?: Phaser.GameObjects.Rectangle;
+  private targetHintText?: Phaser.GameObjects.Text;
   private objectGroup?: Phaser.GameObjects.Group;
   private enemyObjects = new Map<string, EnemyVisual>();
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -128,11 +130,17 @@ export class WorldScene extends Phaser.Scene {
   }
 
   update(): void {
-    if (this.loadingMap || this.menuOpen || this.dialogueLines.length > 0 || this.moving) {
+    if (this.loadingMap || this.menuOpen || this.dialogueLines.length > 0) {
+      this.hideTargetHint();
+      return;
+    }
+
+    if (this.moving) {
       return;
     }
 
     this.updateEnemyMovement();
+    this.refreshTargetHint();
 
     if (this.resetKey && Phaser.Input.Keyboard.JustDown(this.resetKey)) {
       resetSave();
@@ -177,11 +185,13 @@ export class WorldScene extends Phaser.Scene {
       );
       this.player.setDepth(20);
       this.createDialoguePanel();
+      this.createTargetHintPanel();
       setPlayerPosition(mapId, entryTile.x, entryTile.y);
       this.game.events.emit(GAME_EVENTS.mapChanged, this.currentMap.name);
       this.game.events.emit(GAME_EVENTS.stateChanged);
     } finally {
       this.loadingMap = false;
+      this.refreshTargetHint();
     }
   }
 
@@ -367,10 +377,12 @@ export class WorldScene extends Phaser.Scene {
     }
 
     if (this.isBlocked(target)) {
+      this.refreshTargetHint();
       return;
     }
 
     this.moving = true;
+    this.hideTargetHint();
     this.playerTile = target;
     setPlayerPosition(this.currentMap.id, target.x, target.y);
     this.tweens.add({
@@ -382,6 +394,7 @@ export class WorldScene extends Phaser.Scene {
       onComplete: () => {
         this.moving = false;
         void this.checkPortal();
+        this.refreshTargetHint();
       }
     });
 
@@ -482,6 +495,7 @@ export class WorldScene extends Phaser.Scene {
       duration: ENEMY_MOVE_DURATION_MS,
       ease: "Sine.easeInOut"
     });
+    this.refreshTargetHint();
   }
 
   private tryInteract(): void {
@@ -653,11 +667,13 @@ export class WorldScene extends Phaser.Scene {
 
   private openMenu(): void {
     this.menuOpen = true;
+    this.hideTargetHint();
     this.scene.launch("MenuScene");
   }
 
   private openShop(shopKind: ShopKind): void {
     this.menuOpen = true;
+    this.hideTargetHint();
     this.scene.launch("ShopScene", { shopKind });
   }
 
@@ -815,6 +831,10 @@ export class WorldScene extends Phaser.Scene {
     return this.currentMap.chests.find((chest) => chest.x === position.x && chest.y === position.y);
   }
 
+  private portalAt(position: TilePosition) {
+    return this.currentMap.portals.find((portal) => portal.x === position.x && portal.y === position.y);
+  }
+
   private frontTile(): TilePosition {
     const vector = directionVectors[this.facing];
     return {
@@ -824,6 +844,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private showDialogue(lines: string[]): void {
+    this.hideTargetHint();
     this.dialogueLines = lines;
     this.dialogueIndex = 0;
     this.dialogueBox?.setVisible(true);
@@ -839,6 +860,7 @@ export class WorldScene extends Phaser.Scene {
       this.dialogueBox?.setVisible(false);
       this.dialogueAccent?.setVisible(false);
       this.dialogueText?.setVisible(false);
+      this.refreshTargetHint();
       return;
     }
 
@@ -865,6 +887,129 @@ export class WorldScene extends Phaser.Scene {
       })
       .setDepth(41)
       .setVisible(false);
+  }
+
+  private createTargetHintPanel(): void {
+    this.targetHintBox = this.add
+      .rectangle(0, 0, 164, 42, 0x0e1720, 0.94)
+      .setStrokeStyle(1, 0xf0d98a, 0.86)
+      .setDepth(34)
+      .setVisible(false);
+    this.targetHintText = this.add
+      .text(0, 0, "", {
+        fontFamily: '"Yu Gothic", Meiryo, "Hiragino Sans", "Noto Sans JP", sans-serif',
+        fontSize: "14px",
+        color: "#fff4cf",
+        align: "center",
+        wordWrap: { width: 148, useAdvancedWrap: true },
+        lineSpacing: 3
+      })
+      .setOrigin(0.5, 0.5)
+      .setDepth(35)
+      .setVisible(false);
+  }
+
+  private refreshTargetHint(): void {
+    if (this.loadingMap || this.menuOpen || this.dialogueLines.length > 0 || this.moving) {
+      this.hideTargetHint();
+      return;
+    }
+
+    const hint = this.getTargetHint();
+    if (!hint) {
+      this.hideTargetHint();
+      return;
+    }
+
+    const lineCount = hint.text.split("\n").length;
+    const height = lineCount > 1 ? 48 : 34;
+    const width = 164;
+    const mapLeft = MAP_OFFSET_X;
+    const mapRight = MAP_OFFSET_X + this.currentMap.rows[0].length * TILE_SIZE;
+    const mapTop = MAP_OFFSET_Y;
+    const x = Phaser.Math.Clamp(
+      this.toWorldX(hint.position.x),
+      mapLeft + width / 2,
+      mapRight - width / 2
+    );
+    const y = Phaser.Math.Clamp(this.toWorldY(hint.position.y) - 34, mapTop + height / 2, 548);
+
+    this.targetHintText?.setText(hint.text);
+    this.targetHintBox?.setPosition(x, y).setDisplaySize(width, height).setVisible(true);
+    this.targetHintText?.setPosition(x, y).setVisible(true);
+  }
+
+  private hideTargetHint(): void {
+    this.targetHintBox?.setVisible(false);
+    this.targetHintText?.setVisible(false);
+  }
+
+  private getTargetHint(): { text: string; position: TilePosition } | undefined {
+    const front = this.describeTargetAt(this.frontTile());
+    if (front) {
+      return front;
+    }
+
+    const adjacentDirections: Direction[] = ["up", "right", "down", "left"];
+    for (const direction of adjacentDirections) {
+      const hint = this.describeTargetAt(this.offsetPosition(this.playerTile, direction));
+      if (hint) {
+        return hint;
+      }
+    }
+
+    return undefined;
+  }
+
+  private describeTargetAt(position: TilePosition): { text: string; position: TilePosition } | undefined {
+    const npc = this.npcAt(position);
+    if (npc) {
+      return { text: this.describeNpc(npc), position };
+    }
+
+    const chest = this.chestAt(position);
+    if (chest) {
+      return {
+        text: hasFlag(`${chest.id}-opened`) ? "空の宝箱" : "宝箱\n開く",
+        position
+      };
+    }
+
+    const enemy = this.enemyAt(position);
+    if (enemy) {
+      const definition = ENEMIES[enemy.enemyKey];
+      return {
+        text: definition ? `${definition.name}\nHP${definition.maxHp} 攻${definition.attack}` : "魔物",
+        position
+      };
+    }
+
+    const portal = this.portalAt(position);
+    if (portal) {
+      return { text: this.describePortal(portal.kind), position };
+    }
+
+    return undefined;
+  }
+
+  private describeNpc(npc: NpcDefinition): string {
+    if (npc.id === "shopkeeper" || npc.id === "equipmentShopkeeper") {
+      return `${npc.name}\n売買`;
+    }
+    if (npc.id === "healer") {
+      return `${npc.name}\n回復`;
+    }
+    return npc.name;
+  }
+
+  private describePortal(kind: string | undefined): string {
+    if (kind === "stairs-up") {
+      return "階段上\n移動";
+    }
+    if (kind === "stairs-down") {
+      return "階段下\n移動";
+    }
+    return "入口\n移動";
   }
 
   private getTileTexture(tile: string): string {
