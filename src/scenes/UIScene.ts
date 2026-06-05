@@ -10,6 +10,7 @@ export class UIScene extends Phaser.Scene {
   private objectiveText?: Phaser.GameObjects.Text;
   private mapText?: Phaser.GameObjects.Text;
   private hpBarFill?: Phaser.GameObjects.Rectangle;
+  private mpBarFill?: Phaser.GameObjects.Rectangle;
   private toastText?: Phaser.GameObjects.Text;
   private toastTimer?: Phaser.Time.TimerEvent;
 
@@ -24,9 +25,12 @@ export class UIScene extends Phaser.Scene {
     this.add.rectangle(400, 608, 800, 64, 0x0c1319, 0.9);
     this.add.rectangle(400, 576, 800, 2, 0xd6b56a, 0.65);
     this.hpText = this.add.text(24, 15, "", this.textStyle(18, "#f4df7e"));
-    this.add.rectangle(24, 46, 150, 10, 0x1b232c, 1).setOrigin(0, 0.5);
-    this.hpBarFill = this.add.rectangle(26, 46, 146, 6, 0xd95745, 1).setOrigin(0, 0.5);
-    this.add.rectangle(24, 46, 150, 10).setStrokeStyle(1, 0xf1d585, 0.8).setOrigin(0, 0.5);
+    this.add.rectangle(24, 43, 150, 8, 0x1b232c, 1).setOrigin(0, 0.5);
+    this.hpBarFill = this.add.rectangle(26, 43, 146, 4, 0xd95745, 1).setOrigin(0, 0.5);
+    this.add.rectangle(24, 43, 150, 8).setStrokeStyle(1, 0xf1d585, 0.8).setOrigin(0, 0.5);
+    this.add.rectangle(24, 55, 150, 8, 0x1b232c, 1).setOrigin(0, 0.5);
+    this.mpBarFill = this.add.rectangle(26, 55, 146, 4, 0x4a8dff, 1).setOrigin(0, 0.5);
+    this.add.rectangle(24, 55, 150, 8).setStrokeStyle(1, 0x8fc6ff, 0.72).setOrigin(0, 0.5);
     this.statsText = this.add.text(206, 18, "", this.textStyle(17, "#f4f0db"));
     this.add.text(24, 582, "目的", this.textStyle(13, "#d6b56a"));
     this.objectiveText = this.add.text(76, 582, "", this.textStyle(17, "#e6d7a8"));
@@ -61,7 +65,9 @@ export class UIScene extends Phaser.Scene {
       `Lv ${save.level}  攻撃 ${save.attack}  道具 ${getTotalItemCount()}  G ${save.gold}`
     );
     const hpRatio = Phaser.Math.Clamp(save.hp / save.maxHp, 0, 1);
-    this.hpBarFill?.setDisplaySize(146 * hpRatio, 6);
+    const mpRatio = Phaser.Math.Clamp(save.mp / save.maxMp, 0, 1);
+    this.hpBarFill?.setDisplaySize(146 * hpRatio, 4);
+    this.mpBarFill?.setDisplaySize(146 * mpRatio, 4);
     this.objectiveText?.setText(getObjective());
     const mapName =
       save.mapId === "dungeon"
