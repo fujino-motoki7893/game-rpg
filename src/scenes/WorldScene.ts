@@ -39,6 +39,7 @@ const directionVectors: Record<Direction, TilePosition> = {
   right: { x: 1, y: 0 },
   up: { x: 0, y: -1 }
 };
+const FIELD_DUNGEON_ENTRANCE: TilePosition = { x: 2, y: 13 };
 
 export class WorldScene extends Phaser.Scene {
   private currentMap!: MapDefinition;
@@ -81,6 +82,7 @@ export class WorldScene extends Phaser.Scene {
     this.events.on("resume", this.refreshAfterBattle, this);
     this.game.events.on(GAME_EVENTS.menuClosed, this.handleMenuClosed, this);
     this.game.events.on(GAME_EVENTS.shopClosed, this.handleMenuClosed, this);
+    this.game.events.on(GAME_EVENTS.escapeDungeon, this.escapeDungeon, this);
     this.events.once("shutdown", this.shutdown, this);
 
     const save = getSave();
@@ -92,6 +94,7 @@ export class WorldScene extends Phaser.Scene {
     this.events.off("resume", this.refreshAfterBattle, this);
     this.game.events.off(GAME_EVENTS.menuClosed, this.handleMenuClosed, this);
     this.game.events.off(GAME_EVENTS.shopClosed, this.handleMenuClosed, this);
+    this.game.events.off(GAME_EVENTS.escapeDungeon, this.escapeDungeon, this);
   }
 
   update(): void {
@@ -478,6 +481,18 @@ export class WorldScene extends Phaser.Scene {
 
   private handleMenuClosed(): void {
     this.menuOpen = false;
+  }
+
+  private async escapeDungeon(): Promise<void> {
+    if (this.loadingMap || this.currentMap?.id !== "dungeon") {
+      return;
+    }
+
+    this.menuOpen = false;
+    resetDungeonEnemyDefeats();
+    setCurrentDungeonFloor(1);
+    await this.loadMap("field", FIELD_DUNGEON_ENTRANCE);
+    this.game.events.emit(GAME_EVENTS.toast, "帰還の羽で草原へ脱出した");
   }
 
   private async checkPortal(): Promise<void> {

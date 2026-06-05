@@ -1,5 +1,11 @@
 import Phaser from "phaser";
-import { canItemHealHp, canItemRestoreMp, ITEM_ORDER, ITEMS } from "../data/items";
+import {
+  canItemEscapeDungeon,
+  canItemHealHp,
+  canItemRestoreMp,
+  ITEM_ORDER,
+  ITEMS
+} from "../data/items";
 import { MAPS } from "../data/maps";
 import { getSkillHealAmount, SKILL_ORDER, SKILLS } from "../data/skills";
 import { GAME_EVENTS } from "../game/constants";
@@ -8,6 +14,7 @@ import {
   getDungeonFloorCount,
   getItemCount,
   getSave,
+  consumeItem,
   useHealingSkill,
   useItem
 } from "../game/GameState";
@@ -127,9 +134,9 @@ export class MenuScene extends Phaser.Scene {
       const item = ITEMS[itemId];
       const selected = index === this.selectedItemIndex;
       const count = getItemCount(itemId);
-      const y = 224 + index * 48;
+      const y = 216 + index * 40;
       const row = this.add
-        .rectangle(388, y + 14, 468, 42, selected ? 0x263442 : 0x111a24, selected ? 0.95 : 0.58)
+        .rectangle(388, y + 14, 468, 36, selected ? 0x263442 : 0x111a24, selected ? 0.95 : 0.58)
         .setStrokeStyle(selected ? 2 : 1, selected ? 0xd8bc72 : 0x34475a, selected ? 0.9 : 0.45)
         .setDepth(101)
         .setInteractive({ useHandCursor: true })
@@ -141,13 +148,13 @@ export class MenuScene extends Phaser.Scene {
           .setDepth(102)
       );
       this.addContent(
-        this.add.text(190, y, item.name, this.textStyle(19, "#fff4cf")).setDepth(102)
+        this.add.text(190, y, item.name, this.textStyle(18, "#fff4cf")).setDepth(102)
       );
       this.addContent(
-        this.add.text(330, y, `x${count}`, this.textStyle(18, "#d9e5ef")).setDepth(102)
+        this.add.text(330, y, `x${count}`, this.textStyle(17, "#d9e5ef")).setDepth(102)
       );
       this.addContent(
-        this.add.text(404, y, item.description, this.textStyle(15, "#9fb4c6")).setDepth(102)
+        this.add.text(404, y, item.description, this.textStyle(14, "#9fb4c6")).setDepth(102)
       );
     });
 
@@ -303,6 +310,11 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
+    if (canItemEscapeDungeon(itemId)) {
+      this.useEscapeItem(itemId);
+      return;
+    }
+
     const result = useItem(itemId);
     if (!result.used) {
       this.setMessage(this.getItemFailureMessage(result.reason));
@@ -312,6 +324,24 @@ export class MenuScene extends Phaser.Scene {
     this.setMessage(this.getItemUseMessage(item.name, result.healed, result.restoredMp));
     this.game.events.emit(GAME_EVENTS.stateChanged);
     this.renderContent();
+  }
+
+  private useEscapeItem(itemId: ItemId): void {
+    const item = ITEMS[itemId];
+    const save = getSave();
+    if (save.mapId !== "dungeon") {
+      this.setMessage("ダンジョンの中でしか使えない。");
+      return;
+    }
+
+    if (!consumeItem(itemId)) {
+      this.setMessage(`${item.name}を持っていない。`);
+      return;
+    }
+
+    this.game.events.emit(GAME_EVENTS.stateChanged);
+    this.game.events.emit(GAME_EVENTS.escapeDungeon);
+    this.closeMenu();
   }
 
   private useSelectedSkill(): void {
@@ -426,6 +456,10 @@ export class MenuScene extends Phaser.Scene {
     const save = getSave();
     if (getItemCount(itemId) <= 0) {
       return false;
+    }
+
+    if (canItemEscapeDungeon(itemId)) {
+      return save.mapId === "dungeon";
     }
 
     return (

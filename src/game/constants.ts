@@ -8,5 +8,6 @@ export const GAME_EVENTS = {
   mapChanged: "map-changed",
   toast: "toast",
   menuClosed: "menu-closed",
-  shopClosed: "shop-closed"
+  shopClosed: "shop-closed",
+  escapeDungeon: "escape-dungeon"
 } as const;

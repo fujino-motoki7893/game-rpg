@@ -4,14 +4,24 @@ export interface ItemDefinition {
   id: ItemId;
   name: string;
   description: string;
-  buyPrice: number;
+  buyPrice?: number;
+  sellPrice?: number;
   healAmount?: number;
   healRatio?: number;
   mpRestoreAmount?: number;
   mpRestoreRatio?: number;
+  escapesDungeon?: boolean;
 }
 
-export const ITEM_ORDER: ItemId[] = ["herb", "strongHerb", "magicWater", "manaWater"];
+export const ITEM_ORDER: ItemId[] = [
+  "herb",
+  "strongHerb",
+  "magicWater",
+  "manaWater",
+  "returnFeather"
+];
+
+export const SHOP_BUY_ITEM_ORDER: ItemId[] = ["herb", "strongHerb", "magicWater", "manaWater"];
 
 export const ITEMS: Record<ItemId, ItemDefinition> = {
   herb: {
@@ -41,6 +51,13 @@ export const ITEMS: Record<ItemId, ItemDefinition> = {
     description: "MPを10回復",
     buyPrice: 16,
     mpRestoreAmount: 10
+  },
+  returnFeather: {
+    id: "returnFeather",
+    name: "帰還の羽",
+    description: "洞窟から草原へ脱出",
+    sellPrice: 45,
+    escapesDungeon: true
   }
 };
 
@@ -74,10 +91,19 @@ export function canItemRestoreMp(itemId: ItemId): boolean {
   return item.mpRestoreAmount !== undefined || item.mpRestoreRatio !== undefined;
 }
 
+export function canItemEscapeDungeon(itemId: ItemId): boolean {
+  return ITEMS[itemId].escapesDungeon === true;
+}
+
+export function isItemBuyable(itemId: ItemId): boolean {
+  return ITEMS[itemId].buyPrice !== undefined;
+}
+
 export function getItemBuyPrice(itemId: ItemId): number {
-  return ITEMS[itemId].buyPrice;
+  return ITEMS[itemId].buyPrice ?? 0;
 }
 
 export function getItemSellPrice(itemId: ItemId): number {
-  return Math.floor(ITEMS[itemId].buyPrice / 2);
+  const item = ITEMS[itemId];
+  return item.sellPrice ?? Math.floor((item.buyPrice ?? 0) / 2);
 }

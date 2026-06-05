@@ -1,7 +1,15 @@
 import Phaser from "phaser";
-import { getItemBuyPrice, getItemSellPrice, ITEM_ORDER, ITEMS } from "../data/items";
+import {
+  getItemBuyPrice,
+  getItemSellPrice,
+  isItemBuyable,
+  ITEM_ORDER,
+  ITEMS,
+  SHOP_BUY_ITEM_ORDER
+} from "../data/items";
 import { GAME_EVENTS } from "../game/constants";
 import { buyItem, getItemCount, getSave, sellItem } from "../game/GameState";
+import type { ItemId } from "../game/types";
 
 type ShopTab = "buy" | "sell";
 
@@ -83,6 +91,7 @@ export class ShopScene extends Phaser.Scene {
     }
 
     this.activeTab = tab;
+    this.clampSelectedItemIndex();
     this.setMessage("");
     this.renderContent();
   }
@@ -91,16 +100,18 @@ export class ShopScene extends Phaser.Scene {
     this.clearContent();
     this.updateTabs();
     this.goldText?.setText(`G ${getSave().gold}`);
+    const visibleItems = this.getVisibleItems();
+    this.clampSelectedItemIndex();
 
-    ITEM_ORDER.forEach((itemId, index) => {
+    visibleItems.forEach((itemId, index) => {
       const item = ITEMS[itemId];
       const selected = index === this.selectedItemIndex;
       const count = getItemCount(itemId);
       const price = this.activeTab === "buy" ? getItemBuyPrice(itemId) : getItemSellPrice(itemId);
       const canTrade = this.canTradeSelected(index);
-      const y = 224 + index * 48;
+      const y = 216 + index * 40;
       const row = this.add
-        .rectangle(388, y + 14, 468, 42, selected ? 0x263442 : 0x111a24, selected ? 0.95 : 0.58)
+        .rectangle(388, y + 14, 468, 36, selected ? 0x263442 : 0x111a24, selected ? 0.95 : 0.58)
         .setStrokeStyle(selected ? 2 : 1, selected ? 0xd8bc72 : 0x34475a, selected ? 0.9 : 0.45)
         .setDepth(101)
         .setInteractive({ useHandCursor: true })
@@ -110,22 +121,25 @@ export class ShopScene extends Phaser.Scene {
         this.add.text(164, y, selected ? ">" : "", this.textStyle(18, "#f6e4a4")).setDepth(102)
       );
       this.addContent(
-        this.add.text(190, y, item.name, this.textStyle(18, "#fff4cf")).setDepth(102)
+        this.add.text(190, y, item.name, this.textStyle(17, "#fff4cf")).setDepth(102)
       );
       this.addContent(
-        this.add.text(312, y, `${price}G`, this.textStyle(17, canTrade ? "#f4df7e" : "#748393")).setDepth(102)
+        this.add.text(312, y, `${price}G`, this.textStyle(16, canTrade ? "#f4df7e" : "#748393")).setDepth(102)
       );
       this.addContent(
         this.add.text(390, y, `所持 x${count}`, this.textStyle(15, "#9fb4c6")).setDepth(102)
       );
       this.addContent(
-        this.add.text(496, y, item.description, this.textStyle(14, "#9fb4c6")).setDepth(102)
+        this.add.text(496, y, item.description, this.textStyle(13, "#9fb4c6")).setDepth(102)
       );
     });
 
-    const selectedItemId = ITEM_ORDER[this.selectedItemIndex];
+    const selectedItemId = visibleItems[this.selectedItemIndex];
     const selectedCanTrade = this.canTradeSelected(this.selectedItemIndex);
     const actionLabel = this.activeTab === "buy" ? "買う" : "売る";
+    const selectedBuyPrice = isItemBuyable(selectedItemId)
+      ? `${getItemBuyPrice(selectedItemId)}G`
+      : "非売品";
     const actionButton = this.add
       .text(530, 412, actionLabel, {
         ...this.textStyle(18, selectedCanTrade ? "#101820" : "#2a3036"),
@@ -146,7 +160,7 @@ export class ShopScene extends Phaser.Scene {
         .text(
           154,
           416,
-          `${ITEMS[selectedItemId].name}  買値 ${getItemBuyPrice(selectedItemId)}G  売値 ${getItemSellPrice(selectedItemId)}G`,
+          `${ITEMS[selectedItemId].name}  買値 ${selectedBuyPrice}  売値 ${getItemSellPrice(selectedItemId)}G`,
           this.textStyle(16, "#f4df7e")
         )
         .setDepth(102)
@@ -154,13 +168,13 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private selectItem(index: number): void {
-    this.selectedItemIndex = Phaser.Math.Clamp(index, 0, ITEM_ORDER.length - 1);
+    this.selectedItemIndex = Phaser.Math.Clamp(index, 0, this.getVisibleItems().length - 1);
     this.setMessage("");
     this.renderContent();
   }
 
   private tradeSelectedItem(): void {
-    const itemId = ITEM_ORDER[this.selectedItemIndex];
+    const itemId = this.getVisibleItems()[this.selectedItemIndex];
     const item = ITEMS[itemId];
 
     if (this.activeTab === "buy") {
@@ -186,9 +200,9 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private canTradeSelected(index: number): boolean {
-    const itemId = ITEM_ORDER[index];
+    const itemId = this.getVisibleItems()[index];
     if (this.activeTab === "buy") {
-      return getSave().gold >= getItemBuyPrice(itemId);
+      return isItemBuyable(itemId) && getSave().gold >= getItemBuyPrice(itemId);
     }
     return getItemCount(itemId) > 0;
   }
@@ -234,10 +248,22 @@ export class ShopScene extends Phaser.Scene {
     this.selectedItemIndex = Phaser.Math.Wrap(
       this.selectedItemIndex + direction,
       0,
-      ITEM_ORDER.length
+      this.getVisibleItems().length
     );
     this.setMessage("");
     this.renderContent();
+  }
+
+  private getVisibleItems(): ItemId[] {
+    return this.activeTab === "buy" ? SHOP_BUY_ITEM_ORDER : ITEM_ORDER;
+  }
+
+  private clampSelectedItemIndex(): void {
+    this.selectedItemIndex = Phaser.Math.Clamp(
+      this.selectedItemIndex,
+      0,
+      this.getVisibleItems().length - 1
+    );
   }
 
   private updateTabs(): void {

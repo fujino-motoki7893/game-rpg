@@ -5,6 +5,7 @@ import {
   getItemHealAmount,
   getItemMpRestoreAmount,
   getItemSellPrice,
+  isItemBuyable,
   isItemId,
   ITEM_ORDER
 } from "../data/items";
@@ -182,7 +183,7 @@ export interface UseItemResult {
 export interface BuyItemResult {
   bought: boolean;
   price: number;
-  reason?: "not-enough-gold" | "unknown-item";
+  reason?: "not-enough-gold" | "not-for-sale" | "unknown-item";
 }
 
 export interface SellItemResult {
@@ -220,6 +221,10 @@ export function buyItem(itemId: ItemId): BuyItemResult {
     return { bought: false, price: 0, reason: "unknown-item" };
   }
 
+  if (!isItemBuyable(itemId)) {
+    return { bought: false, price: 0, reason: "not-for-sale" };
+  }
+
   const price = getItemBuyPrice(itemId);
   if (save.gold < price) {
     return { bought: false, price, reason: "not-enough-gold" };
@@ -247,6 +252,21 @@ export function sellItem(itemId: ItemId): SellItemResult {
   save.gold += price;
   persistSave();
   return { sold: true, price };
+}
+
+export function consumeItem(itemId: ItemId): boolean {
+  if (!isItemId(itemId)) {
+    return false;
+  }
+
+  ensureInventory();
+  if ((save.items[itemId] ?? 0) <= 0) {
+    return false;
+  }
+
+  save.items[itemId] = Math.max(0, (save.items[itemId] ?? 0) - 1);
+  persistSave();
+  return true;
 }
 
 export function useItem(itemId: ItemId): UseItemResult {

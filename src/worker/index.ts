@@ -614,18 +614,30 @@ function ensureChestAccess(
 function pickSupplyChestReward(floor: number, floorCount: number): ChestReward {
   const depth = floor / floorCount;
   if (depth < 0.34) {
-    return floor > 1 && floor % 2 === 0
-      ? { type: "item", itemId: "manaWater", quantity: 1 }
-      : { type: "item", itemId: "herb", quantity: floor === 1 ? 1 : 2 };
+    if (floor > 1 && floor % 3 === 0) {
+      return { type: "item", itemId: "returnFeather", quantity: 1 };
+    }
+    if (floor > 1 && floor % 2 === 0) {
+      return { type: "item", itemId: "manaWater", quantity: 1 };
+    }
+    return { type: "item", itemId: "herb", quantity: floor === 1 ? 1 : 2 };
   }
   if (depth < 0.74) {
-    return floor % 2 === 0
-      ? { type: "item", itemId: "manaWater", quantity: 1 }
-      : { type: "item", itemId: "strongHerb", quantity: 1 };
+    if (floor % 3 === 0) {
+      return { type: "item", itemId: "returnFeather", quantity: 1 };
+    }
+    if (floor % 2 === 0) {
+      return { type: "item", itemId: "manaWater", quantity: 1 };
+    }
+    return { type: "item", itemId: "strongHerb", quantity: 1 };
   }
-  return floor % 2 === 0
-    ? { type: "item", itemId: "manaWater", quantity: 1 }
-    : { type: "item", itemId: "magicWater", quantity: 1 };
+  if (floor % 2 === 0) {
+    return { type: "item", itemId: "returnFeather", quantity: 1 };
+  }
+  if (floor % 3 === 0) {
+    return { type: "item", itemId: "manaWater", quantity: 1 };
+  }
+  return { type: "item", itemId: "magicWater", quantity: 1 };
 }
 
 function carveCorridor(grid: string[][], from: TilePosition, to: TilePosition): void {
