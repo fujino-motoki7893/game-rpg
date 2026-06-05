@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import {
   getItemBuyPrice,
+  getItemRarityLabel,
   getItemSellPrice,
   isItemBuyable,
   ITEM_ORDER,
@@ -124,13 +125,16 @@ export class ShopScene extends Phaser.Scene {
         this.add.text(190, y, item.name, this.textStyle(17, "#fff4cf")).setDepth(102)
       );
       this.addContent(
-        this.add.text(312, y, `${price}G`, this.textStyle(16, canTrade ? "#f4df7e" : "#748393")).setDepth(102)
+        this.add.text(286, y, getItemRarityLabel(itemId), this.textStyle(14, "#f4df7e")).setDepth(102)
       );
       this.addContent(
-        this.add.text(390, y, `所持 x${count}`, this.textStyle(15, "#9fb4c6")).setDepth(102)
+        this.add.text(330, y, `${price}G`, this.textStyle(16, canTrade ? "#f4df7e" : "#748393")).setDepth(102)
       );
       this.addContent(
-        this.add.text(496, y, item.description, this.textStyle(13, "#9fb4c6")).setDepth(102)
+        this.add.text(406, y, `所持 x${count}`, this.textStyle(15, "#9fb4c6")).setDepth(102)
+      );
+      this.addContent(
+        this.add.text(492, y, item.description, this.textStyle(12, "#9fb4c6")).setDepth(102)
       );
     });
 
@@ -160,7 +164,7 @@ export class ShopScene extends Phaser.Scene {
         .text(
           154,
           416,
-          `${ITEMS[selectedItemId].name}  買値 ${selectedBuyPrice}  売値 ${getItemSellPrice(selectedItemId)}G`,
+          `${ITEMS[selectedItemId].name} ${getItemRarityLabel(selectedItemId)}  買値 ${selectedBuyPrice}  売値 ${getItemSellPrice(selectedItemId)}G`,
           this.textStyle(16, "#f4df7e")
         )
         .setDepth(102)

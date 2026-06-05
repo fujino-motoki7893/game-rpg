@@ -1,9 +1,12 @@
 import type { ItemId } from "../game/types";
 
+export type ItemRarity = 1 | 2 | 3 | 4 | 5;
+
 export interface ItemDefinition {
   id: ItemId;
   name: string;
   description: string;
+  rarity: ItemRarity;
   buyPrice?: number;
   sellPrice?: number;
   healAmount?: number;
@@ -28,6 +31,7 @@ export const ITEMS: Record<ItemId, ItemDefinition> = {
     id: "herb",
     name: "薬草",
     description: "HPを16回復",
+    rarity: 1,
     buyPrice: 8,
     healAmount: 16
   },
@@ -35,6 +39,7 @@ export const ITEMS: Record<ItemId, ItemDefinition> = {
     id: "strongHerb",
     name: "上薬草",
     description: "HPを32回復",
+    rarity: 2,
     buyPrice: 18,
     healAmount: 32
   },
@@ -42,6 +47,7 @@ export const ITEMS: Record<ItemId, ItemDefinition> = {
     id: "magicWater",
     name: "まほうの水",
     description: "HPを最大値の半分回復",
+    rarity: 3,
     buyPrice: 28,
     healRatio: 0.5
   },
@@ -49,6 +55,7 @@ export const ITEMS: Record<ItemId, ItemDefinition> = {
     id: "manaWater",
     name: "魔力の水",
     description: "MPを10回復",
+    rarity: 2,
     buyPrice: 16,
     mpRestoreAmount: 10
   },
@@ -56,6 +63,7 @@ export const ITEMS: Record<ItemId, ItemDefinition> = {
     id: "returnFeather",
     name: "帰還の羽",
     description: "洞窟から草原へ脱出",
+    rarity: 2,
     sellPrice: 45,
     escapesDungeon: true
   }
@@ -97,6 +105,10 @@ export function canItemEscapeDungeon(itemId: ItemId): boolean {
 
 export function isItemBuyable(itemId: ItemId): boolean {
   return ITEMS[itemId].buyPrice !== undefined;
+}
+
+export function getItemRarityLabel(itemId: ItemId): string {
+  return `☆${ITEMS[itemId].rarity}`;
 }
 
 export function getItemBuyPrice(itemId: ItemId): number {

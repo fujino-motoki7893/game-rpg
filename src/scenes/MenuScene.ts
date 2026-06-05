@@ -3,6 +3,7 @@ import {
   canItemEscapeDungeon,
   canItemHealHp,
   canItemRestoreMp,
+  getItemRarityLabel,
   ITEM_ORDER,
   ITEMS
 } from "../data/items";
@@ -151,7 +152,10 @@ export class MenuScene extends Phaser.Scene {
         this.add.text(190, y, item.name, this.textStyle(18, "#fff4cf")).setDepth(102)
       );
       this.addContent(
-        this.add.text(330, y, `x${count}`, this.textStyle(17, "#d9e5ef")).setDepth(102)
+        this.add.text(294, y, getItemRarityLabel(itemId), this.textStyle(15, "#f4df7e")).setDepth(102)
+      );
+      this.addContent(
+        this.add.text(340, y, `x${count}`, this.textStyle(17, "#d9e5ef")).setDepth(102)
       );
       this.addContent(
         this.add.text(404, y, item.description, this.textStyle(14, "#9fb4c6")).setDepth(102)

@@ -1,6 +1,12 @@
 import Phaser from "phaser";
 import { ENEMIES } from "../data/enemies";
-import { canItemHealHp, canItemRestoreMp, ITEM_ORDER, ITEMS } from "../data/items";
+import {
+  canItemHealHp,
+  canItemRestoreMp,
+  getItemRarityLabel,
+  ITEM_ORDER,
+  ITEMS
+} from "../data/items";
 import { SKILLS } from "../data/skills";
 import { GAME_EVENTS } from "../game/constants";
 import {
@@ -132,7 +138,7 @@ export class BattleScene extends Phaser.Scene {
       const item = ITEMS[itemId];
       const count = getItemCount(itemId);
       this.createBattleButton(
-        `${item.name}\nx${count}`,
+        `${item.name} ${getItemRarityLabel(itemId)}\nx${count}`,
         index,
         () => this.useBattleItem(itemId),
         this.canUseBattleItem(itemId),
