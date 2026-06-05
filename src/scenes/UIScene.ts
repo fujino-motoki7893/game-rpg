@@ -1,9 +1,10 @@
 import Phaser from "phaser";
-import { MAPS } from "../data/maps";
+import { getMapDefinition } from "../data/maps";
 import { GAME_EVENTS } from "../game/constants";
 import {
   getCurrentDungeonFloor,
   getDungeonFloorCount,
+  isExpandedWorldUnlocked,
   getPlayerAttack,
   getPlayerDefense,
   getPlayerMaxHp,
@@ -80,10 +81,11 @@ export class UIScene extends Phaser.Scene {
     this.hpBarFill?.setDisplaySize(146 * hpRatio, 4);
     this.mpBarFill?.setDisplaySize(146 * mpRatio, 4);
     this.objectiveText?.setText(getObjective());
+    const mapDefinition = getMapDefinition(save.mapId, isExpandedWorldUnlocked());
     const mapName =
       save.mapId === "dungeon"
-        ? `${MAPS.dungeon.name} B${getCurrentDungeonFloor()}F/${getDungeonFloorCount() ?? "?"}F`
-        : MAPS[save.mapId].name;
+        ? `${mapDefinition.name} B${getCurrentDungeonFloor()}F/${getDungeonFloorCount() ?? "?"}F`
+        : mapDefinition.name;
     this.mapText?.setText(mapName);
   }
 

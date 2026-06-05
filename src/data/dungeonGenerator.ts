@@ -9,9 +9,46 @@ import type {
 
 const WIDTH = 20;
 const HEIGHT = 15;
-const DUNGEON_NAME = "エンバーフォール洞窟";
 const REGULAR_ENEMY_COUNT = 3;
-const DUNGEON_ENEMY_WEIGHTS: DungeonEnemyKey[] = [
+const DUNGEON_NAMES: Record<number, string> = {
+  1: "エンバーフォール洞窟",
+  2: "黒曜の深層洞窟"
+};
+const FIELD_DUNGEON_ENTRANCES: Record<number, TilePosition> = {
+  1: { x: 2, y: 13 },
+  2: { x: 16, y: 13 }
+};
+const DUNGEON_ENEMY_WEIGHTS_BY_TIER: Record<number, DungeonEnemyKey[]> = {
+  1: [
+    "goblin",
+    "goblin",
+    "bat",
+    "skeleton",
+    "wolf",
+    "mage",
+    "mimic"
+  ],
+  2: [
+    "skeleton",
+    "wolf",
+    "mage",
+    "mimic",
+    "orc",
+    "orc",
+    "direWolf",
+    "darkMage",
+    "stoneGolem"
+  ]
+};
+const DUNGEON_GUARDIAN_KEYS: Record<number, string> = {
+  1: "guardian",
+  2: "deepGuardian"
+};
+const RELIC_CHEST_IDS: Record<number, string> = {
+  1: "relic-chest",
+  2: "moon-relic-chest"
+};
+const DEFAULT_DUNGEON_ENEMY_WEIGHTS: DungeonEnemyKey[] = [
   "goblin",
   "goblin",
   "bat",
@@ -36,6 +73,7 @@ export interface DungeonGenerationOptions {
   floor?: number;
   floorCount?: number;
   upTarget?: TilePosition;
+  tier?: number;
 }
 
 export function generateDungeon(
@@ -45,6 +83,7 @@ export function generateDungeon(
   const seed = options.seed ?? createDungeonSeed();
   const floorCount = Math.max(1, options.floorCount ?? 1);
   const floor = clamp(options.floor ?? 1, 1, floorCount);
+  const tier = normalizeDungeonTier(options.tier);
   const isFinalFloor = floor >= floorCount;
   const rng = createRng(seed);
   const grid = createFilledGrid("#");
@@ -83,11 +122,19 @@ export function generateDungeon(
   }
 
   const spawn = { x: 1, y: 1 };
+  const fieldEntrance = getFieldDungeonEntranceForTier(tier);
   const reserved = new Set<string>([positionKey(spawn)]);
   const enemies: EnemySpawn[] = [];
   const portals: PortalDefinition[] = [
     floor === 1
-      ? { x: spawn.x, y: spawn.y, toMap: "field", toX: 2, toY: 13, kind: "stairs-up" }
+      ? {
+          x: spawn.x,
+          y: spawn.y,
+          toMap: "field",
+          toX: fieldEntrance.x,
+          toY: fieldEntrance.y,
+          kind: "stairs-up"
+        }
       : {
           x: spawn.x,
           y: spawn.y,
@@ -136,7 +183,7 @@ export function generateDungeon(
         y: randomInt(rng, room.y + 1, room.y + room.h - 2)
       };
       const position = findOpenFloorNear(grid, preferred, reserved);
-      const enemyKey = pickDungeonEnemyKey(rng);
+      const enemyKey = pickDungeonEnemyKey(rng, tier);
       reserved.add(positionKey(position));
       enemies.push({
         id: `dungeon-b${floor}-${enemyKey}-${index + 1}`,
@@ -151,7 +198,7 @@ export function generateDungeon(
   if (guardian) {
     enemies.push({
       id: "dungeon-guardian",
-      enemyKey: "guardian",
+      enemyKey: getDungeonGuardianKeyForTier(tier),
       x: guardian.x,
       y: guardian.y
     });
@@ -175,7 +222,7 @@ export function generateDungeon(
 
   return {
     id: "dungeon",
-    name: `${DUNGEON_NAME} B${floor}F`,
+    name: `${getDungeonNameForTier(tier)} B${floor}F`,
     floor,
     floorCount,
     spawn,
@@ -184,7 +231,7 @@ export function generateDungeon(
     npcs: [],
     chests: [
       {
-        id: `dungeon-b${floor}-supply-chest`,
+        id: `dungeon-t${tier}-b${floor}-supply-chest`,
         x: supplyChest.x,
         y: supplyChest.y,
         reward: pickSupplyChestReward(floor, floorCount, rng)
@@ -192,7 +239,7 @@ export function generateDungeon(
       ...(relicChest
         ? [
             {
-              id: "relic-chest",
+              id: getRelicChestIdForTier(tier),
               x: relicChest.x,
               y: relicChest.y,
               reward: { type: "relic" } as const
@@ -206,6 +253,32 @@ export function generateDungeon(
 
 export function createDungeonSeed(): number {
   return (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
+}
+
+export function getDungeonNameForTier(tier: number): string {
+  return DUNGEON_NAMES[normalizeDungeonTier(tier)] ?? DUNGEON_NAMES[1];
+}
+
+export function getDungeonGuardianKeyForTier(tier: number): string {
+  return DUNGEON_GUARDIAN_KEYS[normalizeDungeonTier(tier)] ?? DUNGEON_GUARDIAN_KEYS[1];
+}
+
+export function getRelicChestIdForTier(tier: number): string {
+  return RELIC_CHEST_IDS[normalizeDungeonTier(tier)] ?? RELIC_CHEST_IDS[1];
+}
+
+export function getFieldDungeonEntranceForTier(tier: number): TilePosition {
+  return FIELD_DUNGEON_ENTRANCES[normalizeDungeonTier(tier)] ?? FIELD_DUNGEON_ENTRANCES[1];
+}
+
+export function getDungeonEnemyKeysForTier(tier: number): DungeonEnemyKey[] {
+  const weights =
+    DUNGEON_ENEMY_WEIGHTS_BY_TIER[normalizeDungeonTier(tier)] ?? DEFAULT_DUNGEON_ENEMY_WEIGHTS;
+  return [...new Set(weights)];
+}
+
+function normalizeDungeonTier(tier: number | undefined): number {
+  return tier && tier >= 2 ? 2 : 1;
 }
 
 function createRng(seed: number): Rng {
@@ -469,8 +542,9 @@ function shuffled<T>(items: T[], rng: Rng): T[] {
   return copy;
 }
 
-function pickDungeonEnemyKey(rng: Rng): DungeonEnemyKey {
-  const weightedKey = DUNGEON_ENEMY_WEIGHTS[randomInt(rng, 0, DUNGEON_ENEMY_WEIGHTS.length - 1)];
+function pickDungeonEnemyKey(rng: Rng, tier: number): DungeonEnemyKey {
+  const weights = DUNGEON_ENEMY_WEIGHTS_BY_TIER[tier] ?? DEFAULT_DUNGEON_ENEMY_WEIGHTS;
+  const weightedKey = weights[randomInt(rng, 0, weights.length - 1)];
   return DUNGEON_ENEMY_KEYS.includes(weightedKey) ? weightedKey : "goblin";
 }
 

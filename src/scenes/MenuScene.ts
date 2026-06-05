@@ -15,7 +15,7 @@ import {
   ITEM_ORDER,
   ITEMS
 } from "../data/items";
-import { MAPS } from "../data/maps";
+import { getMapDefinition } from "../data/maps";
 import { getSkillHealAmount, SKILL_ORDER, SKILLS } from "../data/skills";
 import { GAME_EVENTS } from "../game/constants";
 import {
@@ -29,6 +29,7 @@ import {
   getPlayerMaxHp,
   getPlayerMaxMp,
   getSave,
+  isExpandedWorldUnlocked,
   consumeItem,
   equipEquipment,
   useHealingSkill,
@@ -743,10 +744,11 @@ export class MenuScene extends Phaser.Scene {
 
   private currentMapName(): string {
     const save = getSave();
+    const mapDefinition = getMapDefinition(save.mapId, isExpandedWorldUnlocked());
     if (save.mapId === "dungeon") {
-      return `${MAPS.dungeon.name} B${getCurrentDungeonFloor()}F/${getDungeonFloorCount() ?? "?"}F`;
+      return `${mapDefinition.name} B${getCurrentDungeonFloor()}F/${getDungeonFloorCount() ?? "?"}F`;
     }
-    return MAPS[save.mapId].name;
+    return mapDefinition.name;
   }
 
   private closeMenu(): void {

@@ -1,16 +1,18 @@
 import Phaser from "phaser";
 import { getNpcDialogue } from "../data/dialogues";
+import { getFieldDungeonEntranceForTier } from "../data/dungeonGenerator";
 import { createDungeon } from "../data/dungeonService";
 import { ENEMIES } from "../data/enemies";
 import { EQUIPMENT } from "../data/equipment";
 import { ITEMS } from "../data/items";
-import { BLOCKING_TILES, MAPS } from "../data/maps";
+import { BLOCKING_TILES, getMapDefinition, MAPS } from "../data/maps";
 import { GAME_EVENTS, MAP_OFFSET_X, MAP_OFFSET_Y, TILE_SIZE } from "../game/constants";
 import {
   addItem,
   addEquipment,
   ensureDungeonProgress,
   getGeneratedDungeonFloor,
+  getDungeonTier,
   getItemCount,
   getPlayerAttack,
   getPlayerMaxHp,
@@ -18,8 +20,10 @@ import {
   getSave,
   hasFlag,
   healPlayer,
+  isExpandedWorldUnlocked,
   markFlag,
   persistSave,
+  resetDungeonProgress,
   resetSave,
   resetDungeonEnemyDefeats,
   resetFieldEnemyDefeats,
@@ -46,7 +50,6 @@ const directionVectors: Record<Direction, TilePosition> = {
   right: { x: 1, y: 0 },
   up: { x: 0, y: -1 }
 };
-const FIELD_DUNGEON_ENTRANCE: TilePosition = { x: 2, y: 13 };
 const ENEMY_AWARENESS_RANGE = 4;
 const ENEMY_DECISION_INTERVAL_MS = 900;
 const ENEMY_MOVE_DURATION_MS = 180;
@@ -184,9 +187,10 @@ export class WorldScene extends Phaser.Scene {
 
   private async resolveMap(mapId: MapId): Promise<MapDefinition> {
     if (mapId !== "dungeon") {
-      return MAPS[mapId];
+      return getMapDefinition(mapId, isExpandedWorldUnlocked());
     }
 
+    const dungeonTier = getDungeonTier();
     const { floorCount, currentFloor } = ensureDungeonProgress();
     const generatedDungeon = getGeneratedDungeonFloor(currentFloor);
     if (generatedDungeon && this.hasSupplyChest(generatedDungeon)) {
@@ -202,7 +206,7 @@ export class WorldScene extends Phaser.Scene {
       : undefined;
 
     this.game.events.emit(GAME_EVENTS.toast, `B${currentFloor}Fを生成中...`);
-    const { dungeon, source } = await createDungeon(currentFloor, floorCount, upTarget);
+    const { dungeon, source } = await createDungeon(currentFloor, floorCount, upTarget, dungeonTier);
     setGeneratedDungeonFloor(currentFloor, dungeon);
     this.game.events.emit(
       GAME_EVENTS.toast,
@@ -488,7 +492,7 @@ export class WorldScene extends Phaser.Scene {
     const target = this.frontTile();
     const npc = this.npcAt(target);
     if (npc) {
-      this.handleNpc(npc);
+      void this.handleNpc(npc);
       return;
     }
 
@@ -498,7 +502,7 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  private handleNpc(npc: NpcDefinition): void {
+  private async handleNpc(npc: NpcDefinition): Promise<void> {
     if (npc.id === "shopkeeper") {
       this.openShop("item");
       return;
@@ -509,8 +513,9 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
 
-    const dialogue = getNpcDialogue(npc.id);
+    let dialogue: string[] | undefined;
     let stateChanged = false;
+    let shouldReloadMap = false;
 
     if (npc.id === "healer") {
       if (getItemCount("herb") < 5) {
@@ -524,24 +529,55 @@ export class WorldScene extends Phaser.Scene {
       stateChanged = true;
     }
 
-    if (npc.id === "elder" && !hasFlag("questAccepted")) {
-      markFlag("questAccepted");
-      stateChanged = true;
-    }
-
-    if (npc.id === "elder" && hasFlag("treasureFound") && !hasFlag("questComplete")) {
-      const save = getSave();
-      save.gold += 40;
-      markFlag("questComplete");
-      persistSave();
-      stateChanged = true;
+    if (npc.id === "elder") {
+      if (!hasFlag("questAccepted")) {
+        markFlag("questAccepted");
+        stateChanged = true;
+        dialogue = getNpcDialogue(npc.id);
+      } else if (hasFlag("treasureFound") && !hasFlag("questComplete")) {
+        const save = getSave();
+        save.gold += 40;
+        markFlag("questComplete");
+        markFlag("secondQuestAccepted");
+        resetDungeonEnemyDefeats();
+        resetFieldEnemyDefeats();
+        resetDungeonProgress();
+        persistSave();
+        stateChanged = true;
+        shouldReloadMap = true;
+        dialogue = [
+          "村長ローアン: 太陽石を取り戻してくれたのだな。",
+          "金貨40枚を受け取った。",
+          "村の北門と草原の東道が開かれた。",
+          "クエスト開始: 月影石を探す"
+        ];
+      } else if (hasFlag("secondTreasureFound") && !hasFlag("secondQuestComplete")) {
+        const save = getSave();
+        save.gold += 120;
+        markFlag("secondQuestComplete");
+        persistSave();
+        stateChanged = true;
+        dialogue = [
+          "村長ローアン: 月影石まで持ち帰ってくれたのか。",
+          "金貨120枚を受け取った。",
+          "太陽石と月影石が呼応し、村を包む結界が強く輝いた。"
+        ];
+      } else if (hasFlag("questComplete") && !hasFlag("secondQuestAccepted")) {
+        markFlag("secondQuestAccepted");
+        stateChanged = true;
+        dialogue = getNpcDialogue(npc.id);
+      }
     }
 
     if (stateChanged) {
       this.game.events.emit(GAME_EVENTS.stateChanged);
     }
 
-    this.showDialogue(dialogue);
+    if (shouldReloadMap) {
+      await this.loadMap(this.currentMap.id, this.playerTile);
+    }
+
+    this.showDialogue(dialogue ?? getNpcDialogue(npc.id));
   }
 
   private async openChest(chest: ChestDefinition): Promise<void> {
@@ -558,14 +594,18 @@ export class WorldScene extends Phaser.Scene {
 
     markFlag(`${chest.id}-opened`);
     if (isRelicChest) {
-      markFlag("treasureFound");
+      const dungeonTier = getDungeonTier();
+      const relicName = dungeonTier >= 2 ? "月影石" : "太陽石";
+      markFlag(dungeonTier >= 2 ? "secondTreasureFound" : "treasureFound");
       resetDungeonEnemyDefeats();
       setCurrentDungeonFloor(1);
       this.game.events.emit(GAME_EVENTS.stateChanged);
-      await this.loadMap("field", FIELD_DUNGEON_ENTRANCE);
+      await this.loadMap("field", this.getFieldDungeonEntrance(dungeonTier));
       this.showDialogue([
-        "太陽石を手に入れた。",
-        "あたたかな光に包まれ、洞窟の外へ導かれた。"
+        `${relicName}を手に入れた。`,
+        dungeonTier >= 2
+          ? "深い闇がほどけ、草原の新しい洞窟入口へ導かれた。"
+          : "あたたかな光に包まれ、洞窟の外へ導かれた。"
       ]);
       return;
     }
@@ -633,8 +673,12 @@ export class WorldScene extends Phaser.Scene {
     this.menuOpen = false;
     resetDungeonEnemyDefeats();
     setCurrentDungeonFloor(1);
-    await this.loadMap("field", FIELD_DUNGEON_ENTRANCE);
+    await this.loadMap("field", this.getFieldDungeonEntrance());
     this.game.events.emit(GAME_EVENTS.toast, "帰還の羽で草原へ脱出した");
+  }
+
+  private getFieldDungeonEntrance(tier = getDungeonTier()): TilePosition {
+    return { ...getFieldDungeonEntranceForTier(tier) };
   }
 
   private async checkPortal(): Promise<void> {

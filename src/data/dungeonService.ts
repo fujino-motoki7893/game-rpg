@@ -1,4 +1,8 @@
-import { generateDungeon } from "./dungeonGenerator";
+import {
+  generateDungeon,
+  getDungeonEnemyKeysForTier,
+  getDungeonGuardianKeyForTier
+} from "./dungeonGenerator";
 import { ENEMIES } from "./enemies";
 import { isEquipmentId } from "./equipment";
 import { isItemId } from "./items";
@@ -14,13 +18,14 @@ interface DungeonApiResponse {
 export async function createDungeon(
   floor: number,
   floorCount: number,
-  upTarget?: TilePosition
+  upTarget?: TilePosition,
+  tier = 1
 ): Promise<{ dungeon: MapDefinition; source: DungeonSource }> {
   try {
     const response = await fetch("/api/dungeon", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ theme: "王道ファンタジー", size: "small", floor, floorCount, upTarget }),
+      body: JSON.stringify({ theme: "王道ファンタジー", size: "small", floor, floorCount, upTarget, tier }),
       signal: AbortSignal.timeout(8000)
     });
 
@@ -29,7 +34,7 @@ export async function createDungeon(
     }
 
     const payload = (await response.json()) as DungeonApiResponse;
-    if (!isDungeonMap(payload.map, floor, floorCount)) {
+    if (!isDungeonMap(payload.map, floor, floorCount, tier)) {
       throw new Error("Dungeon API returned an invalid map");
     }
 
@@ -38,11 +43,11 @@ export async function createDungeon(
       source: payload.source === "groq" ? "groq" : "worker-local"
     };
   } catch {
-    return { dungeon: generateDungeon({ floor, floorCount, upTarget }), source: "local" };
+    return { dungeon: generateDungeon({ floor, floorCount, upTarget, tier }), source: "local" };
   }
 }
 
-function isDungeonMap(value: unknown, floor: number, floorCount: number): value is MapDefinition {
+function isDungeonMap(value: unknown, floor: number, floorCount: number, tier: number): value is MapDefinition {
   if (!value || typeof value !== "object") {
     return false;
   }
@@ -76,14 +81,26 @@ function isDungeonMap(value: unknown, floor: number, floorCount: number): value 
     return false;
   }
 
+  const guardianKey = getDungeonGuardianKeyForTier(tier);
+  const allowedEnemyKeys = new Set<string>(getDungeonEnemyKeysForTier(tier));
+  const enemyKeysValid = map.enemies.every((enemy) =>
+    enemy.id === "dungeon-guardian"
+      ? enemy.enemyKey === guardianKey
+      : allowedEnemyKeys.has(enemy.enemyKey)
+  );
+
+  if (!enemyKeysValid) {
+    return false;
+  }
+
   if (floor >= floorCount) {
     return (
       map.chests.some(isItemRewardChest) &&
-      map.chests.some((chest) => chest.id === "relic-chest" && isTilePosition(chest)) &&
+      map.chests.some((chest) => chest.reward?.type === "relic" && isTilePosition(chest)) &&
       map.enemies.some(
         (enemy) =>
           enemy.id === "dungeon-guardian" &&
-          enemy.enemyKey === "guardian" &&
+          enemy.enemyKey === guardianKey &&
           isTilePosition(enemy)
       )
     );
@@ -102,6 +119,7 @@ function isDungeonMap(value: unknown, floor: number, floorCount: number): value 
     map.enemies.some(
       (enemy) =>
         enemy.enemyKey !== "guardian" &&
+        enemy.enemyKey !== "deepGuardian" &&
         isTilePosition(enemy)
     )
   );

@@ -2,10 +2,24 @@ import { hasFlag } from "../game/GameState";
 
 export function getNpcDialogue(npcId: string): string[] {
   if (npcId === "elder") {
-    if (hasFlag("questComplete")) {
+    if (hasFlag("secondQuestComplete")) {
       return [
-        "村長ローアン: ストーンブルックはもう安全だ。",
-        "村長ローアン: 若き勇者よ、その旅路を胸に刻んでおくれ。"
+        "村長ローアン: 太陽石と月影石がそろい、谷の結界は強くなった。",
+        "村長ローアン: 若き勇者よ、広がった世界をゆっくり見て回っておくれ。"
+      ];
+    }
+
+    if (hasFlag("secondTreasureFound")) {
+      return [
+        "村長ローアン: 月影石まで持ち帰ってくれたのか。",
+        "村長ローアン: 深き洞窟を越えた勇気に、村の皆が胸を熱くしている。"
+      ];
+    }
+
+    if (hasFlag("secondQuestAccepted") || hasFlag("questComplete")) {
+      return [
+        "村長ローアン: 草原の東に、黒曜の深層洞窟へ続く道が開いた。",
+        "村長ローアン: そこに眠る月影石があれば、村の結界はさらに強くなる。"
       ];
     }
 
@@ -46,8 +60,16 @@ export function getNpcDialogue(npcId: string): string[] {
 }
 
 export function getObjective(): string {
-  if (hasFlag("questComplete")) {
-    return "クエスト完了";
+  if (hasFlag("secondQuestComplete")) {
+    return "村を見守る";
+  }
+
+  if (hasFlag("secondTreasureFound")) {
+    return "月影石を報告する";
+  }
+
+  if (hasFlag("secondQuestAccepted") || hasFlag("questComplete")) {
+    return "新洞窟で月影石を探す";
   }
 
   if (hasFlag("treasureFound")) {

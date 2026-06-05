@@ -1,5 +1,12 @@
-import { generateDungeon } from "../data/dungeonGenerator";
-import { DUNGEON_ENEMY_KEYS, isDungeonEnemyKey, type DungeonEnemyKey } from "../data/enemies";
+import {
+  generateDungeon,
+  getDungeonEnemyKeysForTier,
+  getDungeonGuardianKeyForTier,
+  getDungeonNameForTier,
+  getFieldDungeonEntranceForTier,
+  getRelicChestIdForTier
+} from "../data/dungeonGenerator";
+import { isDungeonEnemyKey, type DungeonEnemyKey } from "../data/enemies";
 import type { ChestReward, EnemySpawn, MapDefinition, PortalDefinition, TilePosition } from "../game/types";
 
 interface Env {
@@ -21,13 +28,13 @@ interface GroqChatCompletion {
 const WIDTH = 20;
 const HEIGHT = 15;
 const DEFAULT_MODEL = "llama-3.1-8b-instant";
-const DUNGEON_NAME = "エンバーフォール洞窟";
 const REGULAR_ENEMY_COUNT = 3;
 
 interface DungeonRequest {
   floor: number;
   floorCount: number;
   upTarget?: TilePosition;
+  tier: number;
 }
 
 interface NormalizedEnemySpawn extends TilePosition {
@@ -89,7 +96,7 @@ async function createDungeonResponse(request: Request, env: Env): Promise<Respon
 
 async function readDungeonRequest(request: Request): Promise<DungeonRequest> {
   if (request.method === "GET") {
-    return { floor: 1, floorCount: 1 };
+    return { floor: 1, floorCount: 1, tier: 1 };
   }
 
   let raw: unknown = {};
@@ -101,13 +108,14 @@ async function readDungeonRequest(request: Request): Promise<DungeonRequest> {
 
   const body =
     raw && typeof raw === "object"
-      ? (raw as { floor?: unknown; floorCount?: unknown; upTarget?: unknown })
+      ? (raw as { floor?: unknown; floorCount?: unknown; upTarget?: unknown; tier?: unknown })
       : {};
   const floorCount = readBoundedInteger(body.floorCount, 1, 8, 1);
   const floor = readBoundedInteger(body.floor, 1, floorCount, 1);
+  const tier = readBoundedInteger(body.tier, 1, 2, 1);
   const upTarget = readPlayablePosition(body.upTarget);
 
-  return upTarget ? { floor, floorCount, upTarget } : { floor, floorCount };
+  return upTarget ? { floor, floorCount, upTarget, tier } : { floor, floorCount, tier };
 }
 
 function readBoundedInteger(
@@ -140,6 +148,9 @@ function readPlayablePosition(value: unknown): TilePosition | undefined {
 
 async function generateGroqDungeon(env: Env, context: DungeonRequest): Promise<MapDefinition> {
   const isFinalFloor = context.floor >= context.floorCount;
+  const dungeonName = getDungeonNameForTier(context.tier);
+  const guardianKey = getDungeonGuardianKeyForTier(context.tier);
+  const regularEnemyKeys = getDungeonEnemyKeysForTier(context.tier);
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -160,7 +171,10 @@ async function generateGroqDungeon(env: Env, context: DungeonRequest): Promise<M
         {
           role: "user",
           content: [
-            `Create floor B${context.floor}F of a ${context.floorCount}-floor classic fantasy cave dungeon.`,
+            `Create floor B${context.floor}F of a ${context.floorCount}-floor ${dungeonName}.`,
+            context.tier >= 2
+              ? "This is the second quest dungeon: make it feel deeper and more dangerous than the first cave."
+              : "This is the first quest cave dungeon.",
             "Return a JSON object with rows, chests, enemies, and optionally stairsDown.",
             "rows must be exactly 15 strings, each exactly 20 characters.",
             "Allowed row characters: # wall, . floor, ~ water, U up stairs, V down stairs, B relic chest, D guardian floor.",
@@ -172,15 +186,15 @@ async function generateGroqDungeon(env: Env, context: DungeonRequest): Promise<M
             isFinalFloor
               ? `Add exactly ${REGULAR_ENEMY_COUNT} regular enemies and one guardian enemy in enemies.`
               : `Add exactly ${REGULAR_ENEMY_COUNT} regular enemies in enemies.`,
-            `Regular enemyKey values must come from: ${DUNGEON_ENEMY_KEYS.join(", ")}.`,
+            `Regular enemyKey values must come from: ${regularEnemyKeys.join(", ")}.`,
             isFinalFloor
-              ? "The guardian enemyKey must be guardian."
+              ? `The guardian enemyKey must be ${guardianKey}.`
               : "Do not add a guardian enemy on this floor.",
             "Every enemy, stairs, and at least one tile next to the final chest must be reachable from U without crossing #, ~, or B.",
             "Also include a numeric seed field for deterministic fallback.",
             isFinalFloor
-              ? "Example shape: {\"rows\":[\"####################\",...],\"chests\":[{\"x\":15,\"y\":12}],\"enemies\":[{\"enemyKey\":\"bat\",\"x\":7,\"y\":4},{\"enemyKey\":\"skeleton\",\"x\":12,\"y\":8},{\"enemyKey\":\"mimic\",\"x\":10,\"y\":11},{\"enemyKey\":\"guardian\",\"x\":15,\"y\":13}]}"
-              : "Example shape: {\"rows\":[\"####################\",...],\"stairsDown\":{\"x\":15,\"y\":12},\"chests\":[],\"enemies\":[{\"enemyKey\":\"bat\",\"x\":7,\"y\":4},{\"enemyKey\":\"skeleton\",\"x\":12,\"y\":8},{\"enemyKey\":\"mimic\",\"x\":10,\"y\":11}]}"
+              ? `Example shape: {"rows":["####################",...],"chests":[{"x":15,"y":12}],"enemies":[{"enemyKey":"${regularEnemyKeys[0]}","x":7,"y":4},{"enemyKey":"${regularEnemyKeys[1]}","x":12,"y":8},{"enemyKey":"${regularEnemyKeys[2]}","x":10,"y":11},{"enemyKey":"${guardianKey}","x":15,"y":13}]}`
+              : `Example shape: {"rows":["####################",...],"stairsDown":{"x":15,"y":12},"chests":[],"enemies":[{"enemyKey":"${regularEnemyKeys[0]}","x":7,"y":4},{"enemyKey":"${regularEnemyKeys[1]}","x":12,"y":8},{"enemyKey":"${regularEnemyKeys[2]}","x":10,"y":11}]}`
           ].join(" ")
         }
       ]
@@ -237,11 +251,19 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
   }
 
   const spawn = { x: 1, y: 1 };
+  const fieldEntrance = getFieldDungeonEntranceForTier(context.tier);
   rows[spawn.y][spawn.x] = ".";
   const reserved = new Set<string>([positionKey(spawn)]);
   const portals: PortalDefinition[] = [
     context.floor === 1
-      ? { x: spawn.x, y: spawn.y, toMap: "field", toX: 2, toY: 13, kind: "stairs-up" }
+      ? {
+          x: spawn.x,
+          y: spawn.y,
+          toMap: "field",
+          toX: fieldEntrance.x,
+          toY: fieldEntrance.y,
+          kind: "stairs-up"
+        }
       : {
           x: spawn.x,
           y: spawn.y,
@@ -264,7 +286,7 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
     reserved.add(positionKey(chest));
 
     guardian =
-      pickEnemy(raw.enemies, "guardian", rows, reserved) ??
+      pickEnemy(raw.enemies, getDungeonGuardianKeyForTier(context.tier), rows, reserved) ??
       findOpenFloorNear(rows, { x: chest.x, y: chest.y + 1 }, reserved);
     if (!guardian) {
       return undefined;
@@ -290,7 +312,7 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
     });
   }
 
-  const regularEnemies = pickRegularEnemies(raw.enemies, rows, reserved);
+  const regularEnemies = pickRegularEnemies(raw.enemies, rows, reserved, context.tier);
   while (regularEnemies.length < REGULAR_ENEMY_COUNT) {
     const fallback = findOpenFloorNear(
       rows,
@@ -301,9 +323,10 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
       return undefined;
     }
     reserved.add(positionKey(fallback));
+    const fallbackEnemyKeys = getDungeonEnemyKeysForTier(context.tier);
     regularEnemies.push({
       ...fallback,
-      enemyKey: DUNGEON_ENEMY_KEYS[regularEnemies.length % DUNGEON_ENEMY_KEYS.length]
+      enemyKey: fallbackEnemyKeys[regularEnemies.length % fallbackEnemyKeys.length]
     });
   }
 
@@ -374,7 +397,7 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
 
   return {
     id: "dungeon",
-    name: `${DUNGEON_NAME} B${context.floor}F`,
+    name: `${getDungeonNameForTier(context.tier)} B${context.floor}F`,
     floor: context.floor,
     floorCount: context.floorCount,
     spawn,
@@ -383,7 +406,7 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
     npcs: [],
     chests: [
       {
-        id: `dungeon-b${context.floor}-supply-chest`,
+        id: `dungeon-t${context.tier}-b${context.floor}-supply-chest`,
         x: supplyChest.x,
         y: supplyChest.y,
         reward: pickSupplyChestReward(context.floor, context.floorCount)
@@ -391,7 +414,7 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
       ...(chest
         ? [
             {
-              id: "relic-chest",
+              id: getRelicChestIdForTier(context.tier),
               x: chest.x,
               y: chest.y,
               reward: { type: "relic" } as const
@@ -407,7 +430,14 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
         y: enemy.y
       })),
       ...(guardian
-        ? [{ id: "dungeon-guardian", enemyKey: "guardian", x: guardian.x, y: guardian.y }]
+        ? [
+            {
+              id: "dungeon-guardian",
+              enemyKey: getDungeonGuardianKeyForTier(context.tier),
+              x: guardian.x,
+              y: guardian.y
+            }
+          ]
         : [])
     ]
   };
@@ -482,12 +512,14 @@ function pickEnemy(
 function pickRegularEnemies(
   value: unknown,
   grid: string[][],
-  reserved: Set<string>
+  reserved: Set<string>,
+  tier: number
 ): NormalizedEnemySpawn[] {
   if (!Array.isArray(value)) {
     return [];
   }
 
+  const allowedEnemyKeys = getDungeonEnemyKeysForTier(tier);
   const enemies: NormalizedEnemySpawn[] = [];
   value
     .filter((enemy) => enemy && typeof enemy === "object")
@@ -497,6 +529,7 @@ function pickRegularEnemies(
       if (
         enemies.length < REGULAR_ENEMY_COUNT &&
         isDungeonEnemyKey(enemy.enemyKey) &&
+        allowedEnemyKeys.includes(enemy.enemyKey) &&
         isOpenFloor(grid, position, reserved)
       ) {
         reserved.add(positionKey(position));

@@ -1,6 +1,6 @@
-import type { MapDefinition } from "../game/types";
+import type { MapDefinition, MapId } from "../game/types";
 
-export const MAPS: Record<string, MapDefinition> = {
+export const MAPS: Record<MapId, MapDefinition> = {
   village: {
     id: "village",
     name: "ストーンブルック村",
@@ -98,5 +98,82 @@ export const MAPS: Record<string, MapDefinition> = {
     ]
   }
 };
+
+export const EXPANDED_MAPS: Partial<Record<MapId, MapDefinition>> = {
+  village: {
+    id: "village",
+    name: "ストーンブルック村・北区",
+    spawn: { x: 9, y: 6 },
+    rows: [
+      "####################",
+      "#....H......H......#",
+      "#....H......H...H..#",
+      "#..................#",
+      "#..E...====........#",
+      "#......=..=....N...#",
+      "#......=..=........#",
+      "#......====........#",
+      "#...H..........H...#",
+      "#...H..........H...#",
+      "#......=......=....#",
+      "#~~~...=......=..~~#",
+      "#~~~...========..~~#",
+      "#.........O........#",
+      "####################"
+    ],
+    portals: [{ x: 10, y: 13, toMap: "field", toX: 10, toY: 1 }],
+    npcs: [
+      { id: "elder", name: "村長ローアン", texture: "npc-elder", x: 3, y: 4 },
+      { id: "healer", name: "ミラ", texture: "npc-healer", x: 15, y: 5 },
+      { id: "shopkeeper", name: "道具屋ニコ", texture: "npc-shopkeeper", x: 6, y: 10 },
+      { id: "equipmentShopkeeper", name: "装備屋ガロ", texture: "npc-armorer", x: 13, y: 10 }
+    ],
+    chests: [],
+    enemies: []
+  },
+  field: {
+    id: "field",
+    name: "広がった月明かりの草原",
+    spawn: { x: 10, y: 1 },
+    rows: [
+      "####################",
+      "#.........O........#",
+      "#..,,,,......,,,,..#",
+      "#..,,....S...,,,,..#",
+      "#......G.....G.....#",
+      "#~~......====......#",
+      "#~~......=..=...^^.#",
+      "#........====...^^^#",
+      "#..,,,,.........^C.#",
+      "#..,,,,.....G...^^.#",
+      "#..................#",
+      "#...S..........S...#",
+      "#^...^.........~~~.#",
+      "#.....,,,,......O..#",
+      "####################"
+    ],
+    portals: [
+      { x: 10, y: 1, toMap: "village", toX: 10, toY: 13 },
+      { x: 16, y: 13, toMap: "dungeon", toX: 1, toY: 1 }
+    ],
+    npcs: [],
+    chests: [],
+    enemies: [
+      { id: "field-slime-c", enemyKey: "slime", x: 9, y: 3 },
+      { id: "field-orc-a", enemyKey: "orc", x: 7, y: 4 },
+      { id: "field-direwolf-a", enemyKey: "direWolf", x: 14, y: 4 },
+      { id: "field-darkmage-a", enemyKey: "darkMage", x: 13, y: 9 },
+      { id: "field-golem-a", enemyKey: "stoneGolem", x: 15, y: 11 }
+    ]
+  },
+  dungeon: {
+    ...MAPS.dungeon,
+    name: "黒曜の深層洞窟"
+  }
+};
+
+export function getMapDefinition(mapId: MapId, expanded = false): MapDefinition {
+  return (expanded && EXPANDED_MAPS[mapId]) || MAPS[mapId];
+}
 
 export const BLOCKING_TILES = new Set(["#", "H", "~", "^"]);

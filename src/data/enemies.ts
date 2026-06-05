@@ -6,7 +6,11 @@ export const DUNGEON_ENEMY_KEYS = [
   "skeleton",
   "wolf",
   "mage",
-  "mimic"
+  "mimic",
+  "orc",
+  "direWolf",
+  "darkMage",
+  "stoneGolem"
 ] as const;
 
 export type DungeonEnemyKey = (typeof DUNGEON_ENEMY_KEYS)[number];
@@ -79,6 +83,42 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     gold: 14,
     texture: "enemy-mimic"
   },
+  orc: {
+    key: "orc",
+    name: "草原オーク",
+    maxHp: 36,
+    attack: 10,
+    exp: 14,
+    gold: 10,
+    texture: "enemy-goblin"
+  },
+  direWolf: {
+    key: "direWolf",
+    name: "牙狼",
+    maxHp: 34,
+    attack: 12,
+    exp: 15,
+    gold: 11,
+    texture: "enemy-wolf"
+  },
+  darkMage: {
+    key: "darkMage",
+    name: "黒衣の呪術師",
+    maxHp: 30,
+    attack: 13,
+    exp: 17,
+    gold: 14,
+    texture: "enemy-mage"
+  },
+  stoneGolem: {
+    key: "stoneGolem",
+    name: "石甲ゴーレム",
+    maxHp: 46,
+    attack: 11,
+    exp: 18,
+    gold: 15,
+    texture: "enemy-guardian"
+  },
   guardian: {
     key: "guardian",
     name: "太陽石の守護者",
@@ -86,6 +126,16 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     attack: 8,
     exp: 14,
     gold: 16,
+    texture: "enemy-guardian",
+    boss: true
+  },
+  deepGuardian: {
+    key: "deepGuardian",
+    name: "月影石の守護者",
+    maxHp: 64,
+    attack: 13,
+    exp: 28,
+    gold: 32,
     texture: "enemy-guardian",
     boss: true
   }

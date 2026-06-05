@@ -41,8 +41,10 @@ import type {
   MapId
 } from "./types";
 
-const MIN_DUNGEON_FLOORS = 3;
-const MAX_DUNGEON_FLOORS = 5;
+const DUNGEON_FLOOR_RANGES: Record<number, { min: number; max: number }> = {
+  1: { min: 3, max: 5 },
+  2: { min: 5, max: 7 }
+};
 const FIELD_ENEMY_ID_PREFIX = "field-";
 const DUNGEON_ENEMY_ID_PREFIX = "dungeon-";
 
@@ -136,8 +138,26 @@ export function setGeneratedDungeon(dungeon: MapDefinition): void {
 }
 
 export function ensureDungeonProgress(): { floorCount: number; currentFloor: number } {
-  if (!save.dungeonFloorCount) {
-    save.dungeonFloorCount = randomInt(MIN_DUNGEON_FLOORS, MAX_DUNGEON_FLOORS);
+  const dungeonTier = getDungeonTier();
+  const range = getDungeonFloorRange(dungeonTier);
+
+  if (save.dungeonTier !== dungeonTier) {
+    save.dungeonTier = dungeonTier;
+    save.dungeonFloorCount = undefined;
+    save.currentDungeonFloor = 1;
+    save.generatedDungeon = undefined;
+    save.generatedDungeonFloors = {};
+    save.defeatedEnemies = save.defeatedEnemies.filter(
+      (enemyId) => !enemyId.startsWith(DUNGEON_ENEMY_ID_PREFIX)
+    );
+  }
+
+  if (
+    !save.dungeonFloorCount ||
+    save.dungeonFloorCount < range.min ||
+    save.dungeonFloorCount > range.max
+  ) {
+    save.dungeonFloorCount = randomInt(range.min, range.max);
   }
 
   if (!save.currentDungeonFloor) {
@@ -164,8 +184,25 @@ export function getDungeonFloorCount(): number | undefined {
   return save.dungeonFloorCount;
 }
 
+export function getDungeonTier(): number {
+  return hasFlag("questComplete") ? 2 : 1;
+}
+
+export function isExpandedWorldUnlocked(): boolean {
+  return getDungeonTier() >= 2;
+}
+
+export function resetDungeonProgress(): void {
+  save.dungeonTier = getDungeonTier();
+  save.dungeonFloorCount = undefined;
+  save.currentDungeonFloor = 1;
+  save.generatedDungeon = undefined;
+  save.generatedDungeonFloors = {};
+  persistSave();
+}
+
 export function setCurrentDungeonFloor(floor: number): void {
-  const floorCount = save.dungeonFloorCount ?? MAX_DUNGEON_FLOORS;
+  const floorCount = save.dungeonFloorCount ?? getDungeonFloorRange(getDungeonTier()).max;
   save.currentDungeonFloor = clampFloor(floor, floorCount);
   persistSave();
 }
@@ -600,6 +637,10 @@ function getBaseMaxMpForLevel(level: number): number {
 
 function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function getDungeonFloorRange(tier: number): { min: number; max: number } {
+  return DUNGEON_FLOOR_RANGES[tier] ?? DUNGEON_FLOOR_RANGES[1];
 }
 
 function clampFloor(floor: number, floorCount: number): number {

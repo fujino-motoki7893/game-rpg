@@ -126,6 +126,7 @@ export interface GameSave {
   flags: Record<string, boolean>;
   defeatedEnemies: string[];
   generatedDungeon?: MapDefinition;
+  dungeonTier?: number;
   dungeonFloorCount?: number;
   currentDungeonFloor?: number;
   generatedDungeonFloors?: Record<string, MapDefinition>;
