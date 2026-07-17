@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { getCharacterIdleAnimationKey } from "../data/characterSprites";
 import {
   EQUIPMENT,
   EQUIPMENT_ORDER,
@@ -7,6 +8,7 @@ import {
   getEquipmentRarityLabel,
   getEquipmentStatSummary
 } from "../data/equipment";
+import { getLunaLine } from "../data/dialogues";
 import {
   canItemEscapeDungeon,
   canItemHealHp,
@@ -29,6 +31,7 @@ import {
   getPlayerMaxHp,
   getPlayerMaxMp,
   getSave,
+  hasCompanion,
   isExpandedWorldUnlocked,
   consumeItem,
   equipEquipment,
@@ -37,14 +40,15 @@ import {
 } from "../game/GameState";
 import type { EquipmentId, ItemId } from "../game/types";
 
-type MenuTab = "items" | "skills" | "equipment" | "status";
+type MenuTab = "items" | "skills" | "equipment" | "status" | "companion";
 
-const TABS: MenuTab[] = ["items", "skills", "equipment", "status"];
+const BASE_TABS: MenuTab[] = ["items", "skills", "equipment", "status"];
 const TAB_LABELS: Record<MenuTab, string> = {
   items: "持ち物",
   skills: "スキル",
   equipment: "装備",
-  status: "強さ"
+  status: "強さ",
+  companion: "ルナ"
 };
 
 export class MenuScene extends Phaser.Scene {
@@ -55,6 +59,7 @@ export class MenuScene extends Phaser.Scene {
   private tabButtons: Partial<Record<MenuTab, Phaser.GameObjects.Text>> = {};
   private contentObjects: Phaser.GameObjects.GameObject[] = [];
   private messageText?: Phaser.GameObjects.Text;
+  private lunaLine = "";
 
   constructor() {
     super("MenuScene");
@@ -67,6 +72,7 @@ export class MenuScene extends Phaser.Scene {
     this.selectedEquipmentIndex = 0;
     this.contentObjects = [];
     this.tabButtons = {};
+    this.lunaLine = "";
 
     this.add.rectangle(400, 320, 800, 640, 0x05080b, 0.58).setDepth(90);
     this.add
@@ -76,10 +82,12 @@ export class MenuScene extends Phaser.Scene {
     this.add.rectangle(400, 154, 508, 2, 0xf0d98a, 0.75).setDepth(101);
     this.add.text(154, 120, "メニュー", this.textStyle(25, "#f6e4a4")).setDepth(102);
 
-    this.createTabButton("items", 154, 176);
-    this.createTabButton("skills", 266, 176);
-    this.createTabButton("equipment", 378, 176);
-    this.createTabButton("status", 490, 176);
+    const visibleTabs = this.getVisibleTabs();
+    const tabWidth = visibleTabs.length > 4 ? 88 : 96;
+    const tabSpacing = visibleTabs.length > 4 ? 100 : 112;
+    visibleTabs.forEach((tab, index) => {
+      this.createTabButton(tab, 154 + index * tabSpacing, 176, tabWidth);
+    });
     this.createCloseButton();
     this.messageText = this.add
       .text(154, 492, "", this.textStyle(16, "#f6e4a4"))
@@ -90,13 +98,17 @@ export class MenuScene extends Phaser.Scene {
     this.renderContent();
   }
 
-  private createTabButton(tab: MenuTab, x: number, y: number): void {
+  private getVisibleTabs(): MenuTab[] {
+    return hasCompanion() ? [...BASE_TABS, "companion"] : BASE_TABS;
+  }
+
+  private createTabButton(tab: MenuTab, x: number, y: number, width: number): void {
     const button = this.add
       .text(x, y, TAB_LABELS[tab], {
-        ...this.textStyle(18, "#101820"),
+        ...this.textStyle(width < 96 ? 16 : 18, "#101820"),
         backgroundColor: "#f2d27a",
-        padding: { x: 18, y: 9 },
-        fixedWidth: 96,
+        padding: { x: width < 96 ? 12 : 18, y: 9 },
+        fixedWidth: width,
         align: "center"
       })
       .setDepth(102)
@@ -145,6 +157,11 @@ export class MenuScene extends Phaser.Scene {
 
     if (this.activeTab === "equipment") {
       this.renderEquipment();
+      return;
+    }
+
+    if (this.activeTab === "companion") {
+      this.renderCompanion();
       return;
     }
 
@@ -417,6 +434,54 @@ export class MenuScene extends Phaser.Scene {
     });
   }
 
+  private renderCompanion(): void {
+    if (!this.lunaLine) {
+      this.lunaLine = getLunaLine();
+    }
+
+    const portrait = this.add
+      .sprite(214, 300, "companion-luna", 0)
+      .setOrigin(0.5, 0.5)
+      .setScale(2.6)
+      .setDepth(102);
+    const idleKey = getCharacterIdleAnimationKey("companion-luna", "down");
+    if (this.anims.exists(idleKey)) {
+      portrait.play(idleKey, true);
+    }
+    this.addContent(portrait);
+
+    this.addContent(
+      this.add.text(154, 214, "ルナ", this.textStyle(18, "#f4df7e")).setDepth(102)
+    );
+    this.addContent(
+      this.add
+        .text(316, 236, this.lunaLine, {
+          ...this.textStyle(16, "#fff4cf"),
+          wordWrap: { width: 300, useAdvancedWrap: true },
+          lineSpacing: 8
+        })
+        .setDepth(102)
+    );
+
+    const talkButton = this.add
+      .text(530, 412, "話す", {
+        ...this.textStyle(18, "#101820"),
+        backgroundColor: "#f2d27a",
+        padding: { x: 18, y: 10 },
+        fixedWidth: 92,
+        align: "center"
+      })
+      .setDepth(102);
+    talkButton.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.talkToLuna());
+    this.addContent(talkButton);
+  }
+
+  private talkToLuna(): void {
+    this.lunaLine = getLunaLine();
+    this.setMessage("");
+    this.renderContent();
+  }
+
   private selectItem(index: number): void {
     this.selectedItemIndex = Phaser.Math.Clamp(index, 0, ITEM_ORDER.length - 1);
     this.setMessage("");
@@ -591,13 +656,19 @@ export class MenuScene extends Phaser.Scene {
 
     if ((event.code === "Space" || event.code === "Enter") && this.activeTab === "equipment") {
       this.equipSelectedEquipment();
+      return;
+    }
+
+    if ((event.code === "Space" || event.code === "Enter") && this.activeTab === "companion") {
+      this.talkToLuna();
     }
   }
 
   private moveTab(direction: number): void {
-    const currentIndex = TABS.indexOf(this.activeTab);
-    const nextIndex = Phaser.Math.Wrap(currentIndex + direction, 0, TABS.length);
-    this.selectTab(TABS[nextIndex]);
+    const visibleTabs = this.getVisibleTabs();
+    const currentIndex = visibleTabs.indexOf(this.activeTab);
+    const nextIndex = Phaser.Math.Wrap(currentIndex + direction, 0, visibleTabs.length);
+    this.selectTab(visibleTabs[nextIndex]);
   }
 
   private moveSelectedItem(direction: number): void {
@@ -719,7 +790,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private updateTabs(): void {
-    TABS.forEach((tab) => {
+    this.getVisibleTabs().forEach((tab) => {
       const selected = this.activeTab === tab;
       this.tabButtons[tab]?.setStyle({
         color: selected ? "#101820" : "#f4f0db",

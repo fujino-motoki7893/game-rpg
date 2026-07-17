@@ -59,6 +59,32 @@ export function getNpcDialogue(npcId: string): string[] {
   return ["返事はない。"];
 }
 
+const LUNA_CASUAL_LINES = [
+  "ルナ: この村の空気、好きです。落ち着きますね。",
+  "ルナ: あなたの剣の腕、旅を続けるうちにさまになってきましたね。",
+  "ルナ: 洞窟の奥は冷えますから、無理はなさらずに。",
+  "ルナ: こうして一緒に旅ができて、嬉しく思っています。",
+  "ルナ: 少し休んでいきますか?私は平気ですよ。",
+  "ルナ: 星の位置を見ていました。今夜は月が綺麗ですね。",
+  "ルナ: 何か困ったことがあれば、遠慮なく言ってくださいね。"
+];
+
+export function getLunaLine(): string {
+  if (hasFlag("secondQuestComplete")) {
+    return "ルナ: 太陽石と月影石……二つの光が村を守っている。感慨深いですね。";
+  }
+
+  if (hasFlag("secondTreasureFound")) {
+    return "ルナ: 月影石、ついに手に入れましたね。村長に見せてあげましょう。";
+  }
+
+  if (hasFlag("secondQuestAccepted") || hasFlag("questComplete")) {
+    return "ルナ: 黒曜の深層洞窟……村長の話では、太陽石の時よりも険しい道のりだとか。気を引き締めていきましょう。";
+  }
+
+  return LUNA_CASUAL_LINES[Math.floor(Math.random() * LUNA_CASUAL_LINES.length)];
+}
+
 export function getObjective(): string {
   if (hasFlag("secondQuestComplete")) {
     return "村を見守る";
