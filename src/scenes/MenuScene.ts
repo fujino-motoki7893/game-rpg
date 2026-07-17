@@ -8,7 +8,7 @@ import {
   getEquipmentRarityLabel,
   getEquipmentStatSummary
 } from "../data/equipment";
-import { getLunaLine } from "../data/dialogues";
+import { fetchLunaLine, getCurrentLunaStage, getLunaLine, getNextStaticLunaLine } from "../data/dialogues";
 import {
   canItemEscapeDungeon,
   canItemHealHp,
@@ -60,6 +60,8 @@ export class MenuScene extends Phaser.Scene {
   private contentObjects: Phaser.GameObjects.GameObject[] = [];
   private messageText?: Phaser.GameObjects.Text;
   private lunaLine = "";
+  private lunaLoading = false;
+  private lunaRequestToken = 0;
 
   constructor() {
     super("MenuScene");
@@ -73,6 +75,8 @@ export class MenuScene extends Phaser.Scene {
     this.contentObjects = [];
     this.tabButtons = {};
     this.lunaLine = "";
+    this.lunaLoading = false;
+    this.lunaRequestToken = 0;
 
     this.add.rectangle(400, 320, 800, 640, 0x05080b, 0.58).setDepth(90);
     this.add
@@ -435,8 +439,9 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private renderCompanion(): void {
-    if (!this.lunaLine) {
-      this.lunaLine = getLunaLine();
+    if (!this.lunaLine && !this.lunaLoading) {
+      this.talkToLuna();
+      return;
     }
 
     const portrait = this.add
@@ -455,7 +460,7 @@ export class MenuScene extends Phaser.Scene {
     );
     this.addContent(
       this.add
-        .text(316, 236, this.lunaLine, {
+        .text(316, 236, this.lunaLine || "……", {
           ...this.textStyle(16, "#fff4cf"),
           wordWrap: { width: 300, useAdvancedWrap: true },
           lineSpacing: 8
@@ -464,22 +469,58 @@ export class MenuScene extends Phaser.Scene {
     );
 
     const talkButton = this.add
-      .text(530, 412, "話す", {
-        ...this.textStyle(18, "#101820"),
-        backgroundColor: "#f2d27a",
+      .text(530, 412, this.lunaLoading ? "……" : "話す", {
+        ...this.textStyle(18, this.lunaLoading ? "#2a3036" : "#101820"),
+        backgroundColor: this.lunaLoading ? "#66707a" : "#f2d27a",
         padding: { x: 18, y: 10 },
         fixedWidth: 92,
         align: "center"
       })
+      .setAlpha(this.lunaLoading ? 0.58 : 1)
       .setDepth(102);
-    talkButton.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.talkToLuna());
+    if (!this.lunaLoading) {
+      talkButton.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.talkToLuna());
+    }
     this.addContent(talkButton);
   }
 
   private talkToLuna(): void {
-    this.lunaLine = getLunaLine();
+    if (this.lunaLoading) {
+      return;
+    }
+
+    const stage = getCurrentLunaStage();
+
+    // Static lines (first casual chats, and the one-off comment after each
+    // elder milestone) always come first; only once every static line for
+    // the current stage has been seen do we reach for AI generation.
+    const staticLine = getNextStaticLunaLine(stage);
+    if (staticLine) {
+      this.lunaLine = staticLine;
+      this.setMessage("");
+      this.renderContent();
+      return;
+    }
+
+    this.lunaLoading = true;
     this.setMessage("");
     this.renderContent();
+
+    const requestToken = ++this.lunaRequestToken;
+
+    fetchLunaLine(stage)
+      .catch(() => getLunaLine())
+      .then((line) => {
+        if (requestToken !== this.lunaRequestToken || !this.scene.isActive()) {
+          return;
+        }
+
+        this.lunaLine = line;
+        this.lunaLoading = false;
+        if (this.activeTab === "companion") {
+          this.renderContent();
+        }
+      });
   }
 
   private selectItem(index: number): void {

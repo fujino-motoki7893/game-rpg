@@ -7,6 +7,13 @@ import {
   getRelicChestIdForTier
 } from "../data/dungeonGenerator";
 import { isDungeonEnemyKey, type DungeonEnemyKey } from "../data/enemies";
+import {
+  describeLunaStage,
+  getLunaLineForStage,
+  isLunaQuestStage,
+  LUNA_CASUAL_LINES
+} from "../data/lunaLines";
+import type { LunaQuestStage } from "../data/lunaLines";
 import type { ChestReward, EnemySpawn, MapDefinition, PortalDefinition, TilePosition } from "../game/types";
 
 interface Env {
@@ -28,6 +35,7 @@ interface GroqChatCompletion {
 const WIDTH = 20;
 const HEIGHT = 15;
 const DEFAULT_MODEL = "llama-3.1-8b-instant";
+const LUNA_MODEL = "llama-3.3-70b-versatile";
 const REGULAR_ENEMY_COUNT = 3;
 
 interface DungeonRequest {
@@ -62,6 +70,13 @@ export default {
         return jsonResponse({ error: "Method not allowed" }, 405);
       }
       return createDungeonResponse(request, env);
+    }
+
+    if (url.pathname === "/api/luna-line") {
+      if (request.method !== "POST") {
+        return jsonResponse({ error: "Method not allowed" }, 405);
+      }
+      return createLunaLineResponse(request, env);
     }
 
     if (url.pathname.startsWith("/api/")) {
@@ -214,6 +229,99 @@ async function generateGroqDungeon(env: Env, context: DungeonRequest): Promise<M
   const parsed = JSON.parse(extractJson(content)) as unknown;
   const map = normalizeDungeon(parsed, context);
   return map ?? generateDungeon({ ...context, seed: readSeed(parsed) ?? hashString(content) });
+}
+
+async function createLunaLineResponse(request: Request, env: Env): Promise<Response> {
+  const stage = await readLunaLineRequest(request);
+  const fallbackLine = getLunaLineForStage(stage);
+
+  if (!env.GROQ_API_KEY) {
+    return jsonResponse({ line: fallbackLine, source: "worker-local" });
+  }
+
+  try {
+    const line = await generateGroqLunaLine(env, stage);
+    return jsonResponse({ line, source: "groq" });
+  } catch (error) {
+    console.warn(
+      "Groq Luna line generation failed",
+      error instanceof Error ? error.message : "unknown error"
+    );
+    return jsonResponse({ line: fallbackLine, source: "worker-local", warning: "groq-unavailable" });
+  }
+}
+
+async function readLunaLineRequest(request: Request): Promise<LunaQuestStage> {
+  let raw: unknown = {};
+  try {
+    raw = await request.json();
+  } catch {
+    raw = {};
+  }
+
+  const body = raw && typeof raw === "object" ? (raw as { stage?: unknown }) : {};
+  return isLunaQuestStage(body.stage) ? body.stage : "casual";
+}
+
+async function generateGroqLunaLine(env: Env, stage: LunaQuestStage): Promise<string> {
+  const situation = describeLunaStage(stage);
+  const voiceExamples = LUNA_CASUAL_LINES.slice(0, 4).map((line) => line.text);
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.GROQ_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: LUNA_MODEL,
+      temperature: 0.65,
+      max_completion_tokens: 120,
+      messages: [
+        {
+          role: "system",
+          content: [
+            "あなたは日本語の小さなブラウザRPGに登場する仲間キャラクター「ルナ」のセリフを1行だけ書きます。",
+            "ルナは物腰が柔らかく上品な、支援型の魔法使いです。旅の道中、ずっと勇者(プレイヤー)に寄り添っています。",
+            "一人称は「私」。口調は丁寧な「です・ます調」で、少し古風で落ち着いた話し方です。若者言葉、くだけた表現、絵文字は使いません。",
+            "HPやMP、レベルなど、ゲームのシステム用語には言及しないでください。",
+            "「頑張りましょう」「油断は禁物です」のような紋切り型の掛け声も避け、具体的で自然な一言にしてください。",
+            "以下はルナの話し方の実例です。この雰囲気・文の長さに合わせてください(内容をそのまま繰り返す必要はありません):",
+            ...voiceExamples.map((line) => `- ${line}`),
+            "出力は「ルナ: 」から始まる1文のみ。40字以内。説明や地の文、鉤括弧は付けないでください。"
+          ].join("\n")
+        },
+        {
+          role: "user",
+          content: `今の状況: ${situation}\nこの状況でルナが勇者にかけそうな一言を、上の話し方に忠実に1つ書いてください。`
+        }
+      ]
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Groq returned ${response.status}`);
+  }
+
+  const payload = (await response.json()) as GroqChatCompletion;
+  const content = payload.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error("Groq returned no content");
+  }
+
+  const line = sanitizeLunaLine(content);
+  if (!line) {
+    throw new Error("Groq returned an unusable line");
+  }
+  return line;
+}
+
+function sanitizeLunaLine(content: string): string | undefined {
+  const trimmed = content.trim().replace(/^["「]+|["」]+$/g, "");
+  const firstLine = trimmed.split("\n")[0].trim();
+  if (!firstLine || firstLine.length > 80) {
+    return undefined;
+  }
+  return firstLine.startsWith("ルナ") ? firstLine : `ルナ: ${firstLine}`;
 }
 
 function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinition | undefined {

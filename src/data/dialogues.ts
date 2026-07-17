@@ -1,4 +1,8 @@
-import { hasFlag } from "../game/GameState";
+import { hasFlag, markFlag } from "../game/GameState";
+import { getLunaLineForStage, getLunaQuestStage, getLunaStaticLinePool } from "./lunaLines";
+import type { LunaQuestStage } from "./lunaLines";
+
+const LUNA_SEEN_FLAG_PREFIX = "luna-line-seen:";
 
 export function getNpcDialogue(npcId: string): string[] {
   if (npcId === "elder") {
@@ -59,30 +63,57 @@ export function getNpcDialogue(npcId: string): string[] {
   return ["返事はない。"];
 }
 
-const LUNA_CASUAL_LINES = [
-  "ルナ: この村の空気、好きです。落ち着きますね。",
-  "ルナ: あなたの剣の腕、旅を続けるうちにさまになってきましたね。",
-  "ルナ: 洞窟の奥は冷えますから、無理はなさらずに。",
-  "ルナ: こうして一緒に旅ができて、嬉しく思っています。",
-  "ルナ: 少し休んでいきますか?私は平気ですよ。",
-  "ルナ: 星の位置を見ていました。今夜は月が綺麗ですね。",
-  "ルナ: 何か困ったことがあれば、遠慮なく言ってくださいね。"
-];
+export function getCurrentLunaStage(): LunaQuestStage {
+  return getLunaQuestStage({
+    secondQuestComplete: hasFlag("secondQuestComplete"),
+    secondTreasureFound: hasFlag("secondTreasureFound"),
+    secondQuestAccepted: hasFlag("secondQuestAccepted"),
+    questComplete: hasFlag("questComplete")
+  });
+}
 
 export function getLunaLine(): string {
-  if (hasFlag("secondQuestComplete")) {
-    return "ルナ: 太陽石と月影石……二つの光が村を守っている。感慨深いですね。";
+  return getLunaLineForStage(getCurrentLunaStage());
+}
+
+/**
+ * Returns the next not-yet-seen static line for the given stage, marking it
+ * seen as a side effect. Returns undefined once every static line for this
+ * stage has already been shown at least once (across the whole save), which
+ * signals the caller to fall back to AI generation instead.
+ */
+export function getNextStaticLunaLine(stage: LunaQuestStage): string | undefined {
+  const unseen = getLunaStaticLinePool(stage).filter(
+    (line) => !hasFlag(`${LUNA_SEEN_FLAG_PREFIX}${line.id}`)
+  );
+  if (unseen.length === 0) {
+    return undefined;
   }
 
-  if (hasFlag("secondTreasureFound")) {
-    return "ルナ: 月影石、ついに手に入れましたね。村長に見せてあげましょう。";
+  const chosen = unseen[Math.floor(Math.random() * unseen.length)];
+  markFlag(`${LUNA_SEEN_FLAG_PREFIX}${chosen.id}`);
+  return chosen.text;
+}
+
+export async function fetchLunaLine(stage: LunaQuestStage): Promise<string> {
+  const response = await fetch("/api/luna-line", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ stage }),
+    signal: AbortSignal.timeout(6000)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Luna line API returned ${response.status}`);
   }
 
-  if (hasFlag("secondQuestAccepted") || hasFlag("questComplete")) {
-    return "ルナ: 黒曜の深層洞窟……村長の話では、太陽石の時よりも険しい道のりだとか。気を引き締めていきましょう。";
+  const payload = (await response.json()) as { line?: unknown };
+  const line = payload.line;
+  if (typeof line !== "string" || !line.trim() || line.length > 160) {
+    throw new Error("Luna line API returned an invalid line");
   }
 
-  return LUNA_CASUAL_LINES[Math.floor(Math.random() * LUNA_CASUAL_LINES.length)];
+  return line.trim();
 }
 
 export function getObjective(): string {
