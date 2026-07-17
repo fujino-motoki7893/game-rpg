@@ -32,11 +32,11 @@ interface GroqChatCompletion {
   }>;
 }
 
-const WIDTH = 20;
-const HEIGHT = 15;
+const WIDTH = 40;
+const HEIGHT = 30;
 const DEFAULT_MODEL = "llama-3.1-8b-instant";
 const LUNA_MODEL = "llama-3.3-70b-versatile";
-const REGULAR_ENEMY_COUNT = 3;
+const REGULAR_ENEMY_COUNT = 5;
 
 interface DungeonRequest {
   floor: number;
@@ -175,7 +175,7 @@ async function generateGroqDungeon(env: Env, context: DungeonRequest): Promise<M
     body: JSON.stringify({
       model: env.GROQ_MODEL ?? DEFAULT_MODEL,
       temperature: 0.8,
-      max_completion_tokens: 1600,
+      max_completion_tokens: 4000,
       response_format: { type: "json_object" },
       messages: [
         {
@@ -191,9 +191,10 @@ async function generateGroqDungeon(env: Env, context: DungeonRequest): Promise<M
               ? "This is the second quest dungeon: make it feel deeper and more dangerous than the first cave."
               : "This is the first quest cave dungeon.",
             "Return a JSON object with rows, chests, enemies, and optionally stairsDown.",
-            "rows must be exactly 15 strings, each exactly 20 characters.",
+            "rows must be exactly 30 strings, each exactly 40 characters.",
             "Allowed row characters: # wall, . floor, ~ water, U up stairs, V down stairs, B relic chest, D guardian floor.",
             "The outer border must be #. Put U at x=1,y=1.",
+            "This is a large map (40x30) — carve several distinct rooms connected by corridors, not just one small cluster; spread rooms and enemies across the full width and height.",
             "The server will add one supply chest automatically. Only place B when this floor needs the final relic chest.",
             isFinalFloor
               ? "This is the final floor. Put one B chest and one D guardian near the deeper side of the dungeon. Do not place V."
@@ -208,8 +209,8 @@ async function generateGroqDungeon(env: Env, context: DungeonRequest): Promise<M
             "Every enemy, stairs, and at least one tile next to the final chest must be reachable from U without crossing #, ~, or B.",
             "Also include a numeric seed field for deterministic fallback.",
             isFinalFloor
-              ? `Example shape: {"rows":["####################",...],"chests":[{"x":15,"y":12}],"enemies":[{"enemyKey":"${regularEnemyKeys[0]}","x":7,"y":4},{"enemyKey":"${regularEnemyKeys[1]}","x":12,"y":8},{"enemyKey":"${regularEnemyKeys[2]}","x":10,"y":11},{"enemyKey":"${guardianKey}","x":15,"y":13}]}`
-              : `Example shape: {"rows":["####################",...],"stairsDown":{"x":15,"y":12},"chests":[],"enemies":[{"enemyKey":"${regularEnemyKeys[0]}","x":7,"y":4},{"enemyKey":"${regularEnemyKeys[1]}","x":12,"y":8},{"enemyKey":"${regularEnemyKeys[2]}","x":10,"y":11}]}`
+              ? `Example shape (illustrative only, yours should fill the full 40x30 grid): {"rows":["########################################",...],"chests":[{"x":28,"y":22}],"enemies":[{"enemyKey":"${regularEnemyKeys[0]}","x":14,"y":4},{"enemyKey":"${regularEnemyKeys[1]}","x":26,"y":9},{"enemyKey":"${regularEnemyKeys[2]}","x":6,"y":14},{"enemyKey":"${regularEnemyKeys[0]}","x":18,"y":15},{"enemyKey":"${regularEnemyKeys[1]}","x":30,"y":15},{"enemyKey":"${guardianKey}","x":28,"y":23}]}`
+              : `Example shape (illustrative only, yours should fill the full 40x30 grid): {"rows":["########################################",...],"stairsDown":{"x":28,"y":22},"chests":[],"enemies":[{"enemyKey":"${regularEnemyKeys[0]}","x":14,"y":4},{"enemyKey":"${regularEnemyKeys[1]}","x":26,"y":9},{"enemyKey":"${regularEnemyKeys[2]}","x":6,"y":14},{"enemyKey":"${regularEnemyKeys[0]}","x":18,"y":15},{"enemyKey":"${regularEnemyKeys[1]}","x":30,"y":15}]}`
           ].join(" ")
         }
       ]
@@ -387,7 +388,7 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
   let downStairs: TilePosition | undefined;
 
   if (isFinalFloor) {
-    chest = pickPosition(raw.chests, rows, reserved) ?? findOpenFloorNear(rows, { x: 15, y: 12 }, reserved);
+    chest = pickPosition(raw.chests, rows, reserved) ?? findOpenFloorNear(rows, { x: 28, y: 22 }, reserved);
     if (!chest) {
       return undefined;
     }
@@ -404,7 +405,7 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
     downStairs =
       readPosition(raw.stairsDown, rows, reserved) ??
       findMarker(raw.rows, "V", rows, reserved) ??
-      findOpenFloorNear(rows, { x: 15, y: 12 }, reserved);
+      findOpenFloorNear(rows, { x: 28, y: 22 }, reserved);
     if (!downStairs) {
       return undefined;
     }
@@ -424,7 +425,7 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
   while (regularEnemies.length < REGULAR_ENEMY_COUNT) {
     const fallback = findOpenFloorNear(
       rows,
-      { x: 6 + regularEnemies.length * 4, y: 5 + regularEnemies.length * 3 },
+      { x: 8 + regularEnemies.length * 6, y: 4 + regularEnemies.length * 5 },
       reserved
     );
     if (!fallback) {
@@ -440,7 +441,7 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
 
   const supplyChest = findOpenFloorNear(
     rows,
-    { x: 5 + (context.floor % 3) * 3, y: 6 + (context.floor % 2) * 4 },
+    { x: 8 + (context.floor % 3) * 10, y: 8 + (context.floor % 2) * 10 },
     reserved
   );
   if (!supplyChest) {

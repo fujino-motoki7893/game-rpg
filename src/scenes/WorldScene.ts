@@ -206,6 +206,7 @@ export class WorldScene extends Phaser.Scene {
       this.playCharacterIdle(this.player, "player", this.facing);
       this.createDialoguePanel();
       this.createTargetHintPanel();
+      this.setupCamera();
       setPlayerPosition(mapId, entryTile.x, entryTile.y);
       this.game.events.emit(GAME_EVENTS.mapChanged, this.currentMap.name);
       this.game.events.emit(GAME_EVENTS.stateChanged);
@@ -213,6 +214,14 @@ export class WorldScene extends Phaser.Scene {
       this.loadingMap = false;
       this.refreshTargetHint();
     }
+  }
+
+  private setupCamera(): void {
+    const mapPixelWidth = this.currentMap.rows[0].length * TILE_SIZE;
+    const mapPixelHeight = this.currentMap.rows.length * TILE_SIZE;
+    const camera = this.cameras.main;
+    camera.setBounds(0, 0, mapPixelWidth, mapPixelHeight);
+    camera.startFollow(this.player, true, 1, 1);
   }
 
   private async resolveMap(mapId: MapId): Promise<MapDefinition> {
@@ -1016,10 +1025,12 @@ export class WorldScene extends Phaser.Scene {
     this.dialogueBox = this.add
       .rectangle(400, 535, 688, 92, 0x101722, 0.97)
       .setStrokeStyle(2, 0xd6b56a, 0.95)
+      .setScrollFactor(0)
       .setDepth(40)
       .setVisible(false);
     this.dialogueAccent = this.add
       .rectangle(400, 493, 650, 2, 0xf0d98a, 0.8)
+      .setScrollFactor(0)
       .setDepth(41)
       .setVisible(false);
     this.dialogueText = this.add
@@ -1030,6 +1041,7 @@ export class WorldScene extends Phaser.Scene {
         wordWrap: { width: 608, useAdvancedWrap: true },
         lineSpacing: 8
       })
+      .setScrollFactor(0)
       .setDepth(41)
       .setVisible(false);
   }
@@ -1069,15 +1081,14 @@ export class WorldScene extends Phaser.Scene {
     const lineCount = hint.text.split("\n").length;
     const height = lineCount > 1 ? 48 : 34;
     const width = 164;
-    const mapLeft = MAP_OFFSET_X;
-    const mapRight = MAP_OFFSET_X + this.currentMap.rows[0].length * TILE_SIZE;
-    const mapTop = MAP_OFFSET_Y;
-    const x = Phaser.Math.Clamp(
-      this.toWorldX(hint.position.x),
-      mapLeft + width / 2,
-      mapRight - width / 2
+    const mapPixelWidth = this.currentMap.rows[0].length * TILE_SIZE;
+    const mapPixelHeight = this.currentMap.rows.length * TILE_SIZE;
+    const x = Phaser.Math.Clamp(this.toWorldX(hint.position.x), width / 2, mapPixelWidth - width / 2);
+    const y = Phaser.Math.Clamp(
+      this.toWorldY(hint.position.y) - 34,
+      height / 2,
+      mapPixelHeight - height / 2
     );
-    const y = Phaser.Math.Clamp(this.toWorldY(hint.position.y) - 34, mapTop + height / 2, 548);
 
     this.targetHintText?.setText(hint.text);
     this.targetHintBox?.setPosition(x, y).setDisplaySize(width, height).setVisible(true);

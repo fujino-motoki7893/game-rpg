@@ -60,8 +60,8 @@ function isDungeonMap(value: unknown, floor: number, floorCount: number, tier: n
     map.floor === floor &&
     map.floorCount === floorCount &&
     Array.isArray(map.rows) &&
-    map.rows.length === 15 &&
-    map.rows.every((row) => typeof row === "string" && row.length === 20) &&
+    map.rows.length === 30 &&
+    map.rows.every((row) => typeof row === "string" && row.length === 40) &&
     Array.isArray(map.portals) &&
     Array.isArray(map.npcs) &&
     Array.isArray(map.chests) &&

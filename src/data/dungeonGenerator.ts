@@ -7,16 +7,16 @@ import type {
   TilePosition
 } from "../game/types";
 
-const WIDTH = 20;
-const HEIGHT = 15;
-const REGULAR_ENEMY_COUNT = 3;
+const WIDTH = 40;
+const HEIGHT = 30;
+const REGULAR_ENEMY_COUNT = 5;
 const DUNGEON_NAMES: Record<number, string> = {
   1: "エンバーフォール洞窟",
   2: "黒曜の深層洞窟"
 };
 const FIELD_DUNGEON_ENTRANCES: Record<number, TilePosition> = {
-  1: { x: 2, y: 13 },
-  2: { x: 16, y: 13 }
+  1: { x: 6, y: 24 },
+  2: { x: 34, y: 6 }
 };
 const DUNGEON_ENEMY_WEIGHTS_BY_TIER: Record<number, DungeonEnemyKey[]> = {
   1: [
@@ -87,32 +87,50 @@ export function generateDungeon(
   const isFinalFloor = floor >= floorCount;
   const rng = createRng(seed);
   const grid = createFilledGrid("#");
-  const startRoom: Room = { x: 1, y: 1, w: 5, h: 4 };
+  const startRoom: Room = { x: 1, y: 1, w: 8, h: 6 };
   const midRooms = [
     clampRoom({
-      x: randomInt(rng, 7, 10),
-      y: randomInt(rng, 2, 4),
-      w: randomInt(rng, 4, 6),
-      h: randomInt(rng, 3, 4)
+      x: randomInt(rng, 12, 16),
+      y: randomInt(rng, 2, 5),
+      w: randomInt(rng, 6, 8),
+      h: randomInt(rng, 4, 6)
     }),
     clampRoom({
-      x: randomInt(rng, 2, 5),
-      y: randomInt(rng, 7, 10),
-      w: randomInt(rng, 4, 5),
-      h: randomInt(rng, 3, 4)
+      x: randomInt(rng, 24, 29),
+      y: randomInt(rng, 2, 6),
+      w: randomInt(rng, 6, 8),
+      h: randomInt(rng, 4, 5)
     }),
     clampRoom({
-      x: randomInt(rng, 9, 12),
-      y: randomInt(rng, 7, 10),
-      w: randomInt(rng, 4, 6),
-      h: randomInt(rng, 3, 4)
+      x: randomInt(rng, 3, 7),
+      y: randomInt(rng, 12, 16),
+      w: randomInt(rng, 6, 8),
+      h: randomInt(rng, 4, 6)
+    }),
+    clampRoom({
+      x: randomInt(rng, 16, 20),
+      y: randomInt(rng, 12, 16),
+      w: randomInt(rng, 6, 9),
+      h: randomInt(rng, 5, 7)
+    }),
+    clampRoom({
+      x: randomInt(rng, 28, 32),
+      y: randomInt(rng, 12, 16),
+      w: randomInt(rng, 6, 8),
+      h: randomInt(rng, 4, 6)
+    }),
+    clampRoom({
+      x: randomInt(rng, 6, 10),
+      y: randomInt(rng, 20, 23),
+      w: randomInt(rng, 6, 8),
+      h: randomInt(rng, 4, 6)
     })
   ];
   const endRoom = clampRoom({
-    x: randomInt(rng, 13, 14),
-    y: randomInt(rng, 9, 10),
-    w: 5,
-    h: 4
+    x: randomInt(rng, 26, 29),
+    y: randomInt(rng, 20, 23),
+    w: 8,
+    h: 6
   });
   const rooms = [startRoom, ...midRooms, endRoom];
 
@@ -462,7 +480,7 @@ function addWaterPools(
   reserved: Set<string>,
   requiredTiles: TilePosition[]
 ): void {
-  const poolCount = randomInt(rng, 2, 4);
+  const poolCount = randomInt(rng, 3, 6);
   for (let poolIndex = 0; poolIndex < poolCount; poolIndex += 1) {
     const room = rooms[randomInt(rng, 0, rooms.length - 1)];
     const origin = {

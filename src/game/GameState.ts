@@ -51,8 +51,8 @@ export const COMPANION_JOINED_FLAG = "companionJoined";
 
 export const initialSave = (): GameSave => ({
   mapId: "village",
-  x: 9,
-  y: 6,
+  x: 20,
+  y: 15,
   hp: 30,
   maxHp: 30,
   mp: getBaseMaxMpForLevel(1),
