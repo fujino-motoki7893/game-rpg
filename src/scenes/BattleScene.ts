@@ -40,6 +40,7 @@ import {
   spendCompanionMp,
   spendMp,
   useItem,
+  useItemOnCompanion,
   useHealingSkill,
 } from "../game/GameState";
 import type { SkillDefinition } from "../data/skills";
@@ -304,6 +305,28 @@ export class BattleScene extends Phaser.Scene {
     }
 
     const item = ITEMS[itemId];
+
+    if (!this.playerBenefitsFromItem(itemId) && this.companionActive && this.companionBenefitsFromItem(itemId)) {
+      const result = useItemOnCompanion(itemId);
+      if (!result.used) {
+        this.setLog(this.getItemFailureMessage(item.name, result.reason));
+        this.refreshHud();
+        return;
+      }
+
+      this.refreshHud();
+      if (result.healed > 0) {
+        this.pulseTarget(this.companionSprite);
+        this.showDamageNumber(result.healed, 272, 164, "#a5ffb2", "+");
+      } else if (result.restoredMp > 0) {
+        this.pulseTarget(this.companionSprite);
+        this.showDamageNumber(result.restoredMp, 272, 164, "#8fc6ff", "+");
+      }
+      this.setLog(`${item.name}をルナに使った。${this.describeHealResult(result.healed, result.restoredMp)}`);
+      this.endPlayerTurn();
+      return;
+    }
+
     const result = useItem(itemId);
     if (!result.used) {
       this.setLog(this.getItemFailureMessage(item.name, result.reason));
@@ -612,18 +635,36 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private canUseBattleItem(itemId: ItemId): boolean {
-    const save = getSave();
     if (getItemCount(itemId) <= 0) {
       return false;
     }
 
+    return (
+      this.playerBenefitsFromItem(itemId) ||
+      (this.companionActive && this.companionBenefitsFromItem(itemId))
+    );
+  }
+
+  private playerBenefitsFromItem(itemId: ItemId): boolean {
+    const save = getSave();
     return (
       (canItemHealHp(itemId) && save.hp < getPlayerMaxHp()) ||
       (canItemRestoreMp(itemId) && save.mp < getPlayerMaxMp())
     );
   }
 
+  private companionBenefitsFromItem(itemId: ItemId): boolean {
+    return (
+      (canItemHealHp(itemId) && getCompanionHp() < getCompanionMaxHp()) ||
+      (canItemRestoreMp(itemId) && getCompanionMp() < getCompanionMaxMp())
+    );
+  }
+
   private getItemUseMessage(itemName: string, healed: number, restoredMp: number): string {
+    return `${itemName}で${this.describeHealResult(healed, restoredMp)}`;
+  }
+
+  private describeHealResult(healed: number, restoredMp: number): string {
     const parts: string[] = [];
     if (healed > 0) {
       parts.push(`HPを${healed}`);
@@ -632,7 +673,7 @@ export class BattleScene extends Phaser.Scene {
       parts.push(`MPを${restoredMp}`);
     }
 
-    return `${itemName}で${parts.join("、")}回復した。`;
+    return `${parts.join("、")}回復した。`;
   }
 
   private getItemFailureMessage(itemName: string, reason?: string): string {

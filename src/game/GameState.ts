@@ -602,6 +602,55 @@ export function useItem(itemId: ItemId): UseItemResult {
   return { used: true, healed: save.hp - beforeHp, restoredMp: save.mp - beforeMp };
 }
 
+export function useItemOnCompanion(itemId: ItemId): UseItemResult {
+  if (!isItemId(itemId)) {
+    return { used: false, healed: 0, restoredMp: 0, reason: "unknown-item" };
+  }
+
+  ensureInventory();
+  if ((save.items[itemId] ?? 0) <= 0) {
+    return { used: false, healed: 0, restoredMp: 0, reason: "no-item" };
+  }
+
+  const healsHp = canItemHealHp(itemId);
+  const restoresMp = canItemRestoreMp(itemId);
+  if (!healsHp && !restoresMp) {
+    return { used: false, healed: 0, restoredMp: 0, reason: "no-effect" };
+  }
+
+  ensureCompanionVitals();
+  const maxHp = getCompanionMaxHp();
+  const maxMp = getCompanionMaxMp();
+  const currentHp = save.companionHp ?? maxHp;
+  const currentMp = save.companionMp ?? maxMp;
+  const hpFull = !healsHp || currentHp >= maxHp;
+  const mpFull = !restoresMp || currentMp >= maxMp;
+  if (hpFull && mpFull) {
+    return {
+      used: false,
+      healed: 0,
+      restoredMp: 0,
+      reason: restoresMp && !healsHp ? "full-mp" : "full-hp"
+    };
+  }
+
+  const beforeHp = currentHp;
+  const beforeMp = currentMp;
+  if (healsHp) {
+    save.companionHp = Math.min(maxHp, currentHp + getItemHealAmount(itemId, maxHp));
+  }
+  if (restoresMp) {
+    save.companionMp = Math.min(maxMp, currentMp + getItemMpRestoreAmount(itemId, maxMp));
+  }
+  save.items[itemId] = Math.max(0, (save.items[itemId] ?? 0) - 1);
+  persistSave();
+  return {
+    used: true,
+    healed: (save.companionHp ?? beforeHp) - beforeHp,
+    restoredMp: (save.companionMp ?? beforeMp) - beforeMp
+  };
+}
+
 export function usePotion(): boolean {
   return useItem("herb").used;
 }
