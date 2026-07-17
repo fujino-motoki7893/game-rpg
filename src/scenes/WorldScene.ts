@@ -4,7 +4,13 @@ import {
   getCharacterOriginY,
   getCharacterWalkAnimationKey
 } from "../data/characterSprites";
-import { getNpcDialogue } from "../data/dialogues";
+import {
+  fetchLunaLine,
+  getCurrentLunaStage,
+  getLunaLine,
+  getNextStaticLunaLine,
+  getNpcDialogue
+} from "../data/dialogues";
 import { getFieldDungeonEntranceForTier } from "../data/dungeonGenerator";
 import { createDungeon } from "../data/dungeonService";
 import { ENEMIES } from "../data/enemies";
@@ -93,6 +99,7 @@ export class WorldScene extends Phaser.Scene {
   private dialogueBox?: Phaser.GameObjects.Rectangle;
   private dialogueAccent?: Phaser.GameObjects.Rectangle;
   private dialogueText?: Phaser.GameObjects.Text;
+  private lunaFieldRequestToken = 0;
   private targetHintBox?: Phaser.GameObjects.Rectangle;
   private targetHintText?: Phaser.GameObjects.Text;
   private objectGroup?: Phaser.GameObjects.Group;
@@ -359,6 +366,11 @@ export class WorldScene extends Phaser.Scene {
 
     if (event.code === "Space" || event.code === "Enter") {
       this.tryInteract();
+      return;
+    }
+
+    if (event.code === "KeyL") {
+      this.talkToCompanion();
     }
   }
 
@@ -541,6 +553,39 @@ export class WorldScene extends Phaser.Scene {
     if (chest) {
       void this.openChest(chest);
     }
+  }
+
+  private talkToCompanion(): void {
+    if (this.loadingMap || this.menuOpen || this.dialogueLines.length > 0 || this.moving) {
+      return;
+    }
+
+    if (!hasCompanion()) {
+      return;
+    }
+
+    const stage = getCurrentLunaStage();
+    const staticLine = getNextStaticLunaLine(stage);
+    if (staticLine) {
+      this.showDialogue([staticLine]);
+      return;
+    }
+
+    const placeholder = "ルナ: ……";
+    const requestToken = ++this.lunaFieldRequestToken;
+    this.showDialogue([placeholder]);
+
+    fetchLunaLine(stage)
+      .catch(() => getLunaLine())
+      .then((line) => {
+        if (requestToken !== this.lunaFieldRequestToken) {
+          return;
+        }
+        if (this.dialogueLines.length === 1 && this.dialogueLines[0] === placeholder) {
+          this.dialogueLines = [line];
+          this.dialogueText?.setText(line);
+        }
+      });
   }
 
   private async handleNpc(npc: NpcDefinition): Promise<void> {
