@@ -92,6 +92,9 @@ export class WorldScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Sprite;
   private playerShadow?: Phaser.GameObjects.Ellipse;
   private playerTile: TilePosition = { x: 0, y: 0 };
+  private companionSprite?: Phaser.GameObjects.Sprite;
+  private companionShadow?: Phaser.GameObjects.Ellipse;
+  private companionTile?: TilePosition;
   private facing: Direction = "down";
   private moving = false;
   private dialogueLines: string[] = [];
@@ -204,6 +207,7 @@ export class WorldScene extends Phaser.Scene {
       );
       this.alignCharacterSprite(this.player, "player").setDepth(20);
       this.playCharacterIdle(this.player, "player", this.facing);
+      this.setupCompanionFollower(entryTile);
       this.createDialoguePanel();
       this.createTargetHintPanel();
       this.setupCamera();
@@ -222,6 +226,66 @@ export class WorldScene extends Phaser.Scene {
     const camera = this.cameras.main;
     camera.setBounds(0, 0, mapPixelWidth, mapPixelHeight);
     camera.startFollow(this.player, true, 1, 1);
+  }
+
+  private setupCompanionFollower(entryTile: TilePosition): void {
+    this.companionSprite = undefined;
+    this.companionShadow = undefined;
+    this.companionTile = undefined;
+
+    if (!hasCompanion()) {
+      return;
+    }
+
+    this.companionTile = { ...entryTile };
+    this.companionShadow = this.add
+      .ellipse(this.toWorldX(entryTile.x), this.toWorldY(entryTile.y) + 13, 20, 6, 0x05080b, 0.3)
+      .setDepth(18);
+    this.companionSprite = this.add.sprite(
+      this.toWorldX(entryTile.x),
+      this.toWorldY(entryTile.y),
+      "companion-luna",
+      0
+    );
+    this.alignCharacterSprite(this.companionSprite, "companion-luna").setDepth(18.5);
+    this.playCharacterIdle(this.companionSprite, "companion-luna", this.facing);
+  }
+
+  private moveCompanion(target: TilePosition): void {
+    if (!this.companionSprite || !this.companionTile) {
+      return;
+    }
+
+    if (this.companionTile.x === target.x && this.companionTile.y === target.y) {
+      return;
+    }
+
+    const direction = this.getDirectionBetween(this.companionTile, target);
+    const companionSprite = this.companionSprite;
+    this.companionTile = target;
+    if (direction) {
+      this.playCharacterWalk(companionSprite, "companion-luna", direction);
+    }
+    this.tweens.add({
+      targets: companionSprite,
+      x: this.toWorldX(target.x),
+      y: this.toWorldY(target.y),
+      duration: 125,
+      ease: "Sine.easeInOut",
+      onComplete: () => {
+        this.playCharacterIdle(companionSprite, "companion-luna", direction ?? "down");
+      }
+    });
+
+    if (this.companionShadow) {
+      this.tweens.add({
+        targets: this.companionShadow,
+        x: this.toWorldX(target.x),
+        y: this.toWorldY(target.y) + 13,
+        duration: 125,
+        ease: "Sine.easeInOut"
+      });
+    }
   }
 
   private async resolveMap(mapId: MapId): Promise<MapDefinition> {
@@ -419,11 +483,13 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
 
+    const previousPlayerTile = { ...this.playerTile };
     this.moving = true;
     this.hideTargetHint();
     this.playerTile = target;
     this.playCharacterWalk(this.player, "player", direction);
     setPlayerPosition(this.currentMap.id, target.x, target.y);
+    this.moveCompanion(previousPlayerTile);
     this.tweens.add({
       targets: this.player,
       x: this.toWorldX(target.x),
