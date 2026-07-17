@@ -6,7 +6,9 @@ Asepriteで書き出したPNGは、下記の形式とファイル名を維持し
 人型キャラクター(`player` / `npc-elder` / `npc-healer` / `npc-shopkeeper` / `npc-armorer`)と
 一部モンスター(`enemy-skeleton` / `enemy-goblin` / `enemy-mage`)は
 Universal LPC Spritesheet Character Generator の素材を合成して生成しています。
-残りのモンスターは四足獣・無定形など人型骨格に合わないためプロシージャル生成のままです。
+`enemy-guardian` / `enemy-bat` / `enemy-slime` は OpenGameArt.org の単体モンスター素材を
+切り出して生成しています。残り(`enemy-wolf` / `enemy-mimic`)は方向別グリッドにきれいに
+収まる素材が見つかっていないため、プロシージャル生成のままです。
 ライセンス・クレジットは [CREDITS.md](CREDITS.md) を参照してください。
 
 ## 形式
@@ -51,4 +53,10 @@ LPC合成モンスター(skeleton/goblin/mage)を再生成する場合(要ネッ
 
 ```powershell
 npm run assets:monsters
+```
+
+OpenGameArt単体モンスター(guardian/bat/slime)を再生成する場合(要ネットワーク接続):
+
+```powershell
+npm run assets:monsters:external
 ```

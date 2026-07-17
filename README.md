@@ -89,11 +89,13 @@ npm run assets:characters
 
 人型キャラクター(プレイヤー/NPC)と一部モンスター(skeleton/goblin/mage)は
 Universal LPC Spritesheet Character Generator の素材を合成して生成しています。
+guardian/bat/slime は OpenGameArt.org の単体モンスター素材から生成しています。
 作り直す場合(要ネットワーク接続):
 
 ```powershell
 npm run assets:humanoids
 npm run assets:monsters
+npm run assets:monsters:external
 ```
 
 ファイル名や各キャラのフレームサイズ、素材のライセンス/クレジットは `public/assets/characters/README.md`

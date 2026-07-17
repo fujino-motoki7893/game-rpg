@@ -5,8 +5,15 @@
 [Universal LPC Spritesheet Character Generator](https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator)
 が配布する素材(body/head/hair/torso/legs/feet/hatの各レイヤー)を `scripts/generate-humanoid-sprites.mjs` /
 `scripts/generate-monster-sprites.mjs` で合成して生成しています。
-残りの `enemy-*.png`(slime/bat/wolf/mimic/guardian)は従来どおり `scripts/generate-character-sheets.mjs`
-によるプロシージャル生成です(LPCには四足獣・無定形モンスター用の骨格が無いため対象外)。
+
+`enemy-guardian.png` / `enemy-bat.png` / `enemy-slime.png` は、LPCコミュニティの作者による
+OpenGameArt.org上の単体モンスター素材(人型骨格に依らない独自シート)を
+`scripts/generate-monster-sprites-external.mjs` で切り出して生成しています。
+
+残りの `enemy-*.png`(wolf/mimic)は従来どおり `scripts/generate-character-sheets.mjs` による
+プロシージャル生成です。狼・ミミック用の素材候補は見つかっていますが、方向別グリッドに
+きれいに収まらない構成(狼はPSD配布で二足/四足ポーズが混在、ミミックは開閉状態のみで
+歩行フレームが無い)のため、安全に変換できる目処が立った時点で対応します。
 
 生成に使用した個別アセットは複数ライセンス(OGA-BY 3.0 / CC-BY-SA 3.0 / CC-BY 4.0 / GPL 2.0 / GPL 3.0 など)で
 提供されています。使用したすべてのアセットに共通して選択可能なのは **GPL 3.0** のみだったため、
@@ -34,6 +41,14 @@
 | feet: shoes (male) | `feet/shoes/basic/male/walk.png` | JaidynReiman, bluecarrot16, Johannes Sjölund (wulax) |
 | hat: wizard hat | `hat/magic/wizard/base/adult/walk.png` | Michael Whitlock (bigbeargames), Tuomo Untinen (reemax), JaidynReiman |
 
+### OpenGameArt単体モンスター素材
+
+| モンスター | 素材 | ページ | 作者 | ライセンス |
+|---|---|---|---|---|
+| enemy-guardian | golem-walk.png | [LPC Golem](https://opengameart.org/content/lpc-golem) | Stephen Challener (Redshrike), William.Thomsponj | CC-BY / GPL / OGA-BY |
+| enemy-bat | bat-NESW.png (48x64) | [Bat (Rework)](https://opengameart.org/content/bat-rework) | bagzie, reworked by AntumDeluge | CC-BY 3.0 / OGA-BY 3.0 |
+| enemy-slime | slime.png | [LPC Monsters](https://opengameart.org/content/lpc-monsters) | Charles Sanchez (CharlesGabriel), bagzie, bluecarrot16 | CC-BY-SA 3.0 / GPL 3.0 |
+
 ## キャラクター/モンスターごとの構成
 
 | キャラクター | 体型/頭 | 髪色 | 服装 |
@@ -46,14 +61,18 @@
 | enemy-skeleton | skeleton body/head | - | (なし、骨のみ) |
 | enemy-goblin | muscular body(緑に再着色)/ goblin head | - | pants |
 | enemy-mage | female body/head | dark_brown | robe (purple) + wizard hat |
+| enemy-guardian | LPC Golem(単体素材、そのまま) | - | - |
+| enemy-bat | Bat Rework(単体素材、そのまま) | - | - |
+| enemy-slime | LPC Monsters slime(単体素材、方向を問わず同一フレームを使い回し) | - | - |
 
 ## 再生成方法
 
 ```powershell
 npm run assets:humanoids
 npm run assets:monsters
+npm run assets:monsters:external
 ```
 
-初回実行時にGitHub(raw.githubusercontent.com)から素材をダウンロードし、`scripts/.lpc-cache/`
-にキャッシュします(ネットワーク接続が必要)。残りの `enemy-*.png` は引き続き `npm run assets:characters`
-(オフラインのプロシージャル生成)で再生成します。
+初回実行時にネットワーク経由で素材をダウンロードし、`scripts/.lpc-cache/`(GitHub)/
+`scripts/.oga-cache/`(OpenGameArt)にキャッシュします。残りの `enemy-*.png`(wolf/mimic)は
+引き続き `npm run assets:characters`(オフラインのプロシージャル生成)で再生成します。

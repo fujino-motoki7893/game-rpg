@@ -5,3 +5,4 @@ dist/
 .env*
 .dev.vars*
 scripts/.lpc-cache/
+scripts/.oga-cache/

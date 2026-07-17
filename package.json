@@ -8,6 +8,7 @@
     "assets:characters": "node scripts/generate-character-sheets.mjs",
     "assets:humanoids": "node scripts/generate-humanoid-sprites.mjs",
     "assets:monsters": "node scripts/generate-monster-sprites.mjs",
+    "assets:monsters:external": "node scripts/generate-monster-sprites-external.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "worker:dev": "npm run build && wrangler dev",
@@ -17,6 +18,7 @@
     "phaser": "^4.1.0"
   },
   "devDependencies": {
+    "adm-zip": "^0.6.0",
     "sharp": "^0.34.5",
     "typescript": "^6.0.3",
     "vite": "^8.0.15",
