@@ -312,17 +312,33 @@ export class BootScene extends Phaser.Scene {
     highlightColor: string,
     up: boolean
   ): void {
-    this.drawDungeonFloor(ctx, shadeColor, "#7c6f56");
-    const steps = up ? [20, 16, 12, 8] : [8, 12, 16, 20];
-    ctx.fillStyle = "#211c1a";
-    steps.forEach((y, index) => {
-      const inset = 5 + index * 2;
-      ctx.fillRect(inset, y, 22 - index * 4, 3);
-    });
-    ctx.fillStyle = highlightColor;
-    ctx.globalAlpha = 0.58;
-    ctx.fillRect(8, up ? 18 : 6, 16, 2);
-    ctx.globalAlpha = 1;
+    // Plain, low-noise backdrop so the step silhouette reads clearly at a
+    // glance (the busy floor-brick pattern used elsewhere made the previous
+    // converging-bars design hard to read as "stairs").
+    ctx.fillStyle = "#241f1c";
+    ctx.fillRect(2, 2, 28, 28);
+
+    const stepCount = 4;
+    const stepWidth = 6;
+    const stepHeight = 5;
+    const baseline = 28;
+    const startX = 3;
+
+    // Ascending step silhouette (like a bar-chart staircase profile). "up"
+    // climbs toward the right, "down" mirrors it so the two tiles are always
+    // visually distinct while both still read clearly as stairs.
+    for (let i = 0; i < stepCount; i += 1) {
+      const height = (i + 1) * stepHeight;
+      const columnIndex = up ? i : stepCount - 1 - i;
+      const x = startX + columnIndex * stepWidth;
+      const y = baseline - height;
+
+      ctx.fillStyle = shadeColor;
+      ctx.fillRect(x, y, stepWidth - 1, height);
+
+      ctx.fillStyle = highlightColor;
+      ctx.fillRect(x, y, stepWidth - 1, 2);
+    }
   }
 
   private createHero(key: string, cloak: string, skin: string, accent: string): void {
