@@ -47,6 +47,7 @@ const DUNGEON_FLOOR_RANGES: Record<number, { min: number; max: number }> = {
 };
 const FIELD_ENEMY_ID_PREFIX = "field-";
 const DUNGEON_ENEMY_ID_PREFIX = "dungeon-";
+export const COMPANION_JOINED_FLAG = "companionJoined";
 
 export const initialSave = (): GameSave => ({
   mapId: "village",
@@ -89,6 +90,8 @@ function loadSave(): GameSave {
     const equipmentStats = calculateEquipmentStats(equipment);
     const hp = normalizeHp(parsed.hp, maxHp + equipmentStats.maxHpBonus);
     const mp = normalizeMp(parsed.mp, maxMp + equipmentStats.maxMpBonus);
+    const companionMaxHp = 20 + level * 5;
+    const companionMaxMp = 14 + level * 4;
     return {
       ...base,
       ...parsed,
@@ -103,6 +106,10 @@ function loadSave(): GameSave {
       equipment,
       potions: items.herb ?? 0,
       flags: parsed.flags ?? {},
+      companionHp:
+        parsed.companionHp !== undefined ? normalizeHp(parsed.companionHp, companionMaxHp) : undefined,
+      companionMp:
+        parsed.companionMp !== undefined ? normalizeMp(parsed.companionMp, companionMaxMp) : undefined,
       defeatedEnemies: parsed.defeatedEnemies ?? [],
       generatedDungeonFloors: parsed.generatedDungeonFloors ?? undefined
     };
@@ -353,6 +360,76 @@ export function getPlayerAttack(): number {
 
 export function getPlayerDefense(): number {
   return getEquipmentStatTotals().defenseBonus;
+}
+
+export function hasCompanion(): boolean {
+  return hasFlag(COMPANION_JOINED_FLAG);
+}
+
+export function getCompanionMaxHp(): number {
+  return 20 + save.level * 5;
+}
+
+export function getCompanionMaxMp(): number {
+  return 14 + save.level * 4;
+}
+
+export function getCompanionAttack(): number {
+  return 3 + save.level * 2;
+}
+
+export function getCompanionHp(): number {
+  ensureCompanionVitals();
+  return save.companionHp ?? getCompanionMaxHp();
+}
+
+export function getCompanionMp(): number {
+  ensureCompanionVitals();
+  return save.companionMp ?? getCompanionMaxMp();
+}
+
+export function recruitCompanion(): void {
+  markFlag(COMPANION_JOINED_FLAG);
+  save.companionHp = getCompanionMaxHp();
+  save.companionMp = getCompanionMaxMp();
+  persistSave();
+}
+
+export function healCompanion(amount: number): number {
+  ensureCompanionVitals();
+  const before = save.companionHp ?? 0;
+  save.companionHp = Math.min(getCompanionMaxHp(), before + amount);
+  persistSave();
+  return save.companionHp - before;
+}
+
+export function restoreCompanionMp(amount: number): number {
+  ensureCompanionVitals();
+  const before = save.companionMp ?? 0;
+  save.companionMp = Math.min(getCompanionMaxMp(), before + amount);
+  persistSave();
+  return save.companionMp - before;
+}
+
+export function damageCompanion(amount: number): void {
+  ensureCompanionVitals();
+  save.companionHp = Math.max(0, (save.companionHp ?? 0) - amount);
+  persistSave();
+}
+
+export function spendCompanionMp(amount: number): boolean {
+  ensureCompanionVitals();
+  if (amount <= 0) {
+    return true;
+  }
+
+  if ((save.companionMp ?? 0) < amount) {
+    return false;
+  }
+
+  save.companionMp = Math.max(0, (save.companionMp ?? 0) - amount);
+  persistSave();
+  return true;
 }
 
 export function buyEquipment(equipmentId: EquipmentId): BuyEquipmentResult {
@@ -673,6 +750,19 @@ function ensureEquipment(): void {
   }
 }
 
+function ensureCompanionVitals(): void {
+  if (!hasFlag(COMPANION_JOINED_FLAG)) {
+    return;
+  }
+
+  if (save.companionHp === undefined) {
+    save.companionHp = getCompanionMaxHp();
+  }
+  if (save.companionMp === undefined) {
+    save.companionMp = getCompanionMaxMp();
+  }
+}
+
 function normalizePositiveInteger(value: unknown, fallback: number): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 1) {
     return fallback;
@@ -800,6 +890,14 @@ function isEquipmentSlot(value: unknown): value is EquipmentSlot {
 function clampVitalsToCurrentMax(): void {
   save.hp = Math.min(save.hp, getPlayerMaxHp());
   save.mp = Math.min(save.mp, getPlayerMaxMp());
+  if (hasFlag(COMPANION_JOINED_FLAG)) {
+    if (save.companionHp !== undefined) {
+      save.companionHp = Math.min(save.companionHp, getCompanionMaxHp());
+    }
+    if (save.companionMp !== undefined) {
+      save.companionMp = Math.min(save.companionMp, getCompanionMaxMp());
+    }
+  }
 }
 
 function syncLegacyPotionCount(): void {

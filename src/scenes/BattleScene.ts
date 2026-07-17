@@ -15,7 +15,13 @@ import {
 import { SKILLS } from "../data/skills";
 import { GAME_EVENTS } from "../game/constants";
 import {
+  damageCompanion,
   damagePlayer,
+  getCompanionAttack,
+  getCompanionHp,
+  getCompanionMaxHp,
+  getCompanionMaxMp,
+  getCompanionMp,
   getPlayerAttack,
   getPlayerDefense,
   getPlayerMaxHp,
@@ -25,10 +31,13 @@ import {
   getSave,
   getTotalItemCount,
   grantReward,
+  hasCompanion,
   hasLearnedSkill,
+  healPlayer,
   markEnemyDefeated,
   persistSave,
   setPlayerPosition,
+  spendCompanionMp,
   spendMp,
   useItem,
   useHealingSkill,
@@ -42,15 +51,21 @@ export class BattleScene extends Phaser.Scene {
   private enemyHp = 0;
   private playerTurn = true;
   private battleOver = false;
+  private companionActive = false;
   private pendingEnemyTurnAt?: number;
   private pendingPlayerTurnAt?: number;
+  private pendingCompanionTurnAt?: number;
+  private playerX = 205;
   private playerSprite?: Phaser.GameObjects.Sprite;
   private enemySprite?: Phaser.GameObjects.Sprite;
+  private companionSprite?: Phaser.GameObjects.Sprite;
   private playerHpFill?: Phaser.GameObjects.Rectangle;
   private enemyHpFill?: Phaser.GameObjects.Rectangle;
+  private companionHpFill?: Phaser.GameObjects.Rectangle;
   private logText?: Phaser.GameObjects.Text;
   private playerHpText?: Phaser.GameObjects.Text;
   private enemyHpText?: Phaser.GameObjects.Text;
+  private companionHpText?: Phaser.GameObjects.Text;
   private buttons: Phaser.GameObjects.Text[] = [];
 
   constructor() {
@@ -61,47 +76,72 @@ export class BattleScene extends Phaser.Scene {
     this.buttons = [];
     this.playerSprite = undefined;
     this.enemySprite = undefined;
+    this.companionSprite = undefined;
     this.playerHpFill = undefined;
     this.enemyHpFill = undefined;
+    this.companionHpFill = undefined;
     this.logText = undefined;
     this.playerHpText = undefined;
     this.enemyHpText = undefined;
+    this.companionHpText = undefined;
     this.enemy = ENEMIES[payload.enemyKey] ?? ENEMIES.goblin;
     this.enemyInstanceId = payload.enemyInstanceId;
     this.enemyHp = this.enemy.maxHp;
     this.playerTurn = true;
     this.battleOver = false;
+    this.companionActive = hasCompanion();
     this.pendingEnemyTurnAt = undefined;
     this.pendingPlayerTurnAt = undefined;
+    this.pendingCompanionTurnAt = undefined;
+
+    this.playerX = this.companionActive ? 160 : 205;
 
     this.add.rectangle(400, 320, 800, 640, 0x07090d, 0.88);
     this.add.rectangle(400, 324, 660, 456, 0x101923, 0.98).setStrokeStyle(3, 0xd8bc72);
     this.add.rectangle(400, 134, 600, 2, 0xf0d98a, 0.75);
     this.add.text(116, 112, "ターンバトル", this.textStyle(24, "#f6e4a4")).setShadow(2, 2, "#000000", 3);
     this.add.ellipse(560, 286, 106, 22, 0x05080b, 0.36);
-    this.add.ellipse(205, 308, 80, 18, 0x05080b, 0.36);
+    this.add.ellipse(this.playerX, 308, 80, 18, 0x05080b, 0.36);
     this.enemySprite = this.add
       .sprite(560, 218, this.enemy.texture, 0)
       .setOrigin(0.5, getCharacterOriginY(this.enemy.texture))
       .setScale(getCharacterBattleScale(this.enemy.texture, 3))
       .setDepth(5);
     this.playerSprite = this.add
-      .sprite(205, 258, "player", 0)
+      .sprite(this.playerX, 258, "player", 0)
       .setOrigin(0.5, getCharacterOriginY("player"))
       .setScale(getCharacterBattleScale("player", 2.6))
       .setDepth(5);
     this.playCharacterIdle(this.enemySprite, this.enemy.texture);
     this.playCharacterIdle(this.playerSprite, "player");
 
-    this.playerHpText = this.add.text(116, 338, "", this.textStyle(18, "#f5f1dc"));
-    this.enemyHpText = this.add.text(448, 338, "", this.textStyle(18, "#f5f1dc"));
-    this.add.rectangle(116, 370, 188, 10, 0x1c2732, 1).setOrigin(0, 0.5);
-    this.add.rectangle(448, 370, 188, 10, 0x1c2732, 1).setOrigin(0, 0.5);
-    this.playerHpFill = this.add.rectangle(118, 370, 184, 6, 0xd95745, 1).setOrigin(0, 0.5);
-    this.enemyHpFill = this.add.rectangle(450, 370, 184, 6, 0xd95745, 1).setOrigin(0, 0.5);
-    this.add.rectangle(116, 370, 188, 10).setStrokeStyle(1, 0xf1d585, 0.8).setOrigin(0, 0.5);
-    this.add.rectangle(448, 370, 188, 10).setStrokeStyle(1, 0xf1d585, 0.8).setOrigin(0, 0.5);
-    this.logText = this.add.text(116, 384, "", {
+    if (this.companionActive) {
+      this.add.ellipse(272, 288, 74, 16, 0x05080b, 0.32);
+      this.companionSprite = this.add
+        .sprite(272, 232, "companion-luna", 0)
+        .setOrigin(0.5, getCharacterOriginY("companion-luna"))
+        .setScale(getCharacterBattleScale("companion-luna", 2.3))
+        .setDepth(4);
+      this.playCharacterIdle(this.companionSprite, "companion-luna");
+    }
+
+    this.playerHpText = this.add.text(116, 300, "", this.textStyle(17, "#f5f1dc"));
+    this.enemyHpText = this.add.text(448, 300, "", this.textStyle(18, "#f5f1dc"));
+    this.add.rectangle(116, 322, 188, 10, 0x1c2732, 1).setOrigin(0, 0.5);
+    this.add.rectangle(448, 322, 188, 10, 0x1c2732, 1).setOrigin(0, 0.5);
+    this.playerHpFill = this.add.rectangle(118, 322, 184, 6, 0xd95745, 1).setOrigin(0, 0.5);
+    this.enemyHpFill = this.add.rectangle(450, 322, 184, 6, 0xd95745, 1).setOrigin(0, 0.5);
+    this.add.rectangle(116, 322, 188, 10).setStrokeStyle(1, 0xf1d585, 0.8).setOrigin(0, 0.5);
+    this.add.rectangle(448, 322, 188, 10).setStrokeStyle(1, 0xf1d585, 0.8).setOrigin(0, 0.5);
+
+    if (this.companionActive) {
+      this.companionHpText = this.add.text(116, 342, "", this.textStyle(17, "#f5f1dc"));
+      this.add.rectangle(116, 364, 188, 10, 0x1c2732, 1).setOrigin(0, 0.5);
+      this.companionHpFill = this.add.rectangle(118, 364, 184, 6, 0xb28aff, 1).setOrigin(0, 0.5);
+      this.add.rectangle(116, 364, 188, 10).setStrokeStyle(1, 0xf1d585, 0.8).setOrigin(0, 0.5);
+    }
+
+    this.logText = this.add.text(116, 390, "", {
       ...this.textStyle(18, "#fff4cf"),
       wordWrap: { width: 568, useAdvancedWrap: true },
       lineSpacing: 8
@@ -118,6 +158,11 @@ export class BattleScene extends Phaser.Scene {
     }
 
     const now = this.time.now;
+    if (this.pendingCompanionTurnAt !== undefined && now >= this.pendingCompanionTurnAt) {
+      this.pendingCompanionTurnAt = undefined;
+      this.runCompanionTurn();
+    }
+
     if (this.pendingEnemyTurnAt !== undefined && now >= this.pendingEnemyTurnAt) {
       this.pendingEnemyTurnAt = undefined;
       this.runEnemyTurn();
@@ -269,10 +314,10 @@ export class BattleScene extends Phaser.Scene {
     this.refreshHud();
     if (result.healed > 0) {
       this.pulseTarget(this.playerSprite);
-      this.showDamageNumber(result.healed, 205, 190, "#a5ffb2", "+");
+      this.showDamageNumber(result.healed, this.playerX, 190, "#a5ffb2", "+");
     } else if (result.restoredMp > 0) {
       this.pulseTarget(this.playerSprite);
-      this.showDamageNumber(result.restoredMp, 205, 190, "#8fc6ff", "+");
+      this.showDamageNumber(result.restoredMp, this.playerX, 190, "#8fc6ff", "+");
     }
     this.setLog(this.getItemUseMessage(item.name, result.healed, result.restoredMp));
     this.endPlayerTurn();
@@ -304,7 +349,7 @@ export class BattleScene extends Phaser.Scene {
 
       this.refreshHud();
       this.pulseTarget(this.playerSprite);
-      this.showDamageNumber(result.healed, 205, 190, "#a5ffb2", "+");
+      this.showDamageNumber(result.healed, this.playerX, 190, "#a5ffb2", "+");
       this.setLog(`${skill.name}でHPを${result.healed}回復した。`);
       this.endPlayerTurn();
       return;
@@ -353,8 +398,59 @@ export class BattleScene extends Phaser.Scene {
 
   private endPlayerTurn(): void {
     this.playerTurn = false;
-    this.pendingEnemyTurnAt = this.time.now + 700;
     this.setButtonsEnabled(false);
+    if (this.companionActive && getCompanionHp() > 0) {
+      this.pendingCompanionTurnAt = this.time.now + 700;
+    } else {
+      this.pendingEnemyTurnAt = this.time.now + 700;
+    }
+  }
+
+  private runCompanionTurn(): void {
+    try {
+      this.companionTurn();
+    } catch (error) {
+      console.error(error);
+      this.pendingCompanionTurnAt = undefined;
+      this.pendingEnemyTurnAt = this.time.now + 200;
+    }
+  }
+
+  private companionTurn(): void {
+    if (!this.companionActive || getCompanionHp() <= 0) {
+      this.pendingEnemyTurnAt = this.time.now + 300;
+      return;
+    }
+
+    const maxHp = getPlayerMaxHp();
+    const playerHp = getSave().hp;
+    const healCost = 4;
+
+    if (playerHp > 0 && playerHp < maxHp * 0.4 && getCompanionMp() >= healCost) {
+      spendCompanionMp(healCost);
+      const healed = healPlayer(Math.round(maxHp * 0.35));
+      this.refreshHud();
+      this.pulseTarget(this.playerSprite);
+      this.showDamageNumber(healed, this.playerX, 190, "#c6ffd8", "+");
+      this.setLog(`ルナの回復魔法！HPを${healed}回復した。`);
+      this.pendingEnemyTurnAt = this.time.now + 700;
+      return;
+    }
+
+    const attack = getCompanionAttack();
+    const damage = Phaser.Math.Between(Math.max(1, attack - 1), attack + 2);
+    this.enemyHp = Math.max(0, this.enemyHp - damage);
+    this.refreshHud();
+    this.flashTarget(this.enemySprite);
+    this.showDamageNumber(damage, 560, 146, "#c9baff");
+
+    if (this.enemyHp <= 0) {
+      this.winBattle(damage);
+      return;
+    }
+
+    this.setLog(`ルナの魔法弾！${damage}のダメージを与えた。`);
+    this.pendingEnemyTurnAt = this.time.now + 700;
   }
 
   private runEnemyTurn(): void {
@@ -372,11 +468,29 @@ export class BattleScene extends Phaser.Scene {
 
   private enemyTurn(): void {
     const rawDamage = Phaser.Math.Between(Math.max(1, this.enemy.attack - 2), this.enemy.attack + 2);
+    const targetsCompanion =
+      this.companionActive && getCompanionHp() > 0 && Phaser.Math.Between(1, 100) <= 30;
+
+    if (targetsCompanion) {
+      const damage = Math.max(1, rawDamage);
+      damageCompanion(damage);
+      this.refreshHud();
+      this.flashTarget(this.companionSprite);
+      this.showDamageNumber(damage, 272, 164, "#ff9a7a");
+      this.setLog(
+        getCompanionHp() <= 0
+          ? `${this.enemy.name}の攻撃。ルナは倒れてしまった。`
+          : `${this.enemy.name}の攻撃。ルナが${damage}のダメージを受けた。`
+      );
+      this.pendingPlayerTurnAt = this.time.now + 700;
+      return;
+    }
+
     const damage = Math.max(1, rawDamage - getPlayerDefense());
     damagePlayer(damage);
     this.refreshHud();
     this.flashTarget(this.playerSprite);
-    this.showDamageNumber(damage, 205, 190, "#ff9a7a");
+    this.showDamageNumber(damage, this.playerX, 190, "#ff9a7a");
 
     if (getSave().hp <= 0) {
       this.loseBattle(damage);
@@ -452,6 +566,18 @@ export class BattleScene extends Phaser.Scene {
       184 * Phaser.Math.Clamp(this.enemyHp / this.enemy.maxHp, 0, 1),
       6
     );
+
+    if (this.companionActive) {
+      const companionMaxHp = getCompanionMaxHp();
+      const companionMaxMp = getCompanionMaxMp();
+      const companionHp = getCompanionHp();
+      const companionMp = getCompanionMp();
+      this.companionHpText?.setText(`ルナ HP ${companionHp}/${companionMaxHp}  MP ${companionMp}/${companionMaxMp}`);
+      this.companionHpFill?.setDisplaySize(
+        184 * Phaser.Math.Clamp(companionHp / companionMaxHp, 0, 1),
+        6
+      );
+    }
   }
 
   private setLog(message: string): void {

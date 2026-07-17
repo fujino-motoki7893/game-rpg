@@ -1,7 +1,7 @@
 # キャラクター素材クレジット
 
-`player.png` / `npc-elder.png` / `npc-healer.png` / `npc-shopkeeper.png` / `npc-armorer.png` および
-`enemy-skeleton.png` / `enemy-goblin.png` / `enemy-mage.png` は
+`player.png` / `npc-elder.png` / `npc-healer.png` / `npc-shopkeeper.png` / `npc-armorer.png` /
+`companion-luna.png` および `enemy-skeleton.png` / `enemy-goblin.png` / `enemy-mage.png` は
 [Universal LPC Spritesheet Character Generator](https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator)
 が配布する素材(body/head/hair/torso/legs/feet/hatの各レイヤー)を `scripts/generate-humanoid-sprites.mjs` /
 `scripts/generate-monster-sprites.mjs` で合成して生成しています。
@@ -36,6 +36,7 @@ OpenGameArt.org上の単体モンスター素材(人型骨格に依らない独�
 | hair (plain) | `hair/plain/adult/walk.png` | JaidynReiman, Manuel Riecke (MrBeast), Joe White |
 | torso: vest (male) | `torso/clothes/vest/male/walk/{blue,tan}.png` | bluecarrot16, Thane Brimhall (pennomi), laetissima, Stephen Challener (Redshrike), Johannes Sjölund (wulax) |
 | torso: robe (female) | `torso/clothes/robe/female/walk/{brown,white,purple}.png` | Luke Mehl |
+| torso: dress (sash, female) | `dress/sash/female/walk/lavender.png` | bluecarrot16, Thane Brimhall (pennomi), laetissima, Matthew Krohn (makrohn) |
 | torso: plate armour (male) | `torso/armour/plate/male/walk.png` | Napsio (Vitruvian Studio), JaidynReiman, bluecarrot16, Michael Whitlock (bigbeargames), Johannes Sjölund (wulax) |
 | legs: pants (male) | `legs/pants/male/walk.png` | bluecarrot16, JaidynReiman, ElizaWy, Matthew Krohn (makrohn), Johannes Sjölund (wulax), Stephen Challener (Redshrike) |
 | feet: shoes (male) | `feet/shoes/basic/male/walk.png` | JaidynReiman, bluecarrot16, Johannes Sjölund (wulax) |
@@ -58,6 +59,7 @@ OpenGameArt.org上の単体モンスター素材(人型骨格に依らない独�
 | npc-healer | female | dark_brown | robe (white) |
 | npc-shopkeeper | male | light_brown | vest (tan) + pants + shoes |
 | npc-armorer | male | black | plate armour + pants + shoes |
+| companion-luna | female | platinum | dress (lavender sash) |
 | enemy-skeleton | skeleton body/head | - | (なし、骨のみ) |
 | enemy-goblin | muscular body(緑に再着色)/ goblin head | - | pants |
 | enemy-mage | female body/head | dark_brown | robe (purple) + wizard hat |

@@ -124,6 +124,14 @@ export const CHARACTER_SPRITES: CharacterSpriteDefinition[] = [
     frameHeight: 48,
     role: "creature",
     battleScale: 2.15
+  },
+  {
+    key: "companion-luna",
+    path: "assets/characters/companion-luna.png",
+    frameWidth: 48,
+    frameHeight: 48,
+    role: "humanoid",
+    battleScale: 1.9
   }
 ];
 

@@ -27,7 +27,16 @@ export const MAPS: Record<MapId, MapDefinition> = {
       { id: "elder", name: "村長ローアン", texture: "npc-elder", x: 3, y: 4 },
       { id: "healer", name: "ミラ", texture: "npc-healer", x: 15, y: 5 },
       { id: "shopkeeper", name: "道具屋ニコ", texture: "npc-shopkeeper", x: 6, y: 10 },
-      { id: "equipmentShopkeeper", name: "装備屋ガロ", texture: "npc-armorer", x: 13, y: 10 }
+      { id: "equipmentShopkeeper", name: "装備屋ガロ", texture: "npc-armorer", x: 13, y: 10 },
+      {
+        id: "luna",
+        name: "ルナ",
+        texture: "companion-luna",
+        x: 9,
+        y: 3,
+        requiresFlag: "treasureFound",
+        hiddenIfFlag: "companionJoined"
+      }
     ],
     chests: [],
     enemies: []
@@ -126,7 +135,16 @@ export const EXPANDED_MAPS: Partial<Record<MapId, MapDefinition>> = {
       { id: "elder", name: "村長ローアン", texture: "npc-elder", x: 3, y: 4 },
       { id: "healer", name: "ミラ", texture: "npc-healer", x: 15, y: 5 },
       { id: "shopkeeper", name: "道具屋ニコ", texture: "npc-shopkeeper", x: 6, y: 10 },
-      { id: "equipmentShopkeeper", name: "装備屋ガロ", texture: "npc-armorer", x: 13, y: 10 }
+      { id: "equipmentShopkeeper", name: "装備屋ガロ", texture: "npc-armorer", x: 13, y: 10 },
+      {
+        id: "luna",
+        name: "ルナ",
+        texture: "companion-luna",
+        x: 9,
+        y: 3,
+        requiresFlag: "treasureFound",
+        hiddenIfFlag: "companionJoined"
+      }
     ],
     chests: [],
     enemies: []

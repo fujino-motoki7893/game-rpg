@@ -32,7 +32,8 @@ const HAIR_PALETTES = {
   dark_brown: ["#050100", "#160701", "#290E02D9", "#290E029C", "#290E02", "#421603", "#5F1F04", "#792806"],
   light_brown: ["#1A0E04", "#301B07", "#60350FD9", "#60350F9C", "#60350F", "#7D4513", "#AE682A", "#C88D58"],
   white: ["#1D1D21", "#484E57", "#8B9498D9", "#8B94989C", "#8B9498", "#B8BBBC", "#D8DCDC", "#FFFFFF"],
-  black: ["#000000", "#080A0A", "#101414D9", "#1014149C", "#101414", "#1C2222", "#31313E", "#4A5057"]
+  black: ["#000000", "#080A0A", "#101414D9", "#1014149C", "#101414", "#1C2222", "#31313E", "#4A5057"],
+  platinum: ["#1C0E06", "#7D5D5D", "#A87D52D9", "#A87D529C", "#A87D52", "#C0AB81", "#EDDF95", "#F6F6F3"]
 };
 
 // Layers are composited bottom-to-top in this order (matches the source
@@ -73,6 +74,12 @@ const CHARACTERS = {
     legs: "legs/pants/male/walk.png",
     torso: "torso/armour/plate/male/walk.png",
     hair: "black"
+  },
+  "companion-luna": {
+    body: "body/bodies/female/walk.png",
+    head: "head/heads/human/female/walk.png",
+    torso: "dress/sash/female/walk/lavender.png",
+    hair: "platinum"
   }
 };
 

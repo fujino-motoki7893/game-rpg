@@ -27,6 +27,10 @@ export interface NpcDefinition extends TilePosition {
   name: string;
   texture: string;
   solid?: boolean;
+  /** NPC only appears once this save flag is true. */
+  requiresFlag?: string;
+  /** NPC is hidden once this save flag is true (e.g. after joining the party). */
+  hiddenIfFlag?: string;
 }
 
 export interface ChestDefinition extends TilePosition {
@@ -124,6 +128,8 @@ export interface GameSave {
   equipmentInventory: EquipmentInventory;
   equipment: EquipmentLoadout;
   flags: Record<string, boolean>;
+  companionHp?: number;
+  companionMp?: number;
   defeatedEnemies: string[];
   generatedDungeon?: MapDefinition;
   dungeonTier?: number;

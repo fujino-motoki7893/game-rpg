@@ -16,6 +16,8 @@ import {
   addItem,
   addEquipment,
   ensureDungeonProgress,
+  getCompanionMaxHp,
+  getCompanionMaxMp,
   getGeneratedDungeonFloor,
   getDungeonTier,
   getItemCount,
@@ -23,15 +25,19 @@ import {
   getPlayerMaxHp,
   getPlayerMaxMp,
   getSave,
+  hasCompanion,
   hasFlag,
+  healCompanion,
   healPlayer,
   isExpandedWorldUnlocked,
   markFlag,
   persistSave,
+  recruitCompanion,
   resetDungeonProgress,
   resetSave,
   resetDungeonEnemyDefeats,
   resetFieldEnemyDefeats,
+  restoreCompanionMp,
   restorePlayerMp,
   setCurrentDungeonFloor,
   setGeneratedDungeonFloor,
@@ -286,7 +292,7 @@ export class WorldScene extends Phaser.Scene {
       });
     });
 
-    this.currentMap.npcs.forEach((npc) => {
+    this.getActiveNpcs().forEach((npc) => {
       this.addShadow(npc.x, npc.y, 11);
       const sprite = this.add.sprite(this.toWorldX(npc.x), this.toWorldY(npc.y), npc.texture, 0);
       this.alignCharacterSprite(sprite, npc.texture).setDepth(12);
@@ -561,7 +567,23 @@ export class WorldScene extends Phaser.Scene {
       }
       healPlayer(getPlayerMaxHp());
       restorePlayerMp(getPlayerMaxMp());
+      if (hasCompanion()) {
+        healCompanion(getCompanionMaxHp());
+        restoreCompanionMp(getCompanionMaxMp());
+      }
       stateChanged = true;
+    }
+
+    if (npc.id === "luna") {
+      recruitCompanion();
+      stateChanged = true;
+      shouldReloadMap = true;
+      dialogue = [
+        "ルナ: 太陽石を取り戻したのですね。",
+        "ルナ: でも、次の月影石は深い洞窟の奥。一人で挑むには荷が重いはず。",
+        "ルナ: 私が手助けしましょう。仲間に加えてください。",
+        "ルナが仲間になった！"
+      ];
     }
 
     if (npc.id === "elder") {
@@ -893,8 +915,16 @@ export class WorldScene extends Phaser.Scene {
     return hash;
   }
 
+  private getActiveNpcs(): NpcDefinition[] {
+    return this.currentMap.npcs.filter(
+      (npc) =>
+        (!npc.requiresFlag || hasFlag(npc.requiresFlag)) &&
+        (!npc.hiddenIfFlag || !hasFlag(npc.hiddenIfFlag))
+    );
+  }
+
   private npcAt(position: TilePosition): NpcDefinition | undefined {
-    return this.currentMap.npcs.find((npc) => npc.x === position.x && npc.y === position.y);
+    return this.getActiveNpcs().find((npc) => npc.x === position.x && npc.y === position.y);
   }
 
   private chestAt(position: TilePosition): ChestDefinition | undefined {
