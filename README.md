@@ -81,13 +81,21 @@ Asepriteで作るキャラクターは `public/assets/characters` に配置し�
 列: 待機 / 歩き1 / 歩き2 / 歩き3
 ```
 
-仮のスプライトシートを作り直す場合:
+仮のスプライトシート(モンスター等)を作り直す場合:
 
 ```powershell
 npm run assets:characters
 ```
 
-ファイル名や各キャラのフレームサイズは `public/assets/characters/README.md` を参照してください。
+人型キャラクター(プレイヤー/NPC)は Universal LPC Spritesheet Character Generator の素材を合成して
+生成しています。作り直す場合(要ネットワーク接続):
+
+```powershell
+npm run assets:humanoids
+```
+
+ファイル名や各キャラのフレームサイズ、素材のライセンス/クレジットは `public/assets/characters/README.md`
+と `public/assets/characters/CREDITS.md` を参照してください。
 
 ## デプロイ
 

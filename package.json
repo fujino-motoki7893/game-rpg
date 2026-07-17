@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "assets:characters": "node scripts/generate-character-sheets.mjs",
+    "assets:humanoids": "node scripts/generate-humanoid-sprites.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "worker:dev": "npm run build && wrangler dev",

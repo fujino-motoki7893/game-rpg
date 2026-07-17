@@ -3,6 +3,10 @@
 Phaserが読み込む固定グリッドPNGを配置するフォルダです。
 Asepriteで書き出したPNGは、下記の形式とファイル名を維持して差し替えてください。
 
+人型キャラクター(`player` / `npc-elder` / `npc-healer` / `npc-shopkeeper` / `npc-armorer`)は
+Universal LPC Spritesheet Character Generator の素材を合成して生成しています。
+ライセンス・クレジットは [CREDITS.md](CREDITS.md) を参照してください。
+
 ## 形式
 
 - ファイル形式: 透明PNG
@@ -29,8 +33,14 @@ Asepriteで書き出したPNGは、下記の形式とファイル名を維持し
 - `enemy-mimic.png`: 32x32
 - `enemy-guardian.png`: 48x48
 
-仮素材を再生成する場合:
+仮素材(モンスター等)を再生成する場合:
 
 ```powershell
 npm run assets:characters
+```
+
+人型キャラクターを再生成する場合(要ネットワーク接続):
+
+```powershell
+npm run assets:humanoids
 ```
