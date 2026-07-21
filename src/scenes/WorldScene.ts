@@ -527,6 +527,15 @@ export class WorldScene extends Phaser.Scene {
       }
 
       enemyObject.nextMoveAt = now + ENEMY_DECISION_INTERVAL_MS;
+
+      if (
+        this.shouldEnemyChase(enemyObject) &&
+        this.distance(enemyObject.tile, this.playerTile) <= 1
+      ) {
+        this.startBattle(enemyObject.enemy);
+        return;
+      }
+
       const nextTile = this.chooseEnemyNextTile(enemyObject);
       if (!nextTile) {
         return;
@@ -541,6 +550,10 @@ export class WorldScene extends Phaser.Scene {
       return this.chooseFleeTile(enemyObject);
     }
 
+    if (this.shouldEnemyChase(enemyObject)) {
+      return this.chooseChaseTile(enemyObject);
+    }
+
     return this.choosePatrolTile(enemyObject);
   }
 
@@ -548,6 +561,14 @@ export class WorldScene extends Phaser.Scene {
     return (
       this.distance(enemyObject.tile, this.playerTile) <= ENEMY_AWARENESS_RANGE &&
       this.isEnemyWeakerThanPlayer(enemyObject.enemy)
+    );
+  }
+
+  private shouldEnemyChase(enemyObject: EnemyVisual): boolean {
+    return (
+      this.currentMap.id === "dungeon" &&
+      this.distance(enemyObject.tile, this.playerTile) <= ENEMY_AWARENESS_RANGE &&
+      !this.isEnemyWeakerThanPlayer(enemyObject.enemy)
     );
   }
 
@@ -560,6 +581,19 @@ export class WorldScene extends Phaser.Scene {
       }))
       .filter((option) => option.distance > currentDistance)
       .sort((a, b) => b.distance - a.distance);
+
+    return options[0]?.position;
+  }
+
+  private chooseChaseTile(enemyObject: EnemyVisual): TilePosition | undefined {
+    const currentDistance = this.distance(enemyObject.tile, this.playerTile);
+    const options = this.getEnemyMoveOptions(enemyObject)
+      .map((position) => ({
+        position,
+        distance: this.distance(position, this.playerTile)
+      }))
+      .filter((option) => option.distance < currentDistance)
+      .sort((a, b) => a.distance - b.distance);
 
     return options[0]?.position;
   }
