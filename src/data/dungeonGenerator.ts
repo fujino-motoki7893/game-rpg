@@ -12,11 +12,13 @@ const HEIGHT = 30;
 const REGULAR_ENEMY_COUNT = 5;
 const DUNGEON_NAMES: Record<number, string> = {
   1: "エンバーフォール洞窟",
-  2: "黒曜の深層洞窟"
+  2: "黒曜の深層洞窟",
+  3: "月蝕の深奥"
 };
 const FIELD_DUNGEON_ENTRANCES: Record<number, TilePosition> = {
   1: { x: 6, y: 24 },
-  2: { x: 34, y: 6 }
+  2: { x: 34, y: 6 },
+  3: { x: 36, y: 16 }
 };
 const DUNGEON_ENEMY_WEIGHTS_BY_TIER: Record<number, DungeonEnemyKey[]> = {
   1: [
@@ -38,16 +40,28 @@ const DUNGEON_ENEMY_WEIGHTS_BY_TIER: Record<number, DungeonEnemyKey[]> = {
     "direWolf",
     "darkMage",
     "stoneGolem"
+  ],
+  3: [
+    "orc",
+    "direWolf",
+    "direWolf",
+    "darkMage",
+    "darkMage",
+    "stoneGolem",
+    "stoneGolem",
+    "mimic"
   ]
 };
 const DUNGEON_GUARDIAN_KEYS: Record<number, string> = {
   1: "guardian",
-  2: "deepGuardian"
+  2: "deepGuardian",
+  3: "eclipseBeast"
 };
 const RELIC_CHEST_IDS: Record<number, string> = {
   1: "relic-chest",
   2: "moon-relic-chest"
 };
+const FINAL_RELIC_MAX_TIER = 2;
 const DEFAULT_DUNGEON_ENEMY_WEIGHTS: DungeonEnemyKey[] = [
   "goblin",
   "goblin",
@@ -166,14 +180,21 @@ export function generateDungeon(
   const requiredTiles: TilePosition[] = [spawn];
   const endCenter = roomCenter(endRoom);
 
+  const hasFinalRelic = hasFinalRelicForTier(tier);
   let relicChest: TilePosition | undefined;
   let guardian: TilePosition | undefined;
   if (isFinalFloor) {
-    relicChest = { x: endCenter.x, y: Math.max(endRoom.y + 1, endCenter.y - 1) };
-    placeMarker(grid, relicChest, "B");
-    reserved.add(positionKey(relicChest));
+    if (hasFinalRelic) {
+      relicChest = { x: endCenter.x, y: Math.max(endRoom.y + 1, endCenter.y - 1) };
+      placeMarker(grid, relicChest, "B");
+      reserved.add(positionKey(relicChest));
+    }
 
-    guardian = findOpenFloorNear(grid, { x: relicChest.x, y: relicChest.y + 1 }, reserved);
+    guardian = findOpenFloorNear(
+      grid,
+      relicChest ? { x: relicChest.x, y: relicChest.y + 1 } : endCenter,
+      reserved
+    );
     placeMarker(grid, guardian, "D");
     reserved.add(positionKey(guardian));
     requiredTiles.push(guardian);
@@ -295,7 +316,14 @@ export function getDungeonEnemyKeysForTier(tier: number): DungeonEnemyKey[] {
   return [...new Set(weights)];
 }
 
+export function hasFinalRelicForTier(tier: number): boolean {
+  return normalizeDungeonTier(tier) <= FINAL_RELIC_MAX_TIER;
+}
+
 function normalizeDungeonTier(tier: number | undefined): number {
+  if (tier && tier >= 3) {
+    return 3;
+  }
   return tier && tier >= 2 ? 2 : 1;
 }
 

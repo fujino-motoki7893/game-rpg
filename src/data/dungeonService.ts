@@ -1,7 +1,8 @@
 import {
   generateDungeon,
   getDungeonEnemyKeysForTier,
-  getDungeonGuardianKeyForTier
+  getDungeonGuardianKeyForTier,
+  hasFinalRelicForTier
 } from "./dungeonGenerator";
 import { ENEMIES } from "./enemies";
 import { isEquipmentId } from "./equipment";
@@ -94,9 +95,12 @@ function isDungeonMap(value: unknown, floor: number, floorCount: number, tier: n
   }
 
   if (floor >= floorCount) {
+    const hasFinalRelic = hasFinalRelicForTier(tier);
     return (
       map.chests.some(isItemRewardChest) &&
-      map.chests.some((chest) => chest.reward?.type === "relic" && isTilePosition(chest)) &&
+      (hasFinalRelic
+        ? map.chests.some((chest) => chest.reward?.type === "relic" && isTilePosition(chest))
+        : !map.chests.some((chest) => chest.reward?.type === "relic")) &&
       map.enemies.some(
         (enemy) =>
           enemy.id === "dungeon-guardian" &&

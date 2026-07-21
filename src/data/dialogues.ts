@@ -6,6 +6,27 @@ const LUNA_SEEN_FLAG_PREFIX = "luna-line-seen:";
 
 export function getNpcDialogue(npcId: string): string[] {
   if (npcId === "elder") {
+    if (hasFlag("thirdQuestComplete")) {
+      return [
+        "村長ローアン: おぬしのおかげで、この谷に静かな夜が戻った。",
+        "村長ローアン: これからも、この村を見守っておくれ。"
+      ];
+    }
+
+    if (hasFlag("finalBeastDefeated")) {
+      return [
+        "村長ローアン: 月蝕の魔獣は討ち果たしたのだったな……!",
+        "村長ローアン: 詳しい話を聞かせてくれ。"
+      ];
+    }
+
+    if (hasFlag("thirdQuestAccepted")) {
+      return [
+        "村長ローアン: 月蝕の魔獣は、草原の奥に開いた新たな坑道に潜んでいるという。",
+        "村長ローアン: くれぐれも、油断はしないでくれ。"
+      ];
+    }
+
     if (hasFlag("secondQuestComplete")) {
       return [
         "村長ローアン: 太陽石と月影石がそろい、谷の結界は強くなった。",
@@ -65,6 +86,9 @@ export function getNpcDialogue(npcId: string): string[] {
 
 export function getCurrentLunaStage(): LunaQuestStage {
   return getLunaQuestStage({
+    thirdQuestComplete: hasFlag("thirdQuestComplete"),
+    finalBeastDefeated: hasFlag("finalBeastDefeated"),
+    thirdQuestAccepted: hasFlag("thirdQuestAccepted"),
     secondQuestComplete: hasFlag("secondQuestComplete"),
     secondTreasureFound: hasFlag("secondTreasureFound"),
     secondQuestAccepted: hasFlag("secondQuestAccepted"),
@@ -117,6 +141,18 @@ export async function fetchLunaLine(stage: LunaQuestStage): Promise<string> {
 }
 
 export function getObjective(): string {
+  if (hasFlag("thirdQuestComplete")) {
+    return "谷に戻った平穏を見守る";
+  }
+
+  if (hasFlag("finalBeastDefeated")) {
+    return "村長ローアンに討伐を報告する";
+  }
+
+  if (hasFlag("thirdQuestAccepted")) {
+    return "月蝕の魔獣を討伐する";
+  }
+
   if (hasFlag("secondQuestComplete")) {
     return "村を見守る";
   }

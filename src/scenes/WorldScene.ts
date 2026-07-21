@@ -35,6 +35,7 @@ import {
   hasFlag,
   healCompanion,
   healPlayer,
+  isEnemyDefeated,
   isExpandedWorldUnlocked,
   markFlag,
   persistSave,
@@ -99,6 +100,7 @@ export class WorldScene extends Phaser.Scene {
   private moving = false;
   private dialogueLines: string[] = [];
   private dialogueIndex = 0;
+  private dialogueOnComplete?: () => void;
   private dialogueBox?: Phaser.GameObjects.Rectangle;
   private dialogueAccent?: Phaser.GameObjects.Rectangle;
   private dialogueText?: Phaser.GameObjects.Text;
@@ -419,7 +421,35 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private refreshAfterBattle(): void {
-    void this.loadMap(this.currentMap.id, this.playerTile);
+    void this.loadMap(this.currentMap.id, this.playerTile).then(() => {
+      this.checkFinalBossDefeat();
+    });
+  }
+
+  private checkFinalBossDefeat(): void {
+    if (
+      this.currentMap.id !== "dungeon" ||
+      getDungeonTier() !== 3 ||
+      !isEnemyDefeated("dungeon-guardian") ||
+      hasFlag("finalBeastDefeated")
+    ) {
+      return;
+    }
+
+    markFlag("finalBeastDefeated");
+    this.game.events.emit(GAME_EVENTS.stateChanged);
+    void this.loadMap("field", this.getFieldDungeonEntrance()).then(() => {
+      this.showDialogue([
+        "月蝕の魔獣を討ち果たした。深い霧が晴れていくのがわかる。",
+        "ルナ: ……終わった、のですね。",
+        "村長ローアンに報告しに行きましょう。"
+      ]);
+    });
+  }
+
+  private launchEnding(): void {
+    this.scene.launch("EndingScene");
+    this.scene.pause();
   }
 
   private handleKeyDown(event: KeyboardEvent): void {
@@ -711,6 +741,7 @@ export class WorldScene extends Phaser.Scene {
     let dialogue: string[] | undefined;
     let stateChanged = false;
     let shouldReloadMap = false;
+    let onDialogueComplete: (() => void) | undefined;
 
     if (npc.id === "healer") {
       if (getItemCount("herb") < 5) {
@@ -766,17 +797,38 @@ export class WorldScene extends Phaser.Scene {
         const save = getSave();
         save.gold += 120;
         markFlag("secondQuestComplete");
+        markFlag("thirdQuestAccepted");
+        resetDungeonEnemyDefeats();
+        resetFieldEnemyDefeats();
+        resetDungeonProgress();
         persistSave();
         stateChanged = true;
         dialogue = [
           "村長ローアン: 月影石まで持ち帰ってくれたのか。",
           "金貨120枚を受け取った。",
-          "太陽石と月影石が呼応し、村を包む結界が強く輝いた。"
+          "太陽石と月影石が呼応し、村を包む結界が強く輝いた。",
+          "村長ローアン: だが……その輝きに応えるように、草原の奥に新たな坑道が口を開けた。",
+          "村長ローアン: 中には禍々しい月蝕の魔獣が眠っているという。この地を脅かす前に、討ち果たしてきてくれないか。",
+          "クエスト開始: 月蝕の魔獣を討伐する"
         ];
       } else if (hasFlag("questComplete") && !hasFlag("secondQuestAccepted")) {
         markFlag("secondQuestAccepted");
         stateChanged = true;
         dialogue = getNpcDialogue(npc.id);
+      } else if (hasFlag("finalBeastDefeated") && !hasFlag("thirdQuestComplete")) {
+        const save = getSave();
+        save.gold += 200;
+        markFlag("thirdQuestComplete");
+        persistSave();
+        stateChanged = true;
+        onDialogueComplete = () => this.launchEnding();
+        dialogue = [
+          "村長ローアン: 月蝕の魔獣を討ち果たしてくれたのか……!",
+          "金貨200枚を受け取った。",
+          "村長ローアン: おぬしのおかげで、この谷に再び穏やかな夜が戻る。本当にありがとう。",
+          "ルナ: 昔、私の故郷も似た影に呑まれかけたことがありました。",
+          "ルナ: あなたのおかげで、あの日守れなかったものを、今度こそ守れた気がします。"
+        ];
       }
     }
 
@@ -788,7 +840,7 @@ export class WorldScene extends Phaser.Scene {
       await this.loadMap(this.currentMap.id, this.playerTile);
     }
 
-    this.showDialogue(dialogue ?? getNpcDialogue(npc.id));
+    this.showDialogue(dialogue ?? getNpcDialogue(npc.id), onDialogueComplete);
   }
 
   private async openChest(chest: ChestDefinition): Promise<void> {
@@ -1097,10 +1149,11 @@ export class WorldScene extends Phaser.Scene {
     };
   }
 
-  private showDialogue(lines: string[]): void {
+  private showDialogue(lines: string[], onComplete?: () => void): void {
     this.hideTargetHint();
     this.dialogueLines = lines;
     this.dialogueIndex = 0;
+    this.dialogueOnComplete = onComplete;
     this.dialogueBox?.setVisible(true);
     this.dialogueAccent?.setVisible(true);
     this.dialogueText?.setVisible(true);
@@ -1115,6 +1168,9 @@ export class WorldScene extends Phaser.Scene {
       this.dialogueAccent?.setVisible(false);
       this.dialogueText?.setVisible(false);
       this.refreshTargetHint();
+      const onComplete = this.dialogueOnComplete;
+      this.dialogueOnComplete = undefined;
+      onComplete?.();
       return;
     }
 

@@ -138,5 +138,15 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     gold: 32,
     texture: "enemy-guardian",
     boss: true
+  },
+  eclipseBeast: {
+    key: "eclipseBeast",
+    name: "月蝕の魔獣",
+    maxHp: 95,
+    attack: 17,
+    exp: 45,
+    gold: 60,
+    texture: "enemy-guardian",
+    boss: true
   }
 };

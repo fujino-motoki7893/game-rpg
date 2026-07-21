@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import "./styles.css";
 import { BattleScene } from "./scenes/BattleScene";
 import { BootScene } from "./scenes/BootScene";
+import { EndingScene } from "./scenes/EndingScene";
 import { MenuScene } from "./scenes/MenuScene";
 import { ShopScene } from "./scenes/ShopScene";
 import { UIScene } from "./scenes/UIScene";
@@ -15,7 +16,7 @@ const config: Phaser.Types.Core.GameConfig = {
   height: 640,
   pixelArt: true,
   roundPixels: true,
-  scene: [BootScene, WorldScene, UIScene, BattleScene, MenuScene, ShopScene],
+  scene: [BootScene, WorldScene, UIScene, BattleScene, MenuScene, ShopScene, EndingScene],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH

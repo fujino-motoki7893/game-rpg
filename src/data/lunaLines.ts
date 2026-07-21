@@ -2,12 +2,18 @@
 // dependency here so this can be safely imported from the Cloudflare Worker too.
 
 export type LunaQuestStage =
+  | "third-quest-complete"
+  | "final-beast-defeated"
+  | "third-quest-active"
   | "second-quest-complete"
   | "second-treasure-found"
   | "second-quest-active"
   | "casual";
 
 export interface LunaQuestFlags {
+  thirdQuestComplete: boolean;
+  finalBeastDefeated: boolean;
+  thirdQuestAccepted: boolean;
   secondQuestComplete: boolean;
   secondTreasureFound: boolean;
   secondQuestAccepted: boolean;
@@ -15,6 +21,15 @@ export interface LunaQuestFlags {
 }
 
 export function getLunaQuestStage(flags: LunaQuestFlags): LunaQuestStage {
+  if (flags.thirdQuestComplete) {
+    return "third-quest-complete";
+  }
+  if (flags.finalBeastDefeated) {
+    return "final-beast-defeated";
+  }
+  if (flags.thirdQuestAccepted) {
+    return "third-quest-active";
+  }
   if (flags.secondQuestComplete) {
     return "second-quest-complete";
   }
@@ -29,6 +44,9 @@ export function getLunaQuestStage(flags: LunaQuestFlags): LunaQuestStage {
 
 export function isLunaQuestStage(value: unknown): value is LunaQuestStage {
   return (
+    value === "third-quest-complete" ||
+    value === "final-beast-defeated" ||
+    value === "third-quest-active" ||
     value === "second-quest-complete" ||
     value === "second-treasure-found" ||
     value === "second-quest-active" ||
@@ -52,6 +70,18 @@ export const LUNA_CASUAL_LINES: LunaStaticLine[] = [
 ];
 
 const STAGE_LINES: Record<Exclude<LunaQuestStage, "casual">, LunaStaticLine> = {
+  "third-quest-complete": {
+    id: "stage-third-quest-complete",
+    text: "ルナ: あなたのおかげで、あの日守れなかったものを、今度こそ守れた気がします。ありがとう。"
+  },
+  "final-beast-defeated": {
+    id: "stage-final-beast-defeated",
+    text: "ルナ: 討ち果たしましたね……。あの日、故郷を覆った影と同じ気配がしました。今度は、間に合いました。"
+  },
+  "third-quest-active": {
+    id: "stage-third-quest-active",
+    text: "ルナ: 月蝕の魔獣……その名を聞いて、胸がざわつきます。昔、故郷の村も同じ影に呑まれかけましたから。"
+  },
   "second-quest-complete": {
     id: "stage-second-quest-complete",
     text: "ルナ: 太陽石と月影石……二つの光が村を守っている。感慨深いですね。"
@@ -82,6 +112,12 @@ export function getLunaLineForStage(stage: LunaQuestStage): string {
 
 export function describeLunaStage(stage: LunaQuestStage): string {
   switch (stage) {
+    case "third-quest-complete":
+      return "月蝕の魔獣を討伐し、村長への報告も終えた。旅の大きな山場を越え、穏やかな安堵に包まれている。ルナは自分の故郷にまつわる古い傷が、今度こそ癒えたように感じている。";
+    case "final-beast-defeated":
+      return "月蝕の魔獣をちょうど討ち果たしたところ。ルナは自分の故郷にまつわる古い傷に触れており、感慨深い様子。";
+    case "third-quest-active":
+      return "村長から、月蝕の魔獣という新たな脅威の話を聞いたばかりで、これから討伐に向かうところ。ルナにとって、その名は昔の故郷の記憶と重なる、思い入れのある脅威。";
     case "second-quest-complete":
       return "月影石を村長に届け終え、太陽石と月影石がそろった。村を守る結界は完成し、当面の脅威は去った。";
     case "second-treasure-found":
