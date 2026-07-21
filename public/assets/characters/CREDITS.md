@@ -34,6 +34,7 @@ OpenGameArt.org上の単体モンスター素材(人型骨格に依らない独�
 | head (skeleton) | `head/heads/skeleton/adult/walk/skeleton.png` | bluecarrot16, Johannes Sjölund (wulax), Stephen Challener (Redshrike) |
 | head (goblin) | `head/heads/goblin/adult/walk.png` | bluecarrot16, Stephen Challener (Redshrike), William.Thomsponj |
 | hair (plain) | `hair/plain/adult/walk.png` | JaidynReiman, Manuel Riecke (MrBeast), Joe White |
+| hair (long, companion-luna用) | `hair/long/adult/walk.png` | JaidynReiman, Manuel Riecke (MrBeast) |
 | torso: vest (male) | `torso/clothes/vest/male/walk/{blue,tan}.png` | bluecarrot16, Thane Brimhall (pennomi), laetissima, Stephen Challener (Redshrike), Johannes Sjölund (wulax) |
 | torso: robe (female) | `torso/clothes/robe/female/walk/{brown,white,purple}.png` | Luke Mehl |
 | torso: dress (sash, female) | `dress/sash/female/walk/lavender.png` | bluecarrot16, Thane Brimhall (pennomi), laetissima, Matthew Krohn (makrohn) |
@@ -59,7 +60,7 @@ OpenGameArt.org上の単体モンスター素材(人型骨格に依らない独�
 | npc-healer | female | dark_brown | robe (white) |
 | npc-shopkeeper | male | light_brown | vest (tan) + pants + shoes |
 | npc-armorer | male | black | plate armour + pants + shoes |
-| companion-luna | female | platinum | dress (lavender sash) |
+| companion-luna | female | platinum (long) | dress (lavender sash) |
 | enemy-skeleton | skeleton body/head | - | (なし、骨のみ) |
 | enemy-goblin | muscular body(緑に再着色)/ goblin head | - | pants |
 | enemy-mage | female body/head | dark_brown | robe (purple) + wizard hat |

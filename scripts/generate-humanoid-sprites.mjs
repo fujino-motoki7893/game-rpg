@@ -79,7 +79,8 @@ const CHARACTERS = {
     body: "body/bodies/female/walk.png",
     head: "head/heads/human/female/walk.png",
     torso: "dress/sash/female/walk/lavender.png",
-    hair: "platinum"
+    hair: "platinum",
+    hairStyle: "long"
   }
 };
 
@@ -154,7 +155,7 @@ async function buildCharacterSheet(key, config) {
   }
   const headPath = await fetchToCache(config.head);
 
-  const hairSourcePath = await fetchToCache("hair/plain/adult/walk.png");
+  const hairSourcePath = await fetchToCache(`hair/${config.hairStyle ?? "plain"}/adult/walk.png`);
   const hairBuffer = await recolorHair(hairSourcePath, config.hair);
 
   const composites = [
