@@ -22,10 +22,10 @@ import {
   addItem,
   addEquipment,
   ensureDungeonProgress,
+  getActiveDungeonTier,
   getCompanionMaxHp,
   getCompanionMaxMp,
   getGeneratedDungeonFloor,
-  getDungeonTier,
   getItemCount,
   getPlayerAttack,
   getPlayerMaxHp,
@@ -40,12 +40,12 @@ import {
   markFlag,
   persistSave,
   recruitCompanion,
-  resetDungeonProgress,
   resetSave,
   resetDungeonEnemyDefeats,
   resetFieldEnemyDefeats,
   restoreCompanionMp,
   restorePlayerMp,
+  setActiveDungeonTier,
   setCurrentDungeonFloor,
   setGeneratedDungeonFloor,
   setPlayerPosition
@@ -295,14 +295,15 @@ export class WorldScene extends Phaser.Scene {
       return getMapDefinition(mapId, isExpandedWorldUnlocked());
     }
 
-    const dungeonTier = getDungeonTier();
-    const { floorCount, currentFloor } = ensureDungeonProgress();
-    const generatedDungeon = getGeneratedDungeonFloor(currentFloor);
+    const dungeonTier = getActiveDungeonTier();
+    const { floorCount, currentFloor } = ensureDungeonProgress(dungeonTier);
+    const generatedDungeon = getGeneratedDungeonFloor(currentFloor, dungeonTier);
     if (generatedDungeon && this.hasSupplyChest(generatedDungeon)) {
       return generatedDungeon;
     }
 
-    const previousFloor = currentFloor > 1 ? getGeneratedDungeonFloor(currentFloor - 1) : undefined;
+    const previousFloor =
+      currentFloor > 1 ? getGeneratedDungeonFloor(currentFloor - 1, dungeonTier) : undefined;
     const previousDownStairs = previousFloor?.portals.find(
       (portal) => portal.kind === "stairs-down" && portal.toFloor === currentFloor
     );
@@ -312,7 +313,7 @@ export class WorldScene extends Phaser.Scene {
 
     this.game.events.emit(GAME_EVENTS.toast, `B${currentFloor}Fを生成中...`);
     const { dungeon, source } = await createDungeon(currentFloor, floorCount, upTarget, dungeonTier);
-    setGeneratedDungeonFloor(currentFloor, dungeon);
+    setGeneratedDungeonFloor(currentFloor, dungeon, dungeonTier);
     this.game.events.emit(
       GAME_EVENTS.toast,
       source === "groq"
@@ -429,7 +430,7 @@ export class WorldScene extends Phaser.Scene {
   private checkFinalBossDefeat(): void {
     if (
       this.currentMap.id !== "dungeon" ||
-      getDungeonTier() !== 3 ||
+      getActiveDungeonTier() !== 3 ||
       !isEnemyDefeated("dungeon-guardian") ||
       hasFlag("finalBeastDefeated")
     ) {
@@ -783,7 +784,6 @@ export class WorldScene extends Phaser.Scene {
         markFlag("secondQuestAccepted");
         resetDungeonEnemyDefeats();
         resetFieldEnemyDefeats();
-        resetDungeonProgress();
         persistSave();
         stateChanged = true;
         shouldReloadMap = true;
@@ -800,7 +800,6 @@ export class WorldScene extends Phaser.Scene {
         markFlag("thirdQuestAccepted");
         resetDungeonEnemyDefeats();
         resetFieldEnemyDefeats();
-        resetDungeonProgress();
         persistSave();
         stateChanged = true;
         dialogue = [
@@ -857,7 +856,7 @@ export class WorldScene extends Phaser.Scene {
 
     markFlag(`${chest.id}-opened`);
     if (isRelicChest) {
-      const dungeonTier = getDungeonTier();
+      const dungeonTier = getActiveDungeonTier();
       const relicName = dungeonTier >= 2 ? "月影石" : "太陽石";
       markFlag(dungeonTier >= 2 ? "secondTreasureFound" : "treasureFound");
       resetDungeonEnemyDefeats();
@@ -942,7 +941,7 @@ export class WorldScene extends Phaser.Scene {
     this.game.events.emit(GAME_EVENTS.toast, "帰還の羽で草原へ脱出した");
   }
 
-  private getFieldDungeonEntrance(tier = getDungeonTier()): TilePosition {
+  private getFieldDungeonEntrance(tier = getActiveDungeonTier()): TilePosition {
     return { ...getFieldDungeonEntranceForTier(tier) };
   }
 
@@ -958,8 +957,10 @@ export class WorldScene extends Phaser.Scene {
     this.applyRespawnRules(this.currentMap.id, portal.toMap);
 
     if (portal.toMap === "dungeon") {
-      ensureDungeonProgress();
-      setCurrentDungeonFloor(portal.toFloor ?? 1);
+      const tier = portal.dungeonTier ?? getActiveDungeonTier();
+      setActiveDungeonTier(tier);
+      ensureDungeonProgress(tier);
+      setCurrentDungeonFloor(portal.toFloor ?? 1, tier);
     }
     await this.loadMap(portal.toMap, { x: portal.toX, y: portal.toY });
   }

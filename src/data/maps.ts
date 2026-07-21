@@ -94,7 +94,7 @@ export const MAPS: Record<MapId, MapDefinition> = {
     ],
     portals: [
       { x: 20, y: 2, toMap: "village", toX: 20, toY: 26 },
-      { x: 6, y: 24, toMap: "dungeon", toX: 1, toY: 1 }
+      { x: 6, y: 24, toMap: "dungeon", toX: 1, toY: 1, dungeonTier: 1 }
     ],
     npcs: [],
     chests: [],
@@ -233,8 +233,9 @@ export const EXPANDED_MAPS: Partial<Record<MapId, MapDefinition>> = {
     ],
     portals: [
       { x: 20, y: 2, toMap: "village", toX: 20, toY: 26 },
-      { x: 34, y: 6, toMap: "dungeon", toX: 1, toY: 1 },
-      { x: 36, y: 16, toMap: "dungeon", toX: 1, toY: 1 }
+      { x: 6, y: 24, toMap: "dungeon", toX: 1, toY: 1, dungeonTier: 1 },
+      { x: 34, y: 6, toMap: "dungeon", toX: 1, toY: 1, dungeonTier: 2 },
+      { x: 36, y: 16, toMap: "dungeon", toX: 1, toY: 1, dungeonTier: 3 }
     ],
     npcs: [],
     chests: [],

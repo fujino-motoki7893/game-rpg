@@ -96,6 +96,8 @@ export interface PortalDefinition extends TilePosition {
   toY: number;
   toFloor?: number;
   kind?: "map" | "stairs-up" | "stairs-down";
+  /** Which dungeon tier this portal leads into/within (only meaningful when toMap is "dungeon"). */
+  dungeonTier?: number;
 }
 
 export interface MapDefinition {
@@ -109,6 +111,12 @@ export interface MapDefinition {
   npcs: NpcDefinition[];
   chests: ChestDefinition[];
   enemies: EnemySpawn[];
+}
+
+export interface DungeonTierProgress {
+  floorCount?: number;
+  currentFloor?: number;
+  generatedFloors?: Record<string, MapDefinition>;
 }
 
 export interface GameSave {
@@ -131,11 +139,10 @@ export interface GameSave {
   companionHp?: number;
   companionMp?: number;
   defeatedEnemies: string[];
-  generatedDungeon?: MapDefinition;
-  dungeonTier?: number;
-  dungeonFloorCount?: number;
-  currentDungeonFloor?: number;
-  generatedDungeonFloors?: Record<string, MapDefinition>;
+  /** Which dungeon tier the player is currently inside (or last entered). */
+  activeDungeonTier?: number;
+  /** Each tier's dungeon crawl (floor count, current floor, generated floors) is tracked independently, so revisiting an earlier tier doesn't disturb a later one. */
+  dungeonProgressByTier?: Record<number, DungeonTierProgress>;
 }
 
 export interface BattlePayload {

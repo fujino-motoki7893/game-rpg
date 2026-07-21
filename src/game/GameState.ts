@@ -30,6 +30,7 @@ import { SAVE_KEY } from "./constants";
 import type { EquipmentStats } from "../data/equipment";
 import type { SkillDefinition, SkillId } from "../data/skills";
 import type {
+  DungeonTierProgress,
   EquipmentId,
   EquipmentInventory,
   EquipmentLoadout,
@@ -111,8 +112,7 @@ function loadSave(): GameSave {
         parsed.companionHp !== undefined ? normalizeHp(parsed.companionHp, companionMaxHp) : undefined,
       companionMp:
         parsed.companionMp !== undefined ? normalizeMp(parsed.companionMp, companionMaxMp) : undefined,
-      defeatedEnemies: parsed.defeatedEnemies ?? [],
-      generatedDungeonFloors: parsed.generatedDungeonFloors ?? undefined
+      defeatedEnemies: parsed.defeatedEnemies ?? []
     };
   } catch {
     return initialSave();
@@ -136,60 +136,59 @@ export function resetSave(): GameSave {
   return save;
 }
 
-export function getGeneratedDungeon(): MapDefinition | undefined {
-  return save.generatedDungeon;
+export function getActiveDungeonTier(): number {
+  return save.activeDungeonTier ?? getDungeonTier();
 }
 
-export function setGeneratedDungeon(dungeon: MapDefinition): void {
-  save.generatedDungeon = dungeon;
+export function setActiveDungeonTier(tier: number): void {
+  save.activeDungeonTier = tier;
   persistSave();
 }
 
-export function ensureDungeonProgress(): { floorCount: number; currentFloor: number } {
-  const dungeonTier = getDungeonTier();
-  const range = getDungeonFloorRange(dungeonTier);
-
-  if (save.dungeonTier !== dungeonTier) {
-    save.dungeonTier = dungeonTier;
-    save.dungeonFloorCount = undefined;
-    save.currentDungeonFloor = 1;
-    save.generatedDungeon = undefined;
-    save.generatedDungeonFloors = {};
-    save.defeatedEnemies = save.defeatedEnemies.filter(
-      (enemyId) => !enemyId.startsWith(DUNGEON_ENEMY_ID_PREFIX)
-    );
+function ensureTierProgress(tier: number): DungeonTierProgress {
+  save.dungeonProgressByTier = save.dungeonProgressByTier ?? {};
+  const existing = save.dungeonProgressByTier[tier];
+  if (existing) {
+    return existing;
   }
+
+  const created: DungeonTierProgress = {};
+  save.dungeonProgressByTier[tier] = created;
+  return created;
+}
+
+export function ensureDungeonProgress(
+  tier = getActiveDungeonTier()
+): { floorCount: number; currentFloor: number } {
+  const progress = ensureTierProgress(tier);
+  const range = getDungeonFloorRange(tier);
 
   if (
-    !save.dungeonFloorCount ||
-    save.dungeonFloorCount < range.min ||
-    save.dungeonFloorCount > range.max
+    !progress.floorCount ||
+    progress.floorCount < range.min ||
+    progress.floorCount > range.max
   ) {
-    save.dungeonFloorCount = randomInt(range.min, range.max);
+    progress.floorCount = randomInt(range.min, range.max);
   }
 
-  if (!save.currentDungeonFloor) {
-    save.currentDungeonFloor = 1;
+  if (!progress.currentFloor) {
+    progress.currentFloor = 1;
   }
 
-  if (!save.generatedDungeonFloors) {
-    save.generatedDungeonFloors = {};
-  }
-
-  save.currentDungeonFloor = clampFloor(save.currentDungeonFloor, save.dungeonFloorCount);
+  progress.currentFloor = clampFloor(progress.currentFloor, progress.floorCount);
   persistSave();
   return {
-    floorCount: save.dungeonFloorCount,
-    currentFloor: save.currentDungeonFloor
+    floorCount: progress.floorCount,
+    currentFloor: progress.currentFloor
   };
 }
 
-export function getCurrentDungeonFloor(): number {
-  return save.currentDungeonFloor ?? 1;
+export function getCurrentDungeonFloor(tier = getActiveDungeonTier()): number {
+  return save.dungeonProgressByTier?.[tier]?.currentFloor ?? 1;
 }
 
-export function getDungeonFloorCount(): number | undefined {
-  return save.dungeonFloorCount;
+export function getDungeonFloorCount(tier = getActiveDungeonTier()): number | undefined {
+  return save.dungeonProgressByTier?.[tier]?.floorCount;
 }
 
 export function getDungeonTier(): number {
@@ -203,31 +202,28 @@ export function isExpandedWorldUnlocked(): boolean {
   return getDungeonTier() >= 2;
 }
 
-export function resetDungeonProgress(): void {
-  save.dungeonTier = getDungeonTier();
-  save.dungeonFloorCount = undefined;
-  save.currentDungeonFloor = 1;
-  save.generatedDungeon = undefined;
-  save.generatedDungeonFloors = {};
+export function setCurrentDungeonFloor(floor: number, tier = getActiveDungeonTier()): void {
+  const progress = ensureTierProgress(tier);
+  const floorCount = progress.floorCount ?? getDungeonFloorRange(tier).max;
+  progress.currentFloor = clampFloor(floor, floorCount);
   persistSave();
 }
 
-export function setCurrentDungeonFloor(floor: number): void {
-  const floorCount = save.dungeonFloorCount ?? getDungeonFloorRange(getDungeonTier()).max;
-  save.currentDungeonFloor = clampFloor(floor, floorCount);
-  persistSave();
+export function getGeneratedDungeonFloor(
+  floor: number,
+  tier = getActiveDungeonTier()
+): MapDefinition | undefined {
+  return save.dungeonProgressByTier?.[tier]?.generatedFloors?.[String(floor)];
 }
 
-export function getGeneratedDungeonFloor(floor: number): MapDefinition | undefined {
-  return save.generatedDungeonFloors?.[String(floor)];
-}
-
-export function setGeneratedDungeonFloor(floor: number, dungeon: MapDefinition): void {
-  save.generatedDungeonFloors = save.generatedDungeonFloors ?? {};
-  save.generatedDungeonFloors[String(floor)] = dungeon;
-  if (floor === 1) {
-    save.generatedDungeon = dungeon;
-  }
+export function setGeneratedDungeonFloor(
+  floor: number,
+  dungeon: MapDefinition,
+  tier = getActiveDungeonTier()
+): void {
+  const progress = ensureTierProgress(tier);
+  progress.generatedFloors = progress.generatedFloors ?? {};
+  progress.generatedFloors[String(floor)] = dungeon;
   persistSave();
 }
 

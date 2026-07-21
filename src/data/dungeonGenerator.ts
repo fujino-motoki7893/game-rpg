@@ -174,7 +174,8 @@ export function generateDungeon(
           toFloor: floor - 1,
           toX: options.upTarget?.x ?? 1,
           toY: options.upTarget?.y ?? 1,
-          kind: "stairs-up"
+          kind: "stairs-up",
+          dungeonTier: tier
         }
   ];
   const requiredTiles: TilePosition[] = [spawn];
@@ -210,7 +211,8 @@ export function generateDungeon(
       toFloor: floor + 1,
       toX: 1,
       toY: 1,
-      kind: "stairs-down"
+      kind: "stairs-down",
+      dungeonTier: tier
     });
   }
 

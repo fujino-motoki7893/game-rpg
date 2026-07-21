@@ -393,7 +393,8 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
           toFloor: context.floor - 1,
           toX: context.upTarget?.x ?? 1,
           toY: context.upTarget?.y ?? 1,
-          kind: "stairs-up"
+          kind: "stairs-up",
+          dungeonTier: context.tier
         }
   ];
   let chest: TilePosition | undefined;
@@ -432,7 +433,8 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
       toFloor: context.floor + 1,
       toX: 1,
       toY: 1,
-      kind: "stairs-down"
+      kind: "stairs-down",
+      dungeonTier: context.tier
     });
   }
 

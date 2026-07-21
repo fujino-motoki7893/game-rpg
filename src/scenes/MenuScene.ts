@@ -17,10 +17,12 @@ import {
   ITEM_ORDER,
   ITEMS
 } from "../data/items";
+import { getDungeonNameForTier } from "../data/dungeonGenerator";
 import { getMapDefinition } from "../data/maps";
 import { getSkillHealAmount, SKILL_ORDER, SKILLS } from "../data/skills";
 import { GAME_EVENTS } from "../game/constants";
 import {
+  getActiveDungeonTier,
   getCurrentDungeonFloor,
   getDungeonFloorCount,
   getEquipmentCount,
@@ -856,11 +858,10 @@ export class MenuScene extends Phaser.Scene {
 
   private currentMapName(): string {
     const save = getSave();
-    const mapDefinition = getMapDefinition(save.mapId, isExpandedWorldUnlocked());
     if (save.mapId === "dungeon") {
-      return `${mapDefinition.name} B${getCurrentDungeonFloor()}F/${getDungeonFloorCount() ?? "?"}F`;
+      return `${getDungeonNameForTier(getActiveDungeonTier())} B${getCurrentDungeonFloor()}F/${getDungeonFloorCount() ?? "?"}F`;
     }
-    return mapDefinition.name;
+    return getMapDefinition(save.mapId, isExpandedWorldUnlocked()).name;
   }
 
   private closeMenu(): void {
