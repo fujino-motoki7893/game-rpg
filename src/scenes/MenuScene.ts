@@ -48,7 +48,8 @@ import {
   equipEquipmentToCompanion,
   useHealingSkill,
   useHealingSkillOnCompanion,
-  useItem
+  useItem,
+  useItemOnCompanion
 } from "../game/GameState";
 import type { EquipmentId, ItemId } from "../game/types";
 
@@ -231,25 +232,87 @@ export class MenuScene extends Phaser.Scene {
         .text(154, 416, `現在HP ${save.hp}/${maxHp}  MP ${save.mp}/${maxMp}`, this.textStyle(18, "#f4df7e"))
         .setDepth(102)
     );
-    this.addContent(
-      this.add.text(154, 440, `所持ゴールド ${save.gold}G`, this.textStyle(15, "#d9e5ef")).setDepth(102)
-    );
 
-    const useButton = this.add
-      .text(530, 412, "使う", {
-        ...this.textStyle(18, canUseSelected ? "#101820" : "#2a3036"),
-        backgroundColor: canUseSelected ? "#f2d27a" : "#66707a",
-        padding: { x: 18, y: 10 },
-        fixedWidth: 92,
-        align: "center"
-      })
-      .setAlpha(canUseSelected ? 1 : 0.58)
-      .setDepth(102);
+    const showCompanionTarget =
+      hasCompanion() && (canItemHealHp(selectedItem) || canItemRestoreMp(selectedItem));
 
-    if (canUseSelected) {
-      useButton.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.useSelectedItem());
+    if (showCompanionTarget) {
+      const count = getItemCount(selectedItem);
+      const canUseSelf =
+        count > 0 &&
+        ((canItemHealHp(selectedItem) && save.hp < maxHp) ||
+          (canItemRestoreMp(selectedItem) && save.mp < maxMp));
+      const canUseCompanion =
+        count > 0 &&
+        ((canItemHealHp(selectedItem) && getCompanionHp() < getCompanionMaxHp()) ||
+          (canItemRestoreMp(selectedItem) && getCompanionMp() < getCompanionMaxMp()));
+
+      this.addContent(
+        this.add
+          .text(
+            154,
+            440,
+            `ルナ HP ${getCompanionHp()}/${getCompanionMaxHp()}  MP ${getCompanionMp()}/${getCompanionMaxMp()}`,
+            this.textStyle(15, "#b28aff")
+          )
+          .setDepth(102)
+      );
+      this.addContent(
+        this.add.text(154, 464, `所持ゴールド ${save.gold}G`, this.textStyle(15, "#d9e5ef")).setDepth(102)
+      );
+
+      const selfButton = this.add
+        .text(452, 412, "自分に使う", {
+          ...this.textStyle(16, canUseSelf ? "#101820" : "#2a3036"),
+          backgroundColor: canUseSelf ? "#f2d27a" : "#66707a",
+          padding: { x: 10, y: 10 },
+          fixedWidth: 90,
+          align: "center"
+        })
+        .setAlpha(canUseSelf ? 1 : 0.58)
+        .setDepth(102);
+      if (canUseSelf) {
+        selfButton.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.useSelectedItem("self"));
+      }
+      this.addContent(selfButton);
+
+      const companionButton = this.add
+        .text(548, 412, "ルナに使う", {
+          ...this.textStyle(16, canUseCompanion ? "#101820" : "#2a3036"),
+          backgroundColor: canUseCompanion ? "#f2d27a" : "#66707a",
+          padding: { x: 10, y: 10 },
+          fixedWidth: 90,
+          align: "center"
+        })
+        .setAlpha(canUseCompanion ? 1 : 0.58)
+        .setDepth(102);
+      if (canUseCompanion) {
+        companionButton
+          .setInteractive({ useHandCursor: true })
+          .on("pointerdown", () => this.useSelectedItem("companion"));
+      }
+      this.addContent(companionButton);
+    } else {
+      this.addContent(
+        this.add.text(154, 440, `所持ゴールド ${save.gold}G`, this.textStyle(15, "#d9e5ef")).setDepth(102)
+      );
+
+      const useButton = this.add
+        .text(530, 412, "使う", {
+          ...this.textStyle(18, canUseSelected ? "#101820" : "#2a3036"),
+          backgroundColor: canUseSelected ? "#f2d27a" : "#66707a",
+          padding: { x: 18, y: 10 },
+          fixedWidth: 92,
+          align: "center"
+        })
+        .setAlpha(canUseSelected ? 1 : 0.58)
+        .setDepth(102);
+
+      if (canUseSelected) {
+        useButton.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.useSelectedItem("self"));
+      }
+      this.addContent(useButton);
     }
-    this.addContent(useButton);
   }
 
   private renderSkills(): void {
@@ -714,11 +777,24 @@ export class MenuScene extends Phaser.Scene {
     this.renderContent();
   }
 
-  private useSelectedItem(): void {
+  private useSelectedItem(target: "self" | "companion" = "self"): void {
     const itemId = ITEM_ORDER[this.selectedItemIndex];
     const item = ITEMS[itemId];
     if (getItemCount(itemId) <= 0) {
       this.setMessage(`${item.name}を持っていない。`);
+      return;
+    }
+
+    if (target === "companion") {
+      const result = useItemOnCompanion(itemId);
+      if (!result.used) {
+        this.setMessage(this.getItemFailureMessage(result.reason, true));
+        return;
+      }
+
+      this.setMessage(this.getItemUseMessage(item.name, result.healed, result.restoredMp, true));
+      this.game.events.emit(GAME_EVENTS.stateChanged);
+      this.renderContent();
       return;
     }
 
@@ -955,7 +1031,12 @@ export class MenuScene extends Phaser.Scene {
     );
   }
 
-  private getItemUseMessage(itemName: string, healed: number, restoredMp: number): string {
+  private getItemUseMessage(
+    itemName: string,
+    healed: number,
+    restoredMp: number,
+    forCompanion = false
+  ): string {
     const parts: string[] = [];
     if (healed > 0) {
       parts.push(`HPを${healed}`);
@@ -964,15 +1045,17 @@ export class MenuScene extends Phaser.Scene {
       parts.push(`MPを${restoredMp}`);
     }
 
-    return `${itemName}で${parts.join("、")}回復した。`;
+    const targetLabel = forCompanion ? "ルナの" : "";
+    return `${itemName}で${targetLabel}${parts.join("、")}回復した。`;
   }
 
-  private getItemFailureMessage(reason?: string): string {
+  private getItemFailureMessage(reason?: string, forCompanion = false): string {
+    const targetLabel = forCompanion ? "ルナの" : "";
     if (reason === "full-hp") {
-      return "HPは満タンだ。";
+      return `${targetLabel}HPは満タンだ。`;
     }
     if (reason === "full-mp") {
-      return "MPは満タンだ。";
+      return `${targetLabel}MPは満タンだ。`;
     }
     return "アイテムを使えなかった。";
   }
