@@ -667,7 +667,9 @@ export class MenuScene extends Phaser.Scene {
           ["HP", `${getCompanionHp()}/${getCompanionMaxHp()}`],
           ["MP", `${getCompanionMp()}/${getCompanionMaxMp()}`],
           ["攻撃", String(getCompanionAttack())],
-          ["防御", String(getCompanionDefense())]
+          ["防御", String(getCompanionDefense())],
+          ["EXP", String(save.exp)],
+          ["次のレベルまで", String(Math.max(0, save.level * 12 - save.exp))]
         ]
       : [
           ["レベル", String(save.level)],
