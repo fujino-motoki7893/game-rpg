@@ -34,16 +34,16 @@ export class UIScene extends Phaser.Scene {
     this.add.rectangle(400, 30, 800, 60, 0x0c1319, 0.96);
     this.add.rectangle(400, 60, 800, 2, 0xd6b56a, 0.72);
     this.add.rectangle(400, 64, 800, 3, 0x000000, 0.22);
-    this.add.rectangle(400, 592, 800, 96, 0x0c1319, 0.9);
-    this.add.rectangle(400, 544, 800, 2, 0xd6b56a, 0.65);
-    this.mapText = this.add.text(776, 15, "", this.textStyle(18, "#a9d8ff")).setOrigin(1, 0);
+    this.add.rectangle(400, 582, 800, 116, 0x0c1319, 0.9);
+    this.add.rectangle(400, 524, 800, 2, 0xd6b56a, 0.65);
     this.add.text(24, 552, "目的", this.textStyle(13, "#d6b56a"));
     this.objectiveText = this.add.text(76, 552, "", this.textStyle(17, "#e6d7a8"));
+    this.mapText = this.add.text(776, 532, "", this.textStyle(18, "#a9d8ff")).setOrigin(1, 0);
     this.playerStatusText = this.add
-      .text(776, 550, "", this.textStyle(16, "#f4df7e"))
+      .text(776, 554, "", this.textStyle(16, "#f4df7e"))
       .setOrigin(1, 0);
     this.lunaStatusText = this.add
-      .text(776, 572, "", this.textStyle(16, "#b28aff"))
+      .text(776, 576, "", this.textStyle(16, "#b28aff"))
       .setOrigin(1, 0);
     this.add.text(
       24,
@@ -52,7 +52,7 @@ export class UIScene extends Phaser.Scene {
       this.textStyle(14, "#9fb4c6")
     );
     this.toastText = this.add
-      .text(400, 522, "", this.textStyle(16, "#ffffff"))
+      .text(400, 505, "", this.textStyle(16, "#ffffff"))
       .setOrigin(0.5, 0.5)
       .setVisible(false);
 
