@@ -842,6 +842,10 @@ export function grantReward(exp: number, gold: number): { leveledUp: boolean; le
     save.attack += 2;
     save.hp = getPlayerMaxHp();
     save.mp = getPlayerMaxMp();
+    if (hasFlag(COMPANION_JOINED_FLAG)) {
+      save.companionHp = getCompanionMaxHp();
+      save.companionMp = getCompanionMaxMp();
+    }
     learnedSkillIds.push(...getSkillIdsLearnedAtLevel(save.level));
     leveledUp = true;
   }
