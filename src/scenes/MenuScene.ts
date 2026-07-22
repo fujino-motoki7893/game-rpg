@@ -25,6 +25,8 @@ import {
   getActiveDungeonTier,
   getCompanionHp,
   getCompanionMaxHp,
+  getCompanionMaxMp,
+  getCompanionMp,
   getCurrentDungeonFloor,
   getDungeonFloorCount,
   getEquipmentCount,
@@ -61,6 +63,7 @@ export class MenuScene extends Phaser.Scene {
   private selectedItemIndex = 0;
   private selectedSkillIndex = 0;
   private selectedEquipmentIndex = 0;
+  private skillsCharacter: "hero" | "luna" = "hero";
   private tabButtons: Partial<Record<MenuTab, Phaser.GameObjects.Text>> = {};
   private contentObjects: Phaser.GameObjects.GameObject[] = [];
   private messageText?: Phaser.GameObjects.Text;
@@ -77,6 +80,7 @@ export class MenuScene extends Phaser.Scene {
     this.selectedItemIndex = 0;
     this.selectedSkillIndex = 0;
     this.selectedEquipmentIndex = 0;
+    this.skillsCharacter = "hero";
     this.contentObjects = [];
     this.tabButtons = {};
     this.lunaLine = "";
@@ -242,6 +246,93 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private renderSkills(): void {
+    if (hasCompanion()) {
+      this.renderSkillsCharacterToggle();
+    }
+
+    if (this.skillsCharacter === "luna" && hasCompanion()) {
+      this.renderLunaSkills();
+      return;
+    }
+
+    this.renderHeroSkills();
+  }
+
+  private renderSkillsCharacterToggle(): void {
+    const options: { key: "hero" | "luna"; label: string }[] = [
+      { key: "hero", label: "主人公" },
+      { key: "luna", label: "ルナ" }
+    ];
+
+    options.forEach((option, index) => {
+      const selected = this.skillsCharacter === option.key;
+      const button = this.add
+        .text(154 + index * 92, 222, option.label, {
+          ...this.textStyle(14, selected ? "#101820" : "#d9e5ef"),
+          backgroundColor: selected ? "#f2d27a" : "#1c2732",
+          padding: { x: 12, y: 6 },
+          fixedWidth: 84,
+          align: "center"
+        })
+        .setDepth(102)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerdown", () => this.selectSkillsCharacter(option.key));
+      this.addContent(button);
+    });
+  }
+
+  private selectSkillsCharacter(character: "hero" | "luna"): void {
+    if (this.skillsCharacter === character) {
+      return;
+    }
+
+    this.skillsCharacter = character;
+    this.setMessage("");
+    this.renderContent();
+  }
+
+  private renderLunaSkills(): void {
+    const abilities: { name: string; cost: string; description: string }[] = [
+      { name: "回復魔法", cost: "MP4", description: "仲間のHPが40%未満のとき自動で発動する" },
+      { name: "魔法弾", cost: "-", description: "通常攻撃として敵にダメージを与える" }
+    ];
+
+    abilities.forEach((ability, index) => {
+      const y = 259 + index * 40;
+      const row = this.add
+        .rectangle(388, y + 14, 468, 38, 0x111a24, 0.58)
+        .setStrokeStyle(1, 0x34475a, 0.45)
+        .setDepth(101);
+      this.addContent(row);
+      this.addContent(
+        this.add.text(190, y, ability.name, this.textStyle(18, "#fff4cf")).setDepth(102)
+      );
+      this.addContent(
+        this.add.text(306, y, ability.cost, this.textStyle(16, "#d9e5ef")).setDepth(102)
+      );
+      this.addContent(
+        this.add.text(376, y, ability.description, this.textStyle(14, "#9fb4c6")).setDepth(102)
+      );
+    });
+
+    this.addContent(
+      this.add
+        .text(
+          154,
+          416,
+          `ルナ HP ${getCompanionHp()}/${getCompanionMaxHp()}  MP ${getCompanionMp()}/${getCompanionMaxMp()}`,
+          this.textStyle(18, "#b28aff")
+        )
+        .setDepth(102)
+    );
+    this.addContent(
+      this.add
+        .text(154, 440, "ルナは戦闘中、状況に応じて自動でこれらの行動を行う。", this.textStyle(14, "#9fb4c6"))
+        .setDepth(102)
+    );
+  }
+
+  private renderHeroSkills(): void {
     const save = getSave();
     const maxHp = getPlayerMaxHp();
     const maxMp = getPlayerMaxMp();
@@ -256,9 +347,9 @@ export class MenuScene extends Phaser.Scene {
       const skill = SKILLS[skillId];
       const selected = index === this.selectedSkillIndex;
       const learned = save.level >= skill.requiredLevel;
-      const y = 224 + index * 48;
+      const y = 259 + index * 40;
       const row = this.add
-        .rectangle(388, y + 14, 468, 42, selected ? 0x263442 : 0x111a24, selected ? 0.95 : 0.58)
+        .rectangle(388, y + 14, 468, 38, selected ? 0x263442 : 0x111a24, selected ? 0.95 : 0.58)
         .setStrokeStyle(selected ? 2 : 1, selected ? 0xd8bc72 : 0x34475a, selected ? 0.9 : 0.45)
         .setDepth(101)
         .setInteractive({ useHandCursor: true })
@@ -741,12 +832,12 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
-    if (this.activeTab === "skills" && event.code === "ArrowUp") {
+    if (this.activeTab === "skills" && this.skillsCharacter === "hero" && event.code === "ArrowUp") {
       this.moveSelectedSkill(-1);
       return;
     }
 
-    if (this.activeTab === "skills" && event.code === "ArrowDown") {
+    if (this.activeTab === "skills" && this.skillsCharacter === "hero" && event.code === "ArrowDown") {
       this.moveSelectedSkill(1);
       return;
     }
@@ -766,7 +857,7 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
-    if ((event.code === "Space" || event.code === "Enter") && this.activeTab === "skills") {
+    if ((event.code === "Space" || event.code === "Enter") && this.activeTab === "skills" && this.skillsCharacter === "hero") {
       this.useSelectedSkill();
       return;
     }
