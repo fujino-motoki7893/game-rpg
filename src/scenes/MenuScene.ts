@@ -71,6 +71,7 @@ export class MenuScene extends Phaser.Scene {
   private selectedEquipmentIndex = 0;
   private skillsCharacter: "hero" | "luna" = "hero";
   private equipmentCharacter: "hero" | "luna" = "hero";
+  private statusCharacter: "hero" | "luna" = "hero";
   private tabButtons: Partial<Record<MenuTab, Phaser.GameObjects.Text>> = {};
   private contentObjects: Phaser.GameObjects.GameObject[] = [];
   private messageText?: Phaser.GameObjects.Text;
@@ -89,6 +90,7 @@ export class MenuScene extends Phaser.Scene {
     this.selectedEquipmentIndex = 0;
     this.skillsCharacter = "hero";
     this.equipmentCharacter = "hero";
+    this.statusCharacter = "hero";
     this.contentObjects = [];
     this.tabButtons = {};
     this.lunaLine = "";
@@ -649,26 +651,46 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private renderStatus(): void {
+    if (hasCompanion()) {
+      this.renderCharacterToggle(this.statusCharacter, (character) => {
+        this.statusCharacter = character;
+      });
+    }
+
+    const showingLuna = hasCompanion() && this.statusCharacter === "luna";
+    const startY = hasCompanion() ? 259 : 226;
+
     const save = getSave();
-    const rows = [
-      ["レベル", String(save.level)],
-      ["HP", `${save.hp}/${getPlayerMaxHp()}`],
-      ["MP", `${save.mp}/${getPlayerMaxMp()}`],
-      ["攻撃", String(getPlayerAttack())],
-      ["防御", String(getPlayerDefense())],
-      ["EXP", String(save.exp)],
-      ["次のレベルまで", String(Math.max(0, save.level * 12 - save.exp))],
-      ["ゴールド", String(save.gold)],
-      ["現在地", this.currentMapName()]
-    ];
+    const rows = showingLuna
+      ? [
+          ["レベル", String(save.level)],
+          ["HP", `${getCompanionHp()}/${getCompanionMaxHp()}`],
+          ["MP", `${getCompanionMp()}/${getCompanionMaxMp()}`],
+          ["攻撃", String(getCompanionAttack())],
+          ["防御", String(getCompanionDefense())]
+        ]
+      : [
+          ["レベル", String(save.level)],
+          ["HP", `${save.hp}/${getPlayerMaxHp()}`],
+          ["MP", `${save.mp}/${getPlayerMaxMp()}`],
+          ["攻撃", String(getPlayerAttack())],
+          ["防御", String(getPlayerDefense())],
+          ["EXP", String(save.exp)],
+          ["次のレベルまで", String(Math.max(0, save.level * 12 - save.exp))],
+          ["ゴールド", String(save.gold)],
+          ["現在地", this.currentMapName()]
+        ];
+    const spacing = hasCompanion() ? 26 : 32;
 
     rows.forEach(([label, value], index) => {
-      const y = 226 + index * 32;
+      const y = startY + index * spacing;
       this.addContent(
         this.add.text(154, y, label, this.textStyle(17, "#9fb4c6")).setDepth(102)
       );
       this.addContent(
-        this.add.text(342, y, value, this.textStyle(18, "#fff4cf")).setDepth(102)
+        this.add
+          .text(342, y, value, this.textStyle(18, showingLuna ? "#b28aff" : "#fff4cf"))
+          .setDepth(102)
       );
     });
   }
