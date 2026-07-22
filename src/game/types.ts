@@ -138,6 +138,7 @@ export interface GameSave {
   flags: Record<string, boolean>;
   companionHp?: number;
   companionMp?: number;
+  companionEquipment?: EquipmentLoadout;
   defeatedEnemies: string[];
   /** Which dungeon tier the player is currently inside (or last entered). */
   activeDungeonTier?: number;

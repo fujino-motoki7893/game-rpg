@@ -19,6 +19,7 @@ import {
   damageCompanion,
   damagePlayer,
   getCompanionAttack,
+  getCompanionDefense,
   getCompanionHp,
   getCompanionMaxHp,
   getCompanionMaxMp,
@@ -546,7 +547,7 @@ export class BattleScene extends Phaser.Scene {
       this.companionActive && getCompanionHp() > 0 && Phaser.Math.Between(1, 100) <= 30;
 
     if (targetsCompanion) {
-      const damage = Math.max(1, rawDamage);
+      const damage = Math.max(1, rawDamage - getCompanionDefense());
       damageCompanion(damage);
       this.refreshHud();
       this.flashTarget(this.companionSprite);

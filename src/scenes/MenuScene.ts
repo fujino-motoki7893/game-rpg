@@ -24,6 +24,9 @@ import { getSkillHealAmount, SKILL_ORDER, SKILLS } from "../data/skills";
 import { GAME_EVENTS } from "../game/constants";
 import {
   getActiveDungeonTier,
+  getCompanionAttack,
+  getCompanionDefense,
+  getCompanionEquippedEquipment,
   getCompanionHp,
   getCompanionMaxHp,
   getCompanionMaxMp,
@@ -42,6 +45,7 @@ import {
   isExpandedWorldUnlocked,
   consumeItem,
   equipEquipment,
+  equipEquipmentToCompanion,
   useHealingSkill,
   useHealingSkillOnCompanion,
   useItem
@@ -65,6 +69,7 @@ export class MenuScene extends Phaser.Scene {
   private selectedSkillIndex = 0;
   private selectedEquipmentIndex = 0;
   private skillsCharacter: "hero" | "luna" = "hero";
+  private equipmentCharacter: "hero" | "luna" = "hero";
   private tabButtons: Partial<Record<MenuTab, Phaser.GameObjects.Text>> = {};
   private contentObjects: Phaser.GameObjects.GameObject[] = [];
   private messageText?: Phaser.GameObjects.Text;
@@ -82,6 +87,7 @@ export class MenuScene extends Phaser.Scene {
     this.selectedSkillIndex = 0;
     this.selectedEquipmentIndex = 0;
     this.skillsCharacter = "hero";
+    this.equipmentCharacter = "hero";
     this.contentObjects = [];
     this.tabButtons = {};
     this.lunaLine = "";
@@ -248,7 +254,9 @@ export class MenuScene extends Phaser.Scene {
 
   private renderSkills(): void {
     if (hasCompanion()) {
-      this.renderSkillsCharacterToggle();
+      this.renderCharacterToggle(this.skillsCharacter, (character) => {
+        this.skillsCharacter = character;
+      });
     }
 
     if (this.skillsCharacter === "luna" && hasCompanion()) {
@@ -259,14 +267,17 @@ export class MenuScene extends Phaser.Scene {
     this.renderHeroSkills();
   }
 
-  private renderSkillsCharacterToggle(): void {
+  private renderCharacterToggle(
+    current: "hero" | "luna",
+    onSelect: (character: "hero" | "luna") => void
+  ): void {
     const options: { key: "hero" | "luna"; label: string }[] = [
       { key: "hero", label: "主人公" },
       { key: "luna", label: "ルナ" }
     ];
 
     options.forEach((option, index) => {
-      const selected = this.skillsCharacter === option.key;
+      const selected = current === option.key;
       const button = this.add
         .text(154 + index * 92, 222, option.label, {
           ...this.textStyle(14, selected ? "#101820" : "#d9e5ef"),
@@ -277,19 +288,16 @@ export class MenuScene extends Phaser.Scene {
         })
         .setDepth(102)
         .setInteractive({ useHandCursor: true })
-        .on("pointerdown", () => this.selectSkillsCharacter(option.key));
+        .on("pointerdown", () => {
+          if (current === option.key) {
+            return;
+          }
+          onSelect(option.key);
+          this.setMessage("");
+          this.renderContent();
+        });
       this.addContent(button);
     });
-  }
-
-  private selectSkillsCharacter(character: "hero" | "luna"): void {
-    if (this.skillsCharacter === character) {
-      return;
-    }
-
-    this.skillsCharacter = character;
-    this.setMessage("");
-    this.renderContent();
   }
 
   private renderLunaSkills(): void {
@@ -489,12 +497,20 @@ export class MenuScene extends Phaser.Scene {
       Math.max(0, ownedEquipment.length - 1)
     );
 
+    if (hasCompanion()) {
+      this.renderCharacterToggle(this.equipmentCharacter, (character) => {
+        this.equipmentCharacter = character;
+      });
+    }
+
+    const showingLuna = hasCompanion() && this.equipmentCharacter === "luna";
+
     this.addContent(
-      this.add.text(154, 214, "装備中", this.textStyle(16, "#f4df7e")).setDepth(102)
+      this.add.text(154, 258, "装備中", this.textStyle(16, "#f4df7e")).setDepth(102)
     );
     EQUIPMENT_SLOTS.forEach((slot, index) => {
-      const y = 238 + index * 24;
-      const equipmentId = getEquippedEquipment(slot);
+      const y = 282 + index * 20;
+      const equipmentId = showingLuna ? getCompanionEquippedEquipment(slot) : getEquippedEquipment(slot);
       const name = equipmentId ? EQUIPMENT[equipmentId].name : "-";
       this.addContent(
         this.add.text(154, y, EQUIPMENT_SLOT_LABELS[slot], this.textStyle(13, "#9fb4c6")).setDepth(102)
@@ -505,12 +521,12 @@ export class MenuScene extends Phaser.Scene {
     });
 
     this.addContent(
-      this.add.text(404, 214, "所持装備", this.textStyle(16, "#f4df7e")).setDepth(102)
+      this.add.text(404, 258, "所持装備", this.textStyle(16, "#f4df7e")).setDepth(102)
     );
 
     if (ownedEquipment.length === 0) {
       this.addContent(
-        this.add.text(404, 242, "装備品なし", this.textStyle(15, "#748393")).setDepth(102)
+        this.add.text(404, 286, "装備品なし", this.textStyle(15, "#748393")).setDepth(102)
       );
     } else {
       const { start, visible } = this.getVisibleOwnedEquipment(ownedEquipment);
@@ -518,7 +534,7 @@ export class MenuScene extends Phaser.Scene {
         const index = start + visibleIndex;
         const equipment = EQUIPMENT[equipmentId];
         const selected = index === this.selectedEquipmentIndex;
-        const y = 238 + visibleIndex * 32;
+        const y = 282 + visibleIndex * 34;
         const row = this.add
           .rectangle(516, y + 13, 236, 30, selected ? 0x263442 : 0x111a24, selected ? 0.95 : 0.58)
           .setStrokeStyle(selected ? 2 : 1, selected ? 0xd8bc72 : 0x34475a, selected ? 0.9 : 0.45)
@@ -544,20 +560,16 @@ export class MenuScene extends Phaser.Scene {
       });
     }
 
+    const statsLine = showingLuna
+      ? `ルナ HP ${getCompanionHp()}/${getCompanionMaxHp()}  MP ${getCompanionMp()}/${getCompanionMaxMp()}  攻 ${getCompanionAttack()}  防 ${getCompanionDefense()}`
+      : `HP ${save.hp}/${getPlayerMaxHp()}  MP ${save.mp}/${getPlayerMaxMp()}  攻 ${getPlayerAttack()}  防 ${getPlayerDefense()}`;
     this.addContent(
-      this.add
-        .text(
-          154,
-          416,
-          `HP ${save.hp}/${getPlayerMaxHp()}  MP ${save.mp}/${getPlayerMaxMp()}  攻 ${getPlayerAttack()}  防 ${getPlayerDefense()}`,
-          this.textStyle(16, "#f4df7e")
-        )
-        .setDepth(102)
+      this.add.text(154, 432, statsLine, this.textStyle(16, showingLuna ? "#b28aff" : "#f4df7e")).setDepth(102)
     );
 
     const canEquipSelected = ownedEquipment.length > 0;
     const equipButton = this.add
-      .text(530, 412, "装備", {
+      .text(530, 428, "装備", {
         ...this.textStyle(18, canEquipSelected ? "#101820" : "#2a3036"),
         backgroundColor: canEquipSelected ? "#f2d27a" : "#66707a",
         padding: { x: 18, y: 10 },
@@ -752,13 +764,15 @@ export class MenuScene extends Phaser.Scene {
     }
 
     const equipment = EQUIPMENT[equipmentId];
-    const result = equipEquipment(equipmentId);
+    const targetingLuna = hasCompanion() && this.equipmentCharacter === "luna";
+    const result = targetingLuna ? equipEquipmentToCompanion(equipmentId) : equipEquipment(equipmentId);
     if (!result.equipped || !result.slot) {
       this.setMessage(`${equipment.name}を装備できなかった。`);
       return;
     }
 
-    this.setMessage(`${equipment.name}を${EQUIPMENT_SLOT_LABELS[result.slot]}に装備した。`);
+    const targetLabel = targetingLuna ? "ルナの" : "";
+    this.setMessage(`${targetLabel}${equipment.name}を${EQUIPMENT_SLOT_LABELS[result.slot]}に装備した。`);
     this.game.events.emit(GAME_EVENTS.stateChanged);
     this.renderContent();
   }
@@ -996,7 +1010,7 @@ export class MenuScene extends Phaser.Scene {
     start: number;
     visible: EquipmentId[];
   } {
-    const visibleCount = 6;
+    const visibleCount = 4;
     const start = Phaser.Math.Clamp(
       this.selectedEquipmentIndex - Math.floor(visibleCount / 2),
       0,
