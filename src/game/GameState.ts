@@ -707,6 +707,38 @@ export function useHealingSkill(skillId: SkillId): UseSkillResult {
   return { used: true, healed: save.hp - before };
 }
 
+export function useHealingSkillOnCompanion(skillId: SkillId): UseSkillResult {
+  if (!isSkillId(skillId)) {
+    return { used: false, healed: 0, reason: "unknown-skill" };
+  }
+
+  const skill = SKILLS[skillId];
+  if (!hasLearnedSkill(skillId)) {
+    return { used: false, healed: 0, reason: "not-learned" };
+  }
+
+  if (skill.effect.type !== "heal") {
+    return { used: false, healed: 0, reason: "not-healing" };
+  }
+
+  ensureCompanionVitals();
+  const maxHp = getCompanionMaxHp();
+  const currentHp = save.companionHp ?? maxHp;
+  if (currentHp >= maxHp) {
+    return { used: false, healed: 0, reason: "full-hp" };
+  }
+
+  if (save.mp < skill.mpCost) {
+    return { used: false, healed: 0, reason: "not-enough-mp" };
+  }
+
+  const before = currentHp;
+  save.mp = Math.max(0, save.mp - skill.mpCost);
+  save.companionHp = Math.min(maxHp, currentHp + getSkillHealAmount(skill, maxHp));
+  persistSave();
+  return { used: true, healed: save.companionHp - before };
+}
+
 export function markFlag(flag: string): void {
   save.flags[flag] = true;
   persistSave();

@@ -42,6 +42,7 @@ import {
   useItem,
   useItemOnCompanion,
   useHealingSkill,
+  useHealingSkillOnCompanion,
 } from "../game/GameState";
 import type { SkillDefinition } from "../data/skills";
 import type { BattlePayload, EnemyDefinition, ItemId } from "../game/types";
@@ -236,7 +237,13 @@ export class BattleScene extends Phaser.Scene {
       this.createBattleButton(
         `${skill.name}\nMP${skill.mpCost}`,
         index,
-        () => this.useSkill(skill),
+        () => {
+          if (skill.effect.type === "heal" && this.companionActive) {
+            this.showHealTargetActions(skill);
+            return;
+          }
+          this.useSkill(skill);
+        },
         enabled,
         true
       );
@@ -246,6 +253,23 @@ export class BattleScene extends Phaser.Scene {
       this.renderMainActions();
       this.setLog("あなたの番だ。");
     }, true, true);
+  }
+
+  private showHealTargetActions(skill: SkillDefinition): void {
+    if (!this.playerTurn) {
+      return;
+    }
+
+    this.clearButtons();
+    this.setLog(`${skill.name}を誰に使いますか?`);
+
+    const save = getSave();
+    const canHealSelf = save.hp < getPlayerMaxHp();
+    const canHealCompanion = getCompanionHp() < getCompanionMaxHp();
+
+    this.createBattleButton("自分", 0, () => this.useSkill(skill, "self"), canHealSelf, true);
+    this.createBattleButton("ルナ", 1, () => this.useSkill(skill, "companion"), canHealCompanion, true);
+    this.createBattleButton("戻る", 2, () => this.showSkillActions(), true, true);
   }
 
   private createBattleButton(
@@ -346,7 +370,7 @@ export class BattleScene extends Phaser.Scene {
     this.endPlayerTurn();
   }
 
-  private useSkill(skill: SkillDefinition): void {
+  private useSkill(skill: SkillDefinition, healTarget: "self" | "companion" = "self"): void {
     if (!this.playerTurn) {
       return;
     }
@@ -363,6 +387,22 @@ export class BattleScene extends Phaser.Scene {
     }
 
     if (skill.effect.type === "heal") {
+      if (healTarget === "companion") {
+        const result = useHealingSkillOnCompanion(skill.id);
+        if (!result.used) {
+          this.setLog(result.reason === "full-hp" ? "ルナのHPは満タンだ。" : `${skill.name}を使えなかった。`);
+          this.refreshHud();
+          return;
+        }
+
+        this.refreshHud();
+        this.pulseTarget(this.companionSprite);
+        this.showDamageNumber(result.healed, 272, 164, "#a5ffb2", "+");
+        this.setLog(`${skill.name}でルナのHPを${result.healed}回復した。`);
+        this.endPlayerTurn();
+        return;
+      }
+
       const result = useHealingSkill(skill.id);
       if (!result.used) {
         this.setLog(result.reason === "full-hp" ? "HPは満タンだ。" : `${skill.name}を使えなかった。`);

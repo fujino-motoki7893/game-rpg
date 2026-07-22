@@ -23,6 +23,8 @@ import { getSkillHealAmount, SKILL_ORDER, SKILLS } from "../data/skills";
 import { GAME_EVENTS } from "../game/constants";
 import {
   getActiveDungeonTier,
+  getCompanionHp,
+  getCompanionMaxHp,
   getCurrentDungeonFloor,
   getDungeonFloorCount,
   getEquipmentCount,
@@ -38,6 +40,7 @@ import {
   consumeItem,
   equipEquipment,
   useHealingSkill,
+  useHealingSkillOnCompanion,
   useItem
 } from "../game/GameState";
 import type { EquipmentId, ItemId } from "../game/types";
@@ -291,29 +294,79 @@ export class MenuScene extends Phaser.Scene {
         .setDepth(102)
     );
 
-    const useLabel = this.getSelectedSkillUseLabel(selectedLearned, selectedIsHeal, canUseSelected);
-    const useButton = this.add
-      .text(518, 412, useLabel, {
-        ...this.textStyle(17, canUseSelected ? "#101820" : "#2a3036"),
-        backgroundColor: canUseSelected ? "#f2d27a" : "#66707a",
-        padding: { x: 14, y: 10 },
-        fixedWidth: 104,
-        align: "center"
-      })
-      .setAlpha(canUseSelected ? 1 : 0.58)
-      .setDepth(102);
+    if (hasCompanion() && selectedIsHeal) {
+      const canUseSelf =
+        selectedLearned && save.mp >= selectedSkill.mpCost && save.hp < maxHp;
+      const canUseCompanion =
+        selectedLearned && save.mp >= selectedSkill.mpCost && getCompanionHp() < getCompanionMaxHp();
 
-    if (canUseSelected) {
-      useButton.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.useSelectedSkill());
+      this.addContent(
+        this.add
+          .text(
+            154,
+            440,
+            `ルナ HP ${getCompanionHp()}/${getCompanionMaxHp()}`,
+            this.textStyle(15, "#b28aff")
+          )
+          .setDepth(102)
+      );
+
+      const selfButton = this.add
+        .text(452, 412, "自分に使う", {
+          ...this.textStyle(16, canUseSelf ? "#101820" : "#2a3036"),
+          backgroundColor: canUseSelf ? "#f2d27a" : "#66707a",
+          padding: { x: 10, y: 10 },
+          fixedWidth: 90,
+          align: "center"
+        })
+        .setAlpha(canUseSelf ? 1 : 0.58)
+        .setDepth(102);
+      if (canUseSelf) {
+        selfButton.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.useSelectedSkill("self"));
+      }
+      this.addContent(selfButton);
+
+      const companionButton = this.add
+        .text(548, 412, "ルナに使う", {
+          ...this.textStyle(16, canUseCompanion ? "#101820" : "#2a3036"),
+          backgroundColor: canUseCompanion ? "#f2d27a" : "#66707a",
+          padding: { x: 10, y: 10 },
+          fixedWidth: 90,
+          align: "center"
+        })
+        .setAlpha(canUseCompanion ? 1 : 0.58)
+        .setDepth(102);
+      if (canUseCompanion) {
+        companionButton
+          .setInteractive({ useHandCursor: true })
+          .on("pointerdown", () => this.useSelectedSkill("companion"));
+      }
+      this.addContent(companionButton);
+    } else {
+      const useLabel = this.getSelectedSkillUseLabel(selectedLearned, selectedIsHeal, canUseSelected);
+      const useButton = this.add
+        .text(518, 412, useLabel, {
+          ...this.textStyle(17, canUseSelected ? "#101820" : "#2a3036"),
+          backgroundColor: canUseSelected ? "#f2d27a" : "#66707a",
+          padding: { x: 14, y: 10 },
+          fixedWidth: 104,
+          align: "center"
+        })
+        .setAlpha(canUseSelected ? 1 : 0.58)
+        .setDepth(102);
+
+      if (canUseSelected) {
+        useButton.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.useSelectedSkill("self"));
+      }
+      this.addContent(useButton);
     }
-    this.addContent(useButton);
 
     if (selectedSkill.effect.type === "heal") {
       this.addContent(
         this.add
           .text(
             154,
-            452,
+            464,
             `回復量 ${getSkillHealAmount(selectedSkill, maxHp)}`,
             this.textStyle(15, "#9fb4c6")
           )
@@ -605,7 +658,7 @@ export class MenuScene extends Phaser.Scene {
     this.renderContent();
   }
 
-  private useSelectedSkill(): void {
+  private useSelectedSkill(target: "self" | "companion" = "self"): void {
     const skillId = SKILL_ORDER[this.selectedSkillIndex];
     const skill = SKILLS[skillId];
     const save = getSave();
@@ -622,6 +675,24 @@ export class MenuScene extends Phaser.Scene {
 
     if (save.mp < skill.mpCost) {
       this.setMessage("MPが足りない。");
+      return;
+    }
+
+    if (target === "companion") {
+      if (getCompanionHp() >= getCompanionMaxHp()) {
+        this.setMessage("ルナのHPは満タンだ。");
+        return;
+      }
+
+      const result = useHealingSkillOnCompanion(skillId);
+      if (!result.used) {
+        this.setMessage(`${skill.name}を使えなかった。`);
+        return;
+      }
+
+      this.setMessage(`${skill.name}でルナのHPを${result.healed}回復した。`);
+      this.game.events.emit(GAME_EVENTS.stateChanged);
+      this.renderContent();
       return;
     }
 
