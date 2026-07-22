@@ -1180,18 +1180,18 @@ export class WorldScene extends Phaser.Scene {
 
   private createDialoguePanel(): void {
     this.dialogueBox = this.add
-      .rectangle(400, 535, 688, 92, 0x101722, 0.97)
+      .rectangle(400, 488, 688, 92, 0x101722, 0.97)
       .setStrokeStyle(2, 0xd6b56a, 0.95)
       .setScrollFactor(0)
       .setDepth(40)
       .setVisible(false);
     this.dialogueAccent = this.add
-      .rectangle(400, 493, 650, 2, 0xf0d98a, 0.8)
+      .rectangle(400, 446, 650, 2, 0xf0d98a, 0.8)
       .setScrollFactor(0)
       .setDepth(41)
       .setVisible(false);
     this.dialogueText = this.add
-      .text(96, 504, "", {
+      .text(96, 457, "", {
         fontFamily: '"Yu Gothic", Meiryo, "Hiragino Sans", "Noto Sans JP", sans-serif',
         fontSize: "18px",
         color: "#fff4cf",
