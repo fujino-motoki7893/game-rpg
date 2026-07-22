@@ -214,7 +214,8 @@ export class WorldScene extends Phaser.Scene {
       this.createTargetHintPanel();
       this.setupCamera();
       setPlayerPosition(mapId, entryTile.x, entryTile.y);
-      this.game.events.emit(GAME_EVENTS.mapChanged, this.currentMap.name);
+      this.game.events.emit(GAME_EVENTS.mapChanged, this.currentMap.name, this.currentMap);
+      this.game.events.emit(GAME_EVENTS.playerMoved, { ...this.playerTile });
       this.game.events.emit(GAME_EVENTS.stateChanged);
     } finally {
       this.loadingMap = false;
@@ -520,6 +521,7 @@ export class WorldScene extends Phaser.Scene {
     this.playerTile = target;
     this.playCharacterWalk(this.player, "player", direction);
     setPlayerPosition(this.currentMap.id, target.x, target.y);
+    this.game.events.emit(GAME_EVENTS.playerMoved, { ...target });
     this.moveCompanion(previousPlayerTile);
     this.tweens.add({
       targets: this.player,
