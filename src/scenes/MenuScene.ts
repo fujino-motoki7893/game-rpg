@@ -220,6 +220,9 @@ export class MenuScene extends Phaser.Scene {
         .text(154, 416, `現在HP ${save.hp}/${maxHp}  MP ${save.mp}/${maxMp}`, this.textStyle(18, "#f4df7e"))
         .setDepth(102)
     );
+    this.addContent(
+      this.add.text(154, 440, `所持ゴールド ${save.gold}G`, this.textStyle(15, "#d9e5ef")).setDepth(102)
+    );
 
     const useButton = this.add
       .text(530, 412, "使う", {
