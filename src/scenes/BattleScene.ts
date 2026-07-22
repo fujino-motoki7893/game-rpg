@@ -4,6 +4,7 @@ import {
   getCharacterIdleAnimationKey,
   getCharacterOriginY
 } from "../data/characterSprites";
+import { getCompanionSkillsForLevel } from "../data/companionSkills";
 import { ENEMIES } from "../data/enemies";
 import {
   canItemHealHp,
@@ -487,17 +488,27 @@ export class BattleScene extends Phaser.Scene {
 
     const maxHp = getPlayerMaxHp();
     const playerHp = getSave().hp;
-    const healCost = 4;
+    const level = getSave().level;
+    const healSkills = getCompanionSkillsForLevel(level)
+      .filter((skill) => skill.effect.type === "heal")
+      .reverse();
 
-    if (playerHp > 0 && playerHp < maxHp * 0.4 && getCompanionMp() >= healCost) {
-      spendCompanionMp(healCost);
-      const healed = healPlayer(Math.round(maxHp * 0.35));
-      this.refreshHud();
-      this.pulseTarget(this.playerSprite);
-      this.showDamageNumber(healed, this.playerX, 190, "#c6ffd8", "+");
-      this.setLog(`ルナの回復魔法！HPを${healed}回復した。`);
-      this.pendingEnemyTurnAt = this.time.now + 700;
-      return;
+    for (const skill of healSkills) {
+      if (skill.effect.type !== "heal") {
+        continue;
+      }
+
+      const { healRatio, triggerRatio } = skill.effect;
+      if (playerHp > 0 && playerHp < maxHp * triggerRatio && getCompanionMp() >= skill.mpCost) {
+        spendCompanionMp(skill.mpCost);
+        const healed = healPlayer(Math.round(maxHp * healRatio));
+        this.refreshHud();
+        this.pulseTarget(this.playerSprite);
+        this.showDamageNumber(healed, this.playerX, 190, "#c6ffd8", "+");
+        this.setLog(`ルナの${skill.name}！HPを${healed}回復した。`);
+        this.pendingEnemyTurnAt = this.time.now + 700;
+        return;
+      }
     }
 
     const attack = getCompanionAttack();

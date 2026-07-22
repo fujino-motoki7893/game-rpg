@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { getCharacterIdleAnimationKey } from "../data/characterSprites";
+import { COMPANION_SKILL_ORDER, COMPANION_SKILLS } from "../data/companionSkills";
 import {
   EQUIPMENT,
   EQUIPMENT_ORDER,
@@ -292,12 +293,11 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private renderLunaSkills(): void {
-    const abilities: { name: string; cost: string; description: string }[] = [
-      { name: "回復魔法", cost: "MP4", description: "仲間のHPが40%未満のとき自動で発動する" },
-      { name: "魔法弾", cost: "-", description: "通常攻撃として敵にダメージを与える" }
-    ];
+    const save = getSave();
 
-    abilities.forEach((ability, index) => {
+    COMPANION_SKILL_ORDER.forEach((skillId, index) => {
+      const skill = COMPANION_SKILLS[skillId];
+      const learned = save.level >= skill.requiredLevel;
       const y = 259 + index * 40;
       const row = this.add
         .rectangle(388, y + 14, 468, 38, 0x111a24, 0.58)
@@ -305,13 +305,24 @@ export class MenuScene extends Phaser.Scene {
         .setDepth(101);
       this.addContent(row);
       this.addContent(
-        this.add.text(190, y, ability.name, this.textStyle(18, "#fff4cf")).setDepth(102)
+        this.add
+          .text(190, y, skill.name, this.textStyle(18, learned ? "#fff4cf" : "#748393"))
+          .setDepth(102)
       );
       this.addContent(
-        this.add.text(306, y, ability.cost, this.textStyle(16, "#d9e5ef")).setDepth(102)
+        this.add
+          .text(306, y, skill.mpCost > 0 ? `MP${skill.mpCost}` : "-", this.textStyle(16, learned ? "#d9e5ef" : "#748393"))
+          .setDepth(102)
       );
       this.addContent(
-        this.add.text(376, y, ability.description, this.textStyle(14, "#9fb4c6")).setDepth(102)
+        this.add
+          .text(
+            376,
+            y,
+            learned ? skill.description : `Lv${skill.requiredLevel}で習得`,
+            this.textStyle(14, learned ? "#9fb4c6" : "#748393")
+          )
+          .setDepth(102)
       );
     });
 
