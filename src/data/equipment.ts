@@ -240,6 +240,32 @@ export function getEquipmentStatSummary(equipmentId: EquipmentId): string {
   return parts.join(" ") || "能力なし";
 }
 
+export function getEquipmentStatDelta(
+  currentId: EquipmentId | undefined,
+  candidateId: EquipmentId
+): string {
+  const current = currentId ? EQUIPMENT[currentId] : undefined;
+  const candidate = EQUIPMENT[candidateId];
+  const parts: string[] = [];
+
+  const pushDelta = (
+    key: "attackBonus" | "defenseBonus" | "maxHpBonus" | "maxMpBonus",
+    label: string
+  ) => {
+    const delta = (candidate[key] ?? 0) - (current?.[key] ?? 0);
+    if (delta !== 0) {
+      parts.push(`${label}${delta > 0 ? "+" : ""}${delta}`);
+    }
+  };
+
+  pushDelta("attackBonus", "攻");
+  pushDelta("defenseBonus", "防");
+  pushDelta("maxHpBonus", "HP");
+  pushDelta("maxMpBonus", "MP");
+
+  return parts.join(" ") || "変化なし";
+}
+
 export function createEmptyEquipmentStats(): EquipmentStats {
   return {
     attackBonus: 0,

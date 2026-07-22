@@ -345,6 +345,11 @@ export function getEquippedEquipment(slot: EquipmentSlot): EquipmentId | undefin
   return save.equipment[slot];
 }
 
+export function previewEquipmentSlot(equipmentId: EquipmentId): EquipmentSlot | undefined {
+  ensureEquipment();
+  return getDefaultEquipmentSlot(equipmentId);
+}
+
 export function getEquipmentStatTotals(): EquipmentStats {
   ensureEquipment();
   return calculateEquipmentStats(save.equipment);

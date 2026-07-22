@@ -7,6 +7,7 @@ import {
   getEquipmentBuyPrice,
   getEquipmentRarityLabel,
   getEquipmentSellPrice,
+  getEquipmentStatDelta,
   getEquipmentStatSummary,
   isEquipmentBuyable
 } from "../data/equipment";
@@ -24,8 +25,10 @@ import {
   buyEquipment,
   buyItem,
   getEquipmentCount,
+  getEquippedEquipment,
   getItemCount,
   getSave,
+  previewEquipmentSlot,
   sellEquipment,
   sellItem
 } from "../game/GameState";
@@ -196,6 +199,29 @@ export class ShopScene extends Phaser.Scene {
         )
         .setDepth(102)
     );
+
+    const upgradeLine = this.getEquipmentUpgradeLine(selectedEntry);
+    if (upgradeLine) {
+      this.addContent(
+        this.add.text(154, 440, upgradeLine, this.textStyle(14, "#9fb4c6")).setDepth(102)
+      );
+    }
+  }
+
+  private getEquipmentUpgradeLine(entry: TradeEntry): string | undefined {
+    if (entry.kind !== "equipment" || this.activeTab !== "buy") {
+      return undefined;
+    }
+
+    const slot = previewEquipmentSlot(entry.id);
+    if (!slot) {
+      return undefined;
+    }
+
+    const currentId = getEquippedEquipment(slot);
+    const currentName = currentId ? EQUIPMENT[currentId].name : "なし";
+    const delta = getEquipmentStatDelta(currentId, entry.id);
+    return `装備中(${currentName})と比較: ${delta}`;
   }
 
   private selectItem(index: number): void {
