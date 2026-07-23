@@ -14,6 +14,7 @@ export interface EquipmentDefinition {
   defenseBonus?: number;
   maxHpBonus?: number;
   maxMpBonus?: number;
+  speedBonus?: number;
 }
 
 export interface EquipmentStats {
@@ -21,6 +22,7 @@ export interface EquipmentStats {
   defenseBonus: number;
   maxHpBonus: number;
   maxMpBonus: number;
+  speedBonus: number;
 }
 
 export const EQUIPMENT_SLOTS: EquipmentSlot[] = [
@@ -119,10 +121,11 @@ export const EQUIPMENT: Record<EquipmentId, EquipmentDefinition> = {
     id: "clothCap",
     name: "布の帽子",
     category: "head",
-    description: "防御+1",
+    description: "防御+1 素早さ+1",
     rarity: 1,
     buyPrice: 18,
-    defenseBonus: 1
+    defenseBonus: 1,
+    speedBonus: 1
   },
   ironHelm: {
     id: "ironHelm",
@@ -157,10 +160,11 @@ export const EQUIPMENT: Record<EquipmentId, EquipmentDefinition> = {
     id: "travelerPants",
     name: "旅人のズボン",
     category: "bodyLower",
-    description: "HP+3",
+    description: "HP+3 素早さ+2",
     rarity: 1,
     buyPrice: 24,
-    maxHpBonus: 3
+    maxHpBonus: 3,
+    speedBonus: 2
   },
   reinforcedGreaves: {
     id: "reinforcedGreaves",
@@ -176,10 +180,11 @@ export const EQUIPMENT: Record<EquipmentId, EquipmentDefinition> = {
     id: "silverRing",
     name: "銀の指輪",
     category: "accessory",
-    description: "MP+3",
+    description: "MP+3 素早さ+1",
     rarity: 2,
     buyPrice: 45,
-    maxMpBonus: 3
+    maxMpBonus: 3,
+    speedBonus: 1
   },
   emberCharm: {
     id: "emberCharm",
@@ -237,6 +242,9 @@ export function getEquipmentStatSummary(equipmentId: EquipmentId): string {
   if (equipment.maxMpBonus) {
     parts.push(`MP+${equipment.maxMpBonus}`);
   }
+  if (equipment.speedBonus) {
+    parts.push(`速+${equipment.speedBonus}`);
+  }
   return parts.join(" ") || "能力なし";
 }
 
@@ -249,7 +257,7 @@ export function getEquipmentStatDelta(
   const parts: string[] = [];
 
   const pushDelta = (
-    key: "attackBonus" | "defenseBonus" | "maxHpBonus" | "maxMpBonus",
+    key: "attackBonus" | "defenseBonus" | "maxHpBonus" | "maxMpBonus" | "speedBonus",
     label: string
   ) => {
     const delta = (candidate[key] ?? 0) - (current?.[key] ?? 0);
@@ -262,6 +270,7 @@ export function getEquipmentStatDelta(
   pushDelta("defenseBonus", "防");
   pushDelta("maxHpBonus", "HP");
   pushDelta("maxMpBonus", "MP");
+  pushDelta("speedBonus", "速");
 
   return parts.join(" ") || "変化なし";
 }
@@ -271,6 +280,7 @@ export function createEmptyEquipmentStats(): EquipmentStats {
     attackBonus: 0,
     defenseBonus: 0,
     maxHpBonus: 0,
-    maxMpBonus: 0
+    maxMpBonus: 0,
+    speedBonus: 0
   };
 }

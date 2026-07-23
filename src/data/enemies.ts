@@ -25,6 +25,7 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     name: "草原スライム",
     maxHp: 16,
     attack: 4,
+    speed: 4,
     exp: 4,
     gold: 3,
     texture: "enemy-slime"
@@ -34,6 +35,7 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     name: "洞窟ゴブリン",
     maxHp: 24,
     attack: 6,
+    speed: 7,
     exp: 7,
     gold: 6,
     texture: "enemy-goblin"
@@ -43,6 +45,7 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     name: "影コウモリ",
     maxHp: 18,
     attack: 5,
+    speed: 12,
     exp: 5,
     gold: 4,
     texture: "enemy-bat"
@@ -52,6 +55,7 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     name: "古びた骸骨兵",
     maxHp: 28,
     attack: 7,
+    speed: 5,
     exp: 8,
     gold: 7,
     texture: "enemy-skeleton"
@@ -61,6 +65,7 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     name: "洞窟狼",
     maxHp: 22,
     attack: 8,
+    speed: 11,
     exp: 8,
     gold: 5,
     texture: "enemy-wolf"
@@ -70,6 +75,7 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     name: "見習い呪術師",
     maxHp: 20,
     attack: 9,
+    speed: 6,
     exp: 10,
     gold: 9,
     texture: "enemy-mage"
@@ -79,6 +85,7 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     name: "宝箱ミミック",
     maxHp: 32,
     attack: 8,
+    speed: 3,
     exp: 12,
     gold: 14,
     texture: "enemy-mimic"
@@ -88,6 +95,7 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     name: "草原オーク",
     maxHp: 36,
     attack: 10,
+    speed: 6,
     exp: 14,
     gold: 10,
     texture: "enemy-goblin"
@@ -97,6 +105,7 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     name: "牙狼",
     maxHp: 34,
     attack: 12,
+    speed: 13,
     exp: 15,
     gold: 11,
     texture: "enemy-wolf"
@@ -106,6 +115,7 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     name: "黒衣の呪術師",
     maxHp: 30,
     attack: 13,
+    speed: 7,
     exp: 17,
     gold: 14,
     texture: "enemy-mage"
@@ -115,6 +125,7 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     name: "石甲ゴーレム",
     maxHp: 46,
     attack: 11,
+    speed: 3,
     exp: 18,
     gold: 15,
     texture: "enemy-guardian"
@@ -124,6 +135,7 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     name: "太陽石の守護者",
     maxHp: 38,
     attack: 8,
+    speed: 8,
     exp: 14,
     gold: 16,
     texture: "enemy-guardian",
@@ -134,6 +146,7 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     name: "月影石の守護者",
     maxHp: 64,
     attack: 13,
+    speed: 9,
     exp: 28,
     gold: 32,
     texture: "enemy-guardian",
@@ -144,6 +157,7 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     name: "月蝕の魔獣",
     maxHp: 95,
     attack: 17,
+    speed: 12,
     exp: 45,
     gold: 60,
     texture: "enemy-guardian",

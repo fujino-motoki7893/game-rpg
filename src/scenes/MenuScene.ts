@@ -26,6 +26,7 @@ import {
   getActiveDungeonTier,
   getCompanionAttack,
   getCompanionDefense,
+  getCompanionSpeed,
   getCompanionEquippedEquipment,
   getCompanionHp,
   getCompanionMaxHp,
@@ -38,6 +39,7 @@ import {
   getItemCount,
   getPlayerAttack,
   getPlayerDefense,
+  getPlayerSpeed,
   getPlayerMaxHp,
   getPlayerMaxMp,
   getSave,
@@ -626,8 +628,8 @@ export class MenuScene extends Phaser.Scene {
     }
 
     const statsLine = showingLuna
-      ? `ルナ HP ${getCompanionHp()}/${getCompanionMaxHp()}  MP ${getCompanionMp()}/${getCompanionMaxMp()}  攻 ${getCompanionAttack()}  防 ${getCompanionDefense()}`
-      : `HP ${save.hp}/${getPlayerMaxHp()}  MP ${save.mp}/${getPlayerMaxMp()}  攻 ${getPlayerAttack()}  防 ${getPlayerDefense()}`;
+      ? `ルナ HP ${getCompanionHp()}/${getCompanionMaxHp()}  MP ${getCompanionMp()}/${getCompanionMaxMp()}  攻 ${getCompanionAttack()}  防 ${getCompanionDefense()}  速 ${getCompanionSpeed()}`
+      : `HP ${save.hp}/${getPlayerMaxHp()}  MP ${save.mp}/${getPlayerMaxMp()}  攻 ${getPlayerAttack()}  防 ${getPlayerDefense()}  速 ${getPlayerSpeed()}`;
     this.addContent(
       this.add.text(154, 432, statsLine, this.textStyle(16, showingLuna ? "#b28aff" : "#f4df7e")).setDepth(102)
     );
@@ -668,6 +670,7 @@ export class MenuScene extends Phaser.Scene {
           ["MP", `${getCompanionMp()}/${getCompanionMaxMp()}`],
           ["攻撃", String(getCompanionAttack())],
           ["防御", String(getCompanionDefense())],
+          ["素早さ", String(getCompanionSpeed())],
           ["EXP", String(save.exp)],
           ["次のレベルまで", String(Math.max(0, save.level * 12 - save.exp))]
         ]
@@ -677,6 +680,7 @@ export class MenuScene extends Phaser.Scene {
           ["MP", `${save.mp}/${getPlayerMaxMp()}`],
           ["攻撃", String(getPlayerAttack())],
           ["防御", String(getPlayerDefense())],
+          ["素早さ", String(getPlayerSpeed())],
           ["EXP", String(save.exp)],
           ["次のレベルまで", String(Math.max(0, save.level * 12 - save.exp))],
           ["ゴールド", String(save.gold)],

@@ -24,10 +24,12 @@ import {
   getCompanionMaxHp,
   getCompanionMaxMp,
   getCompanionMp,
+  getCompanionSpeed,
   getPlayerAttack,
   getPlayerDefense,
   getPlayerMaxHp,
   getPlayerMaxMp,
+  getPlayerSpeed,
   getKnownSkills,
   getItemCount,
   getSave,
@@ -56,9 +58,9 @@ export class BattleScene extends Phaser.Scene {
   private playerTurn = true;
   private battleOver = false;
   private companionActive = false;
-  private pendingEnemyTurnAt?: number;
-  private pendingPlayerTurnAt?: number;
-  private pendingCompanionTurnAt?: number;
+  private turnOrder: Array<"player" | "companion" | "enemy"> = [];
+  private turnIndex = 0;
+  private pendingAdvanceAt?: number;
   private playerX = 205;
   private playerSprite?: Phaser.GameObjects.Sprite;
   private enemySprite?: Phaser.GameObjects.Sprite;
@@ -94,9 +96,9 @@ export class BattleScene extends Phaser.Scene {
     this.playerTurn = true;
     this.battleOver = false;
     this.companionActive = hasCompanion();
-    this.pendingEnemyTurnAt = undefined;
-    this.pendingPlayerTurnAt = undefined;
-    this.pendingCompanionTurnAt = undefined;
+    this.turnOrder = [];
+    this.turnIndex = 0;
+    this.pendingAdvanceAt = undefined;
 
     this.playerX = this.companionActive ? 160 : 205;
 
@@ -151,9 +153,16 @@ export class BattleScene extends Phaser.Scene {
       lineSpacing: 8
     });
 
-    this.renderMainActions();
     this.refreshHud();
     this.setLog(`${this.enemy.name}が行く手をふさいだ。`);
+    this.turnOrder = this.computeTurnOrder();
+    this.turnIndex = 0;
+    if (this.turnOrder[0] === "player") {
+      this.resolveCurrentTurn(false);
+    } else {
+      this.playerTurn = false;
+      this.pendingAdvanceAt = this.time.now + 700;
+    }
   }
 
   update(): void {
@@ -161,23 +170,66 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    const now = this.time.now;
-    if (this.pendingCompanionTurnAt !== undefined && now >= this.pendingCompanionTurnAt) {
-      this.pendingCompanionTurnAt = undefined;
-      this.runCompanionTurn();
+    if (this.pendingAdvanceAt !== undefined && this.time.now >= this.pendingAdvanceAt) {
+      this.pendingAdvanceAt = undefined;
+      this.resolveCurrentTurn();
+    }
+  }
+
+  private computeTurnOrder(): Array<"player" | "companion" | "enemy"> {
+    const actors: Array<{ id: "player" | "companion" | "enemy"; speed: number }> = [
+      { id: "player", speed: Math.max(1, getPlayerSpeed()) },
+      { id: "enemy", speed: Math.max(1, this.enemy.speed) }
+    ];
+    if (this.companionActive && getCompanionHp() > 0) {
+      actors.push({ id: "companion", speed: Math.max(1, getCompanionSpeed()) });
     }
 
-    if (this.pendingEnemyTurnAt !== undefined && now >= this.pendingEnemyTurnAt) {
-      this.pendingEnemyTurnAt = undefined;
-      this.runEnemyTurn();
+    return actors
+      .map((actor) => ({ id: actor.id, key: Math.random() ** (1 / actor.speed) }))
+      .sort((a, b) => b.key - a.key)
+      .map((entry) => entry.id);
+  }
+
+  private resolveCurrentTurn(announce = true): void {
+    if (this.battleOver) {
+      return;
     }
 
-    if (this.pendingPlayerTurnAt !== undefined && now >= this.pendingPlayerTurnAt) {
-      this.pendingPlayerTurnAt = undefined;
+    if (this.turnIndex >= this.turnOrder.length) {
+      this.turnOrder = this.computeTurnOrder();
+      this.turnIndex = 0;
+    }
+
+    const actor = this.turnOrder[this.turnIndex];
+    if (actor === "companion" && (!this.companionActive || getCompanionHp() <= 0)) {
+      this.turnIndex += 1;
+      this.resolveCurrentTurn(announce);
+      return;
+    }
+
+    if (actor === "player") {
       this.playerTurn = true;
       this.renderMainActions();
-      this.setLog("あなたの番だ。");
+      if (announce) {
+        this.setLog("あなたの番だ。");
+      }
+      return;
     }
+
+    this.playerTurn = false;
+    if (actor === "companion") {
+      this.runCompanionTurn();
+    } else {
+      this.runEnemyTurn();
+    }
+  }
+
+  private advanceTurn(delayMs: number): void {
+    this.turnIndex += 1;
+    this.playerTurn = false;
+    this.setButtonsEnabled(false);
+    this.pendingAdvanceAt = this.time.now + delayMs;
   }
 
   private renderMainActions(): void {
@@ -462,13 +514,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private endPlayerTurn(): void {
-    this.playerTurn = false;
-    this.setButtonsEnabled(false);
-    if (this.companionActive && getCompanionHp() > 0) {
-      this.pendingCompanionTurnAt = this.time.now + 700;
-    } else {
-      this.pendingEnemyTurnAt = this.time.now + 700;
-    }
+    this.advanceTurn(700);
   }
 
   private runCompanionTurn(): void {
@@ -476,14 +522,13 @@ export class BattleScene extends Phaser.Scene {
       this.companionTurn();
     } catch (error) {
       console.error(error);
-      this.pendingCompanionTurnAt = undefined;
-      this.pendingEnemyTurnAt = this.time.now + 200;
+      this.advanceTurn(200);
     }
   }
 
   private companionTurn(): void {
     if (!this.companionActive || getCompanionHp() <= 0) {
-      this.pendingEnemyTurnAt = this.time.now + 300;
+      this.advanceTurn(300);
       return;
     }
 
@@ -507,7 +552,7 @@ export class BattleScene extends Phaser.Scene {
         this.pulseTarget(this.playerSprite);
         this.showDamageNumber(healed, this.playerX, 190, "#c6ffd8", "+");
         this.setLog(`ルナの${skill.name}！HPを${healed}回復した。`);
-        this.pendingEnemyTurnAt = this.time.now + 700;
+        this.advanceTurn(700);
         return;
       }
     }
@@ -525,7 +570,7 @@ export class BattleScene extends Phaser.Scene {
     }
 
     this.setLog(`ルナの魔法弾！${damage}のダメージを与えた。`);
-    this.pendingEnemyTurnAt = this.time.now + 700;
+    this.advanceTurn(700);
   }
 
   private runEnemyTurn(): void {
@@ -533,10 +578,9 @@ export class BattleScene extends Phaser.Scene {
       this.enemyTurn();
     } catch (error) {
       console.error(error);
-      this.pendingEnemyTurnAt = undefined;
-      this.pendingPlayerTurnAt = undefined;
+      this.pendingAdvanceAt = undefined;
       this.playerTurn = true;
-      this.setButtonsEnabled(true);
+      this.renderMainActions();
       this.setLog("ターン処理を復旧しました。もう一度行動できます。");
     }
   }
@@ -557,7 +601,7 @@ export class BattleScene extends Phaser.Scene {
           ? `${this.enemy.name}の攻撃。ルナは倒れてしまった。`
           : `${this.enemy.name}の攻撃。ルナが${damage}のダメージを受けた。`
       );
-      this.pendingPlayerTurnAt = this.time.now + 700;
+      this.advanceTurn(700);
       return;
     }
 
@@ -573,13 +617,12 @@ export class BattleScene extends Phaser.Scene {
     }
 
     this.setLog(`${this.enemy.name}の攻撃。${damage}のダメージを受けた。`);
-    this.pendingPlayerTurnAt = this.time.now + 700;
+    this.advanceTurn(700);
   }
 
   private winBattle(lastDamage: number): void {
     this.battleOver = true;
-    this.pendingEnemyTurnAt = undefined;
-    this.pendingPlayerTurnAt = undefined;
+    this.pendingAdvanceAt = undefined;
     markEnemyDefeated(this.enemyInstanceId);
     const reward = grantReward(this.enemy.exp, this.enemy.gold);
     const learnedText =
@@ -598,8 +641,7 @@ export class BattleScene extends Phaser.Scene {
 
   private loseBattle(lastDamage: number): void {
     this.battleOver = true;
-    this.pendingEnemyTurnAt = undefined;
-    this.pendingPlayerTurnAt = undefined;
+    this.pendingAdvanceAt = undefined;
     const save = getSave();
     save.hp = Math.ceil(getPlayerMaxHp() * 0.6);
     save.mp = Math.ceil(getPlayerMaxMp() * 0.5);
@@ -620,8 +662,7 @@ export class BattleScene extends Phaser.Scene {
 
   private closeBattle(message: string): void {
     this.battleOver = true;
-    this.pendingEnemyTurnAt = undefined;
-    this.pendingPlayerTurnAt = undefined;
+    this.pendingAdvanceAt = undefined;
     this.game.events.emit(GAME_EVENTS.toast, message);
     this.game.events.emit(GAME_EVENTS.stateChanged);
     this.scene.stop();

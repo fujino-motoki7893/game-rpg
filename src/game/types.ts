@@ -11,6 +11,7 @@ export interface EnemyDefinition {
   name: string;
   maxHp: number;
   attack: number;
+  speed: number;
   exp: number;
   gold: number;
   texture: string;
@@ -134,6 +135,7 @@ export interface GameSave {
   mp: number;
   maxMp: number;
   attack: number;
+  speed: number;
   level: number;
   exp: number;
   gold: number;

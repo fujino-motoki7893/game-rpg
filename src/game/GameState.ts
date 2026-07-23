@@ -60,6 +60,7 @@ export const initialSave = (): GameSave => ({
   mp: getBaseMaxMpForLevel(1),
   maxMp: getBaseMaxMpForLevel(1),
   attack: 7,
+  speed: 8,
   level: 1,
   exp: 0,
   gold: 0,
@@ -90,6 +91,7 @@ function loadSave(): GameSave {
     const maxHp = normalizePositiveInteger(parsed.maxHp, base.maxHp);
     const maxMp = normalizeMaxMp(parsed.maxMp, level);
     const attack = normalizePositiveInteger(parsed.attack, base.attack);
+    const speed = normalizePositiveInteger(parsed.speed, base.speed);
     const equipmentStats = calculateEquipmentStats(equipment);
     const companionEquipmentStats = calculateEquipmentStats(companionEquipment);
     const hp = normalizeHp(parsed.hp, maxHp + equipmentStats.maxHpBonus);
@@ -105,6 +107,7 @@ function loadSave(): GameSave {
       hp,
       mp,
       attack,
+      speed,
       items,
       equipmentInventory,
       equipment,
@@ -371,6 +374,10 @@ export function getPlayerDefense(): number {
   return getEquipmentStatTotals().defenseBonus;
 }
 
+export function getPlayerSpeed(): number {
+  return save.speed + getEquipmentStatTotals().speedBonus;
+}
+
 export function hasCompanion(): boolean {
   return hasFlag(COMPANION_JOINED_FLAG);
 }
@@ -399,6 +406,10 @@ export function getCompanionAttack(): number {
 
 export function getCompanionDefense(): number {
   return getCompanionEquipmentStatTotals().defenseBonus;
+}
+
+export function getCompanionSpeed(): number {
+  return 6 + save.level + getCompanionEquipmentStatTotals().speedBonus;
 }
 
 export function getCompanionHp(): number {
@@ -845,6 +856,7 @@ export function grantReward(exp: number, gold: number): { leveledUp: boolean; le
     save.maxHp += 6;
     save.maxMp = Math.max(save.maxMp + 4, getBaseMaxMpForLevel(save.level));
     save.attack += 2;
+    save.speed += 1;
     save.hp = getPlayerMaxHp();
     save.mp = getPlayerMaxMp();
     if (hasFlag(COMPANION_JOINED_FLAG)) {
@@ -1014,6 +1026,7 @@ function calculateEquipmentStats(equipment: EquipmentLoadout): EquipmentStats {
     stats.defenseBonus += definition.defenseBonus ?? 0;
     stats.maxHpBonus += definition.maxHpBonus ?? 0;
     stats.maxMpBonus += definition.maxMpBonus ?? 0;
+    stats.speedBonus += definition.speedBonus ?? 0;
   });
   return stats;
 }
