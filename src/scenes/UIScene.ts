@@ -33,6 +33,7 @@ export class UIScene extends Phaser.Scene {
   private mapText?: Phaser.GameObjects.Text;
   private playerStatusText?: Phaser.GameObjects.Text;
   private lunaStatusText?: Phaser.GameObjects.Text;
+  private controlsText?: Phaser.GameObjects.Text;
   private toastText?: Phaser.GameObjects.Text;
   private toastTimer?: Phaser.Time.TimerEvent;
   private minimapTiles?: Phaser.GameObjects.Graphics;
@@ -60,12 +61,7 @@ export class UIScene extends Phaser.Scene {
     this.lunaStatusText = this.add
       .text(776, 576, "", this.textStyle(16, "#b28aff"))
       .setOrigin(1, 0);
-    this.add.text(
-      24,
-      612,
-      "操作: 移動 矢印/WASD  決定 Space/Enter  メニュー M/Esc  ルナと話す L  リセット R",
-      this.textStyle(14, "#9fb4c6")
-    );
+    this.controlsText = this.add.text(24, 612, "", this.textStyle(14, "#9fb4c6"));
     this.toastText = this.add
       .text(400, 505, "", this.textStyle(16, "#ffffff"))
       .setOrigin(0.5, 0.5)
@@ -103,6 +99,11 @@ export class UIScene extends Phaser.Scene {
     } else {
       this.lunaStatusText?.setText("");
     }
+    this.controlsText?.setText(
+      hasCompanion()
+        ? "操作: 移動 矢印/WASD  決定 Space/Enter  メニュー M/Esc  ルナと話す L  リセット R"
+        : "操作: 移動 矢印/WASD  決定 Space/Enter  メニュー M/Esc  リセット R"
+    );
     this.objectiveText?.setText(getObjective());
     const mapName =
       save.mapId === "dungeon"
