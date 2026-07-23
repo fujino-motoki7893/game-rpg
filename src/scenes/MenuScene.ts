@@ -76,6 +76,11 @@ export class MenuScene extends Phaser.Scene {
   private statusCharacter: "hero" | "luna" = "hero";
   private tabButtons: Partial<Record<MenuTab, Phaser.GameObjects.Text>> = {};
   private contentObjects: Phaser.GameObjects.GameObject[] = [];
+  private contentContainer!: Phaser.GameObjects.Container;
+  private contentMaskGraphics?: Phaser.GameObjects.Graphics;
+  private contentScrollY = 0;
+  private contentMaxScroll = 0;
+  private readonly contentViewport = { x: 130, y: 200, width: 540, height: 280 };
   private messageText?: Phaser.GameObjects.Text;
   private lunaLine = "";
   private lunaLoading = false;
@@ -98,6 +103,8 @@ export class MenuScene extends Phaser.Scene {
     this.lunaLine = "";
     this.lunaLoading = false;
     this.lunaRequestToken = 0;
+    this.contentScrollY = 0;
+    this.contentMaxScroll = 0;
 
     this.add.rectangle(400, 320, 800, 640, 0x05080b, 0.58).setDepth(90);
     this.add
@@ -114,11 +121,24 @@ export class MenuScene extends Phaser.Scene {
       this.createTabButton(tab, 154 + index * tabSpacing, 176, tabWidth);
     });
     this.createCloseButton();
+
+    this.contentContainer = this.add.container(0, 0).setDepth(101);
+    this.contentMaskGraphics = this.make.graphics({ x: 0, y: 0 }, false);
+    this.contentMaskGraphics.fillStyle(0xffffff);
+    this.contentMaskGraphics.fillRect(
+      this.contentViewport.x,
+      this.contentViewport.y,
+      this.contentViewport.width,
+      this.contentViewport.height
+    );
+    this.contentContainer.setMask(this.contentMaskGraphics.createGeometryMask());
+
     this.messageText = this.add
       .text(154, 492, "", this.textStyle(16, "#f6e4a4"))
       .setDepth(102);
 
     this.input.keyboard?.on("keydown", this.handleKeyDown, this);
+    this.input.on("wheel", this.handleContentWheel, this);
     this.events.once("shutdown", this.cleanup, this);
     this.renderContent();
   }
@@ -172,25 +192,47 @@ export class MenuScene extends Phaser.Scene {
 
     if (this.activeTab === "items") {
       this.renderItems();
-      return;
-    }
-
-    if (this.activeTab === "skills") {
+    } else if (this.activeTab === "skills") {
       this.renderSkills();
-      return;
-    }
-
-    if (this.activeTab === "equipment") {
+    } else if (this.activeTab === "equipment") {
       this.renderEquipment();
-      return;
-    }
-
-    if (this.activeTab === "companion") {
+    } else if (this.activeTab === "companion") {
       this.renderCompanion();
+    } else {
+      this.renderStatus();
+    }
+
+    this.finalizeContentScroll();
+  }
+
+  private finalizeContentScroll(): void {
+    const viewportBottom = this.contentViewport.y + this.contentViewport.height;
+    let maxBottom = viewportBottom;
+    this.contentObjects.forEach((object) => {
+      const withBounds = object as unknown as { getBounds?: () => Phaser.Geom.Rectangle };
+      if (typeof withBounds.getBounds === "function") {
+        maxBottom = Math.max(maxBottom, withBounds.getBounds().bottom);
+      }
+    });
+    this.contentMaxScroll = Math.max(0, maxBottom - viewportBottom);
+  }
+
+  private scrollContentBy(delta: number): void {
+    if (this.contentMaxScroll <= 0) {
       return;
     }
 
-    this.renderStatus();
+    this.contentScrollY = Phaser.Math.Clamp(this.contentScrollY + delta, 0, this.contentMaxScroll);
+    this.contentContainer.y = -this.contentScrollY;
+  }
+
+  private handleContentWheel(
+    _pointer: Phaser.Input.Pointer,
+    _currentlyOver: Phaser.GameObjects.GameObject[],
+    _deltaX: number,
+    deltaY: number
+  ): void {
+    this.scrollContentBy(deltaY);
   }
 
   private renderItems(): void {
@@ -981,6 +1023,16 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
+    if ((this.activeTab === "status" || this.activeTab === "companion") && event.code === "ArrowUp") {
+      this.scrollContentBy(-40);
+      return;
+    }
+
+    if ((this.activeTab === "status" || this.activeTab === "companion") && event.code === "ArrowDown") {
+      this.scrollContentBy(40);
+      return;
+    }
+
     if ((event.code === "Space" || event.code === "Enter") && this.activeTab === "items") {
       this.useSelectedItem();
       return;
@@ -1146,10 +1198,14 @@ export class MenuScene extends Phaser.Scene {
   private clearContent(): void {
     this.contentObjects.forEach((object) => object.destroy());
     this.contentObjects = [];
+    this.contentScrollY = 0;
+    this.contentMaxScroll = 0;
+    this.contentContainer.y = 0;
   }
 
   private addContent<T extends Phaser.GameObjects.GameObject>(object: T): T {
     this.contentObjects.push(object);
+    this.contentContainer.add(object);
     return object;
   }
 
@@ -1172,7 +1228,9 @@ export class MenuScene extends Phaser.Scene {
 
   private cleanup(): void {
     this.input.keyboard?.off("keydown", this.handleKeyDown, this);
+    this.input.off("wheel", this.handleContentWheel, this);
     this.clearContent();
+    this.contentMaskGraphics?.destroy();
   }
 
   private textStyle(size: number, color: string): Phaser.Types.GameObjects.Text.TextStyle {
