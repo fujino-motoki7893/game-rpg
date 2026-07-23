@@ -11,7 +11,11 @@ import {
   getNextStaticLunaLine,
   getNpcDialogue
 } from "../data/dialogues";
-import { getFieldDungeonEntranceForTier, getGuardianIdForTier } from "../data/dungeonGenerator";
+import {
+  getDungeonNameForTier,
+  getFieldDungeonEntranceForTier,
+  getGuardianIdForTier
+} from "../data/dungeonGenerator";
 import { createDungeon } from "../data/dungeonService";
 import { ENEMIES } from "../data/enemies";
 import { EQUIPMENT } from "../data/equipment";
@@ -1351,7 +1355,7 @@ export class WorldScene extends Phaser.Scene {
 
     const portal = this.portalAt(position);
     if (portal) {
-      return { text: this.describePortal(portal.kind), position };
+      return { text: this.describePortal(portal), position };
     }
 
     return undefined;
@@ -1367,12 +1371,15 @@ export class WorldScene extends Phaser.Scene {
     return npc.name;
   }
 
-  private describePortal(kind: string | undefined): string {
-    if (kind === "stairs-up") {
+  private describePortal(portal: PortalDefinition): string {
+    if (portal.kind === "stairs-up") {
       return "階段上\n移動";
     }
-    if (kind === "stairs-down") {
+    if (portal.kind === "stairs-down") {
       return "階段下\n移動";
+    }
+    if (portal.toMap === "dungeon" && portal.dungeonTier !== undefined) {
+      return `${getDungeonNameForTier(portal.dungeonTier)}\n入る`;
     }
     return "入口\n移動";
   }
