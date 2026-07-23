@@ -761,8 +761,9 @@ export class WorldScene extends Phaser.Scene {
     let onDialogueComplete: (() => void) | undefined;
 
     if (npc.id === "healer") {
-      if (getItemCount("herb") < 5) {
+      if (!hasFlag("healerHerbGiven")) {
         addItem("herb", 1);
+        markFlag("healerHerbGiven");
       }
       if (getItemCount("manaWater") < 2) {
         addItem("manaWater", 1);
