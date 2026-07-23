@@ -81,11 +81,36 @@ export function getNpcDialogue(npcId: string): string[] {
     return ["道具屋ニコ: 旅の準備なら、うちに任せて。"];
   }
 
+  if (npcId === "hiddenElder") {
+    if (hasFlag("fourthQuestComplete")) {
+      return ["隠れ里の長老: この里に平穏を取り戻してくれて、本当にありがとう。"];
+    }
+
+    if (hasFlag("mistSovereignDefeated")) {
+      return [
+        "隠れ里の長老: 深霧の魔王を討ち果たしたのだったな……!",
+        "隠れ里の長老: 詳しい話を聞かせてくれ。"
+      ];
+    }
+
+    if (hasFlag("fourthQuestAccepted")) {
+      return [
+        "隠れ里の長老: 深霧の魔王は、里の奥の坑道に眠っているという。",
+        "隠れ里の長老: くれぐれも油断はしないでくれ。"
+      ];
+    }
+
+    return ["隠れ里の長老: ……この里へようこそ。"];
+  }
+
   return ["返事はない。"];
 }
 
 export function getCurrentLunaStage(): LunaQuestStage {
   return getLunaQuestStage({
+    fourthQuestComplete: hasFlag("fourthQuestComplete"),
+    mistSovereignDefeated: hasFlag("mistSovereignDefeated"),
+    fourthQuestAccepted: hasFlag("fourthQuestAccepted"),
     thirdQuestComplete: hasFlag("thirdQuestComplete"),
     finalBeastDefeated: hasFlag("finalBeastDefeated"),
     thirdQuestAccepted: hasFlag("thirdQuestAccepted"),
@@ -141,6 +166,18 @@ export async function fetchLunaLine(stage: LunaQuestStage): Promise<string> {
 }
 
 export function getObjective(): string {
+  if (hasFlag("fourthQuestComplete")) {
+    return "霧隠れの里に戻った静けさを見守る";
+  }
+
+  if (hasFlag("mistSovereignDefeated")) {
+    return "隠れ里の長老に討伐を報告する";
+  }
+
+  if (hasFlag("fourthQuestAccepted")) {
+    return "深霧の魔王を討伐する";
+  }
+
   if (hasFlag("thirdQuestComplete")) {
     return "谷に戻った平穏を見守る";
   }

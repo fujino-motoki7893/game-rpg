@@ -22,13 +22,27 @@ const REGULAR_ENEMY_COUNT = 5;
 const DUNGEON_NAMES: Record<number, string> = {
   1: "エンバーフォール洞窟",
   2: "黒曜の深層洞窟",
-  3: "月蝕の深奥"
+  3: "月蝕の深奥",
+  4: "霧隠れの深部"
 };
 const FIELD_DUNGEON_ENTRANCES: Record<number, TilePosition> = {
   1: { x: 6, y: 24 },
   2: { x: 34, y: 6 },
-  3: { x: 36, y: 16 }
+  3: { x: 36, y: 16 },
+  4: { x: 8, y: 19 }
 };
+const TIER_3_DUNGEON_ENEMY_WEIGHTS: DungeonEnemyKey[] = [
+  "orc",
+  "direWolf",
+  "direWolf",
+  "darkMage",
+  "darkMage",
+  "stoneGolem",
+  "stoneGolem",
+  "mimic"
+];
+// Tier 4 deliberately reuses tier 3's regular-enemy pool as-is — the new
+// boss is the point of tier 4, not a brand-new bestiary.
 const DUNGEON_ENEMY_WEIGHTS_BY_TIER: Record<number, DungeonEnemyKey[]> = {
   1: [
     "goblin",
@@ -50,50 +64,56 @@ const DUNGEON_ENEMY_WEIGHTS_BY_TIER: Record<number, DungeonEnemyKey[]> = {
     "darkMage",
     "stoneGolem"
   ],
-  3: [
-    "orc",
-    "direWolf",
-    "direWolf",
-    "darkMage",
-    "darkMage",
-    "stoneGolem",
-    "stoneGolem",
-    "mimic"
-  ]
+  3: TIER_3_DUNGEON_ENEMY_WEIGHTS,
+  4: TIER_3_DUNGEON_ENEMY_WEIGHTS
 };
 type SupplyChestEquipmentBucket = "early" | "mid" | "late";
+const TIER_3_SUPPLY_CHEST_EARLY_EQUIPMENT: EquipmentId[] = ["clothCap", "roundShield", "ironHelm"];
+const TIER_3_SUPPLY_CHEST_MID_EQUIPMENT: EquipmentId[] = [
+  "ironSword",
+  "kiteShield",
+  "steelRapier",
+  "scaleMail"
+];
+const TIER_3_SUPPLY_CHEST_LATE_EQUIPMENT: EquipmentId[] = [
+  "chainMail",
+  "reinforcedGreaves",
+  "emberCharm",
+  "towerShield",
+  "swiftGreaves",
+  "hornedHelm",
+  "sagesPendant"
+];
 // New gear is layered on top of the tier-1 pool starting at tier 2, and
 // tier 3 layers in a few extra rare finds on top of that — mirroring
-// DUNGEON_ENEMY_WEIGHTS_BY_TIER's "new content from tier 2 on" shape.
+// DUNGEON_ENEMY_WEIGHTS_BY_TIER's "new content from tier 2 on" shape. Tier 4
+// reuses tier 3's pools as-is (the new masterwork gear is shop-only, not
+// chest loot, so no new chest-only items are added for tier 4).
 const SUPPLY_CHEST_EQUIPMENT_BY_TIER: Record<SupplyChestEquipmentBucket, Record<number, EquipmentId[]>> = {
   early: {
     1: ["clothCap", "roundShield"],
-    2: ["clothCap", "roundShield", "ironHelm"],
-    3: ["clothCap", "roundShield", "ironHelm"]
+    2: TIER_3_SUPPLY_CHEST_EARLY_EQUIPMENT,
+    3: TIER_3_SUPPLY_CHEST_EARLY_EQUIPMENT,
+    4: TIER_3_SUPPLY_CHEST_EARLY_EQUIPMENT
   },
   mid: {
     1: ["ironSword", "kiteShield"],
-    2: ["ironSword", "kiteShield", "steelRapier", "scaleMail"],
-    3: ["ironSword", "kiteShield", "steelRapier", "scaleMail"]
+    2: TIER_3_SUPPLY_CHEST_MID_EQUIPMENT,
+    3: TIER_3_SUPPLY_CHEST_MID_EQUIPMENT,
+    4: TIER_3_SUPPLY_CHEST_MID_EQUIPMENT
   },
   late: {
     1: ["chainMail", "reinforcedGreaves", "emberCharm"],
     2: ["chainMail", "reinforcedGreaves", "emberCharm", "towerShield", "swiftGreaves"],
-    3: [
-      "chainMail",
-      "reinforcedGreaves",
-      "emberCharm",
-      "towerShield",
-      "swiftGreaves",
-      "hornedHelm",
-      "sagesPendant"
-    ]
+    3: TIER_3_SUPPLY_CHEST_LATE_EQUIPMENT,
+    4: TIER_3_SUPPLY_CHEST_LATE_EQUIPMENT
   }
 };
 const DUNGEON_GUARDIAN_KEYS: Record<number, string> = {
   1: "guardian",
   2: "deepGuardian",
-  3: "eclipseBeast"
+  3: "eclipseBeast",
+  4: "mistSovereign"
 };
 const RELIC_CHEST_IDS: Record<number, string> = {
   1: "relic-chest",
@@ -449,6 +469,9 @@ export function getSupplyChestCount(floor: number, roll: number): number {
 }
 
 function normalizeDungeonTier(tier: number | undefined): number {
+  if (tier && tier >= 4) {
+    return 4;
+  }
   if (tier && tier >= 3) {
     return 3;
   }

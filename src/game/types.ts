@@ -1,5 +1,5 @@
 export type Direction = "up" | "down" | "left" | "right";
-export type MapId = "village" | "field" | "dungeon";
+export type MapId = "village" | "field" | "dungeon" | "hiddenVillage";
 
 export interface TilePosition {
   x: number;
@@ -75,7 +75,13 @@ export type EquipmentId =
   | "towerShield"
   | "swiftGreaves"
   | "hornedHelm"
-  | "sagesPendant";
+  | "sagesPendant"
+  | "masterworkGreatsword"
+  | "masterworkAegis"
+  | "masterworkCirclet"
+  | "masterworkPlate"
+  | "masterworkGreaves"
+  | "masterworkSigil";
 export type EquipmentInventory = Partial<Record<EquipmentId, number>>;
 export type EquipmentLoadout = Partial<Record<EquipmentSlot, EquipmentId>>;
 
@@ -111,6 +117,8 @@ export interface PortalDefinition extends TilePosition {
   kind?: "map" | "stairs-up" | "stairs-down" | "edge";
   /** Which dungeon tier this portal leads into/within (only meaningful when toMap is "dungeon"). */
   dungeonTier?: number;
+  /** Portal only functions (and only renders its icon) once this save flag is true. */
+  requiresFlag?: string;
 }
 
 export interface MapDefinition {

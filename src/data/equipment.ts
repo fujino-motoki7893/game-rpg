@@ -72,7 +72,13 @@ export const EQUIPMENT_ORDER: EquipmentId[] = [
   "towerShield",
   "swiftGreaves",
   "hornedHelm",
-  "sagesPendant"
+  "sagesPendant",
+  "masterworkGreatsword",
+  "masterworkAegis",
+  "masterworkCirclet",
+  "masterworkPlate",
+  "masterworkGreaves",
+  "masterworkSigil"
 ];
 
 export const EQUIPMENT_SHOP_ORDER: EquipmentId[] = [
@@ -82,6 +88,15 @@ export const EQUIPMENT_SHOP_ORDER: EquipmentId[] = [
   "paddedVest",
   "travelerPants",
   "silverRing"
+];
+
+export const MASTERWORK_EQUIPMENT_ORDER: EquipmentId[] = [
+  "masterworkGreatsword",
+  "masterworkAegis",
+  "masterworkCirclet",
+  "masterworkPlate",
+  "masterworkGreaves",
+  "masterworkSigil"
 ];
 
 export const EQUIPMENT: Record<EquipmentId, EquipmentDefinition> = {
@@ -261,6 +276,66 @@ export const EQUIPMENT: Record<EquipmentId, EquipmentDefinition> = {
     sellPrice: 90,
     maxMpBonus: 6,
     attackBonus: 2
+  },
+  masterworkGreatsword: {
+    id: "masterworkGreatsword",
+    name: "常闇の大剣",
+    category: "weapon",
+    description: "攻撃+11 素早さ+3",
+    rarity: 5,
+    buyPrice: 450,
+    attackBonus: 11,
+    speedBonus: 3
+  },
+  masterworkAegis: {
+    id: "masterworkAegis",
+    name: "霧守りの大盾",
+    category: "shield",
+    description: "防御+6 HP+8",
+    rarity: 5,
+    buyPrice: 420,
+    defenseBonus: 6,
+    maxHpBonus: 8
+  },
+  masterworkCirclet: {
+    id: "masterworkCirclet",
+    name: "深霧の兜",
+    category: "head",
+    description: "防御+4 攻撃+2",
+    rarity: 5,
+    buyPrice: 380,
+    defenseBonus: 4,
+    attackBonus: 2
+  },
+  masterworkPlate: {
+    id: "masterworkPlate",
+    name: "隠れ里の重鎧",
+    category: "bodyUpper",
+    description: "防御+6 HP+9",
+    rarity: 5,
+    buyPrice: 430,
+    defenseBonus: 6,
+    maxHpBonus: 9
+  },
+  masterworkGreaves: {
+    id: "masterworkGreaves",
+    name: "霧走りの脚甲",
+    category: "bodyLower",
+    description: "素早さ+4 HP+4",
+    rarity: 5,
+    buyPrice: 400,
+    speedBonus: 4,
+    maxHpBonus: 4
+  },
+  masterworkSigil: {
+    id: "masterworkSigil",
+    name: "帝王の紋章",
+    category: "accessory",
+    description: "MP+8 攻撃+3",
+    rarity: 5,
+    buyPrice: 400,
+    maxMpBonus: 8,
+    attackBonus: 3
   }
 };
 

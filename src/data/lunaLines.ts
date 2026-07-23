@@ -2,6 +2,9 @@
 // dependency here so this can be safely imported from the Cloudflare Worker too.
 
 export type LunaQuestStage =
+  | "fourth-quest-complete"
+  | "mist-sovereign-defeated"
+  | "fourth-quest-active"
   | "third-quest-complete"
   | "final-beast-defeated"
   | "third-quest-active"
@@ -11,6 +14,9 @@ export type LunaQuestStage =
   | "casual";
 
 export interface LunaQuestFlags {
+  fourthQuestComplete: boolean;
+  mistSovereignDefeated: boolean;
+  fourthQuestAccepted: boolean;
   thirdQuestComplete: boolean;
   finalBeastDefeated: boolean;
   thirdQuestAccepted: boolean;
@@ -21,6 +27,15 @@ export interface LunaQuestFlags {
 }
 
 export function getLunaQuestStage(flags: LunaQuestFlags): LunaQuestStage {
+  if (flags.fourthQuestComplete) {
+    return "fourth-quest-complete";
+  }
+  if (flags.mistSovereignDefeated) {
+    return "mist-sovereign-defeated";
+  }
+  if (flags.fourthQuestAccepted) {
+    return "fourth-quest-active";
+  }
   if (flags.thirdQuestComplete) {
     return "third-quest-complete";
   }
@@ -44,6 +59,9 @@ export function getLunaQuestStage(flags: LunaQuestFlags): LunaQuestStage {
 
 export function isLunaQuestStage(value: unknown): value is LunaQuestStage {
   return (
+    value === "fourth-quest-complete" ||
+    value === "mist-sovereign-defeated" ||
+    value === "fourth-quest-active" ||
     value === "third-quest-complete" ||
     value === "final-beast-defeated" ||
     value === "third-quest-active" ||
@@ -70,6 +88,18 @@ export const LUNA_CASUAL_LINES: LunaStaticLine[] = [
 ];
 
 const STAGE_LINES: Record<Exclude<LunaQuestStage, "casual">, LunaStaticLine> = {
+  "fourth-quest-complete": {
+    id: "stage-fourth-quest-complete",
+    text: "ルナ: 霧隠れの里にも、静けさが戻りましたね。ここまで一緒に来られて、良かったです。"
+  },
+  "mist-sovereign-defeated": {
+    id: "stage-mist-sovereign-defeated",
+    text: "ルナ: 深霧の魔王……まさか、こんなところにまだ脅威が眠っていたなんて。里の長老に報告しましょう。"
+  },
+  "fourth-quest-active": {
+    id: "stage-fourth-quest-active",
+    text: "ルナ: 霧の向こうに隠れていた里があったのですね。深霧の魔王、油断せずに挑みましょう。"
+  },
   "third-quest-complete": {
     id: "stage-third-quest-complete",
     text: "ルナ: あなたのおかげで、あの日守れなかったものを、今度こそ守れた気がします。ありがとう。"
@@ -112,6 +142,12 @@ export function getLunaLineForStage(stage: LunaQuestStage): string {
 
 export function describeLunaStage(stage: LunaQuestStage): string {
   switch (stage) {
+    case "fourth-quest-complete":
+      return "霧隠れの里で深霧の魔王を討伐し、長老への報告も終えた。隠れ里に静けさが戻り、旅の最後の山場を越えた安堵に包まれている。";
+    case "mist-sovereign-defeated":
+      return "霧隠れの里の奥、坑道の最深部で深霧の魔王をちょうど討ち果たしたところ。まだ知られざる脅威が残っていたことに、ルナは驚きと安堵の入り混じった様子。";
+    case "fourth-quest-active":
+      return "月蝕の魔獣を倒した後に見つかった、霧に隠れた里から、深霧の魔王討伐を頼まれたばかり。これから坑道の奥へ向かうところ。";
     case "third-quest-complete":
       return "月蝕の魔獣を討伐し、村長への報告も終えた。旅の大きな山場を越え、穏やかな安堵に包まれている。ルナは自分の故郷にまつわる古い傷が、今度こそ癒えたように感じている。";
     case "final-beast-defeated":

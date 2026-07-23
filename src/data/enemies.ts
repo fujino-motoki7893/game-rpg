@@ -162,5 +162,16 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     gold: 72,
     texture: "enemy-guardian",
     boss: true
+  },
+  mistSovereign: {
+    key: "mistSovereign",
+    name: "深霧の魔王",
+    maxHp: 155,
+    attack: 24,
+    speed: 15,
+    exp: 78,
+    gold: 105,
+    texture: "enemy-guardian",
+    boss: true
   }
 };

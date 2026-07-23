@@ -18,7 +18,7 @@ import {
 } from "../data/dungeonGenerator";
 import { createDungeon } from "../data/dungeonService";
 import { ENEMIES } from "../data/enemies";
-import { EQUIPMENT } from "../data/equipment";
+import { EQUIPMENT, MASTERWORK_EQUIPMENT_ORDER } from "../data/equipment";
 import { ITEMS } from "../data/items";
 import { BLOCKING_TILES, getMapDefinition, MAPS } from "../data/maps";
 import {
@@ -65,6 +65,7 @@ import type {
   ChestDefinition,
   Direction,
   EnemySpawn,
+  EquipmentId,
   MapDefinition,
   MapId,
   NpcDefinition,
@@ -372,7 +373,7 @@ export class WorldScene extends Phaser.Scene {
 
   private createObjects(): void {
     this.enemyObjects.clear();
-    this.currentMap.portals.forEach((portal) => {
+    this.getActivePortals().forEach((portal) => {
       if (portal.kind === "edge") {
         // Edge portals sit on a border tile that's meant to read as open
         // terrain leading off the map, not a marked door — no icon sprite.
@@ -449,6 +450,7 @@ export class WorldScene extends Phaser.Scene {
   private refreshAfterBattle(): void {
     void this.loadMap(this.currentMap.id, this.playerTile).then(() => {
       this.checkFinalBossDefeat();
+      this.checkMistSovereignDefeat();
     });
   }
 
@@ -469,6 +471,27 @@ export class WorldScene extends Phaser.Scene {
         "月蝕の魔獣を討ち果たした。深い霧が晴れていくのがわかる。",
         "ルナ: ……終わった、のですね。",
         "村長ローアンに報告しに行きましょう。"
+      ]);
+    });
+  }
+
+  private checkMistSovereignDefeat(): void {
+    if (
+      this.currentMap.id !== "dungeon" ||
+      getActiveDungeonTier() !== 4 ||
+      !isEnemyDefeated(getGuardianIdForTier(4)) ||
+      hasFlag("mistSovereignDefeated")
+    ) {
+      return;
+    }
+
+    markFlag("mistSovereignDefeated");
+    this.game.events.emit(GAME_EVENTS.stateChanged);
+    void this.loadMap("field", this.getFieldDungeonEntrance()).then(() => {
+      this.showDialogue([
+        "深霧の魔王は霧となって消え去った。",
+        "ルナ: ここにも、まだ知られざる脅威が眠っていたのですね。",
+        "霧隠れの里の長老に、報告に行きましょう。"
       ]);
     });
   }
@@ -772,6 +795,11 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
 
+    if (npc.id === "masterworkShopkeeper") {
+      this.openShop("equipment", MASTERWORK_EQUIPMENT_ORDER);
+      return;
+    }
+
     let dialogue: string[] | undefined;
     let stateChanged = false;
     let shouldReloadMap = false;
@@ -874,6 +902,34 @@ export class WorldScene extends Phaser.Scene {
       }
     }
 
+    if (npc.id === "hiddenElder") {
+      if (!hasFlag("fourthQuestAccepted")) {
+        const save = getSave();
+        save.gold += 20;
+        markFlag("fourthQuestAccepted");
+        persistSave();
+        stateChanged = true;
+        dialogue = [
+          "隠れ里の長老: よくぞ霧を越えて参られた。この里は深霧の魔王の気配に、長く怯えて暮らしてきた。",
+          "隠れ里の長老: 里の奥に開いた坑道に、その魔王が眠っている。討ち果たしてはくれぬか。",
+          "隠れ里の長老: 手付けに、これを持っていっておくれ。",
+          "金貨20枚を受け取った。",
+          "クエスト開始: 深霧の魔王を討伐する"
+        ];
+      } else if (hasFlag("mistSovereignDefeated") && !hasFlag("fourthQuestComplete")) {
+        const save = getSave();
+        save.gold += 300;
+        markFlag("fourthQuestComplete");
+        persistSave();
+        stateChanged = true;
+        dialogue = [
+          "隠れ里の長老: 深霧の魔王を討ち果たしてくれたのか……!",
+          "金貨300枚を受け取った。",
+          "隠れ里の長老: これで、里に平穏が戻る。おぬしには、いくら感謝してもし足りぬ。"
+        ];
+      }
+    }
+
     if (stateChanged) {
       this.game.events.emit(GAME_EVENTS.stateChanged);
     }
@@ -962,10 +1018,10 @@ export class WorldScene extends Phaser.Scene {
     this.scene.launch("MenuScene");
   }
 
-  private openShop(shopKind: ShopKind): void {
+  private openShop(shopKind: ShopKind, buyableEquipmentIds?: EquipmentId[]): void {
     this.menuOpen = true;
     this.hideTargetHint();
-    this.scene.launch("ShopScene", { shopKind });
+    this.scene.launch("ShopScene", { shopKind, buyableEquipmentIds });
   }
 
   private handleMenuClosed(): void {
@@ -989,7 +1045,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private async checkPortal(): Promise<void> {
-    const portal = this.currentMap.portals.find(
+    const portal = this.getActivePortals().find(
       (candidate) =>
         candidate.kind !== "edge" &&
         candidate.x === this.playerTile.x &&
@@ -1080,7 +1136,7 @@ export class WorldScene extends Phaser.Scene {
       return false;
     }
 
-    if (this.currentMap.portals.some((portal) => portal.x === position.x && portal.y === position.y)) {
+    if (this.getActivePortals().some((portal) => portal.x === position.x && portal.y === position.y)) {
       return false;
     }
 
@@ -1188,12 +1244,18 @@ export class WorldScene extends Phaser.Scene {
     return this.currentMap.chests.find((chest) => chest.x === position.x && chest.y === position.y);
   }
 
+  private getActivePortals(): PortalDefinition[] {
+    return this.currentMap.portals.filter(
+      (portal) => !portal.requiresFlag || hasFlag(portal.requiresFlag)
+    );
+  }
+
   private portalAt(position: TilePosition) {
-    return this.currentMap.portals.find((portal) => portal.x === position.x && portal.y === position.y);
+    return this.getActivePortals().find((portal) => portal.x === position.x && portal.y === position.y);
   }
 
   private edgePortalAt(position: TilePosition): PortalDefinition | undefined {
-    return this.currentMap.portals.find(
+    return this.getActivePortals().find(
       (portal) => portal.kind === "edge" && portal.x === position.x && portal.y === position.y
     );
   }
@@ -1362,7 +1424,11 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private describeNpc(npc: NpcDefinition): string {
-    if (npc.id === "shopkeeper" || npc.id === "equipmentShopkeeper") {
+    if (
+      npc.id === "shopkeeper" ||
+      npc.id === "equipmentShopkeeper" ||
+      npc.id === "masterworkShopkeeper"
+    ) {
       return `${npc.name}\n売買`;
     }
     if (npc.id === "healer") {

@@ -136,7 +136,7 @@ async function readDungeonRequest(request: Request): Promise<DungeonRequest> {
       : {};
   const floorCount = readBoundedInteger(body.floorCount, 1, 8, 1);
   const floor = readBoundedInteger(body.floor, 1, floorCount, 1);
-  const tier = readBoundedInteger(body.tier, 1, 3, 1);
+  const tier = readBoundedInteger(body.tier, 1, 4, 1);
   const upTarget = readPlayablePosition(body.upTarget);
 
   return upTarget ? { floor, floorCount, upTarget, tier } : { floor, floorCount, tier };
@@ -197,11 +197,13 @@ async function generateGroqDungeon(env: Env, context: DungeonRequest): Promise<M
           role: "user",
           content: [
             `Create floor B${context.floor}F of a ${context.floorCount}-floor ${dungeonName}.`,
-            context.tier >= 3
-              ? "This is the third quest dungeon: a fearsome new monster has awakened here — make it feel the most dangerous and oppressive of all three caves."
-              : context.tier >= 2
-                ? "This is the second quest dungeon: make it feel deeper and more dangerous than the first cave."
-                : "This is the first quest cave dungeon.",
+            context.tier >= 4
+              ? "This is the hidden fourth dungeon, sealed away until the third quest's beast was defeated: make it feel like the deepest, most dangerous depths yet, beyond even the third cave."
+              : context.tier >= 3
+                ? "This is the third quest dungeon: a fearsome new monster has awakened here — make it feel the most dangerous and oppressive of all three caves."
+                : context.tier >= 2
+                  ? "This is the second quest dungeon: make it feel deeper and more dangerous than the first cave."
+                  : "This is the first quest cave dungeon.",
             "Return a JSON object with rows, chests, enemies, and optionally stairsDown.",
             "rows must be exactly 30 strings, each exactly 40 characters.",
             "Allowed row characters: # wall, . floor, ~ water, U up stairs, V down stairs, B relic chest, D guardian floor.",

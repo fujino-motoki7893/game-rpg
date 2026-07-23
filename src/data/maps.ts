@@ -137,6 +137,38 @@ export const MAPS: Record<MapId, MapDefinition> = {
       { id: "dungeon-mage-3", enemyKey: "mage", x: 10, y: 10 },
       { id: getGuardianIdForTier(1), enemyKey: "guardian", x: 15, y: 13 }
     ]
+  },
+  hiddenVillage: {
+    id: "hiddenVillage",
+    name: "霧隠れの里",
+    spawn: { x: 12, y: 15 },
+    rows: [
+      "########################",
+      "########################",
+      "##....................##",
+      "##..HHH.........HHH...##",
+      "##..HHH.........HHH...##",
+      "##....................##",
+      "##.........==.........##",
+      "##....============....##",
+      "##.........==.........##",
+      "##.........==.........##",
+      "##.........==.........##",
+      "##..~~~....==.........##",
+      "##..~~~....==.........##",
+      "##.........==.........##",
+      "##.........==.........##",
+      "##..........O.........##",
+      "########################",
+      "########################"
+    ],
+    portals: [{ x: 12, y: 15, toMap: "field", toX: 14, toY: 9 }],
+    npcs: [
+      { id: "hiddenElder", name: "隠れ里の長老", texture: "npc-elder", x: 5, y: 5 },
+      { id: "masterworkShopkeeper", name: "名工ヴォルグ", texture: "npc-armorer", x: 17, y: 5 }
+    ],
+    chests: [],
+    enemies: []
   }
 };
 
@@ -210,7 +242,7 @@ export const EXPANDED_MAPS: Partial<Record<MapId, MapDefinition>> = {
       "####..,,,,,,................,,,,,,O..###",
       "###...,,,,,,................,,,,,,....##",
       "##....,,,,,,................,,,,,,.....#",
-      "##.....................................#",
+      "##............O........................#",
       "#.........S...........G...........S....#",
       "###...................................##",
       "##...........................~~~~~.....#",
@@ -220,7 +252,7 @@ export const EXPANDED_MAPS: Partial<Record<MapId, MapDefinition>> = {
       "##...............,,,,,,.............O..#",
       "####^^^^.........,,,,,,..............###",
       "####^^^^........S...........G.......####",
-      "####^^^^............................####",
+      "####^^^^O...........................####",
       "######.....................,,,,,,..#####",
       "####^^^,,,,................,,,,,,..#####",
       "####^^^,,,,................,,,,,,...####",
@@ -236,7 +268,9 @@ export const EXPANDED_MAPS: Partial<Record<MapId, MapDefinition>> = {
       { x: 20, y: 1, toMap: "village", toX: 20, toY: 27, kind: "edge" },
       { x: 6, y: 24, toMap: "dungeon", toX: 1, toY: 1, dungeonTier: 1 },
       { x: 34, y: 6, toMap: "dungeon", toX: 1, toY: 1, dungeonTier: 2 },
-      { x: 36, y: 16, toMap: "dungeon", toX: 1, toY: 1, dungeonTier: 3 }
+      { x: 36, y: 16, toMap: "dungeon", toX: 1, toY: 1, dungeonTier: 3 },
+      { x: 14, y: 9, toMap: "hiddenVillage", toX: 12, toY: 15, requiresFlag: "finalBeastDefeated" },
+      { x: 8, y: 19, toMap: "dungeon", toX: 1, toY: 1, dungeonTier: 4, requiresFlag: "finalBeastDefeated" }
     ],
     npcs: [],
     chests: [],

@@ -39,6 +39,7 @@ type ShopKind = "item" | "equipment";
 type TradeEntry = { kind: "item"; id: ItemId } | { kind: "equipment"; id: EquipmentId };
 interface ShopPayload {
   shopKind?: ShopKind;
+  buyableEquipmentIds?: EquipmentId[];
 }
 
 const TABS: ShopTab[] = ["buy", "sell"];
@@ -49,6 +50,7 @@ const TAB_LABELS: Record<ShopTab, string> = {
 
 export class ShopScene extends Phaser.Scene {
   private shopKind: ShopKind = "item";
+  private buyableEquipmentIds?: EquipmentId[];
   private activeTab: ShopTab = "buy";
   private selectedItemIndex = 0;
   private tabButtons: Partial<Record<ShopTab, Phaser.GameObjects.Text>> = {};
@@ -62,6 +64,7 @@ export class ShopScene extends Phaser.Scene {
 
   create(payload?: ShopPayload): void {
     this.shopKind = payload?.shopKind ?? "item";
+    this.buyableEquipmentIds = payload?.buyableEquipmentIds;
     this.activeTab = "buy";
     this.selectedItemIndex = 0;
     this.contentObjects = [];
@@ -313,7 +316,8 @@ export class ShopScene extends Phaser.Scene {
 
   private getTradeEntries(): TradeEntry[] {
     if (this.shopKind === "equipment") {
-      const equipmentIds = this.activeTab === "buy" ? EQUIPMENT_SHOP_ORDER : EQUIPMENT_ORDER;
+      const equipmentIds =
+        this.activeTab === "buy" ? this.buyableEquipmentIds ?? EQUIPMENT_SHOP_ORDER : EQUIPMENT_ORDER;
       return equipmentIds.map((id) => ({ kind: "equipment", id }));
     }
 

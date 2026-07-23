@@ -45,7 +45,8 @@ import type {
 const DUNGEON_FLOOR_RANGES: Record<number, { min: number; max: number }> = {
   1: { min: 3, max: 5 },
   2: { min: 5, max: 7 },
-  3: { min: 6, max: 8 }
+  3: { min: 6, max: 8 },
+  4: { min: 7, max: 8 }
 };
 const FIELD_ENEMY_ID_PREFIX = "field-";
 const DUNGEON_ENEMY_ID_PREFIX = "dungeon-";
@@ -199,6 +200,9 @@ export function getDungeonFloorCount(tier = getActiveDungeonTier()): number | un
 }
 
 export function getDungeonTier(): number {
+  if (hasFlag("finalBeastDefeated")) {
+    return 4;
+  }
   if (hasFlag("secondQuestComplete")) {
     return 3;
   }
