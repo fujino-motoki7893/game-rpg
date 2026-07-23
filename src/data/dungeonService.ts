@@ -1,5 +1,6 @@
 import {
   generateDungeon,
+  getDungeonDimensions,
   getDungeonEnemyKeysForTier,
   getDungeonGuardianKeyForTier,
   getGuardianIdForTier,
@@ -55,6 +56,7 @@ function isDungeonMap(value: unknown, floor: number, floorCount: number, tier: n
   }
 
   const map = value as MapDefinition;
+  const { width, height } = getDungeonDimensions(floor);
   const baseValid =
     map.id === "dungeon" &&
     typeof map.name === "string" &&
@@ -62,8 +64,8 @@ function isDungeonMap(value: unknown, floor: number, floorCount: number, tier: n
     map.floor === floor &&
     map.floorCount === floorCount &&
     Array.isArray(map.rows) &&
-    map.rows.length === 30 &&
-    map.rows.every((row) => typeof row === "string" && row.length === 40) &&
+    map.rows.length === height &&
+    map.rows.every((row) => typeof row === "string" && row.length === width) &&
     Array.isArray(map.portals) &&
     Array.isArray(map.npcs) &&
     Array.isArray(map.chests) &&

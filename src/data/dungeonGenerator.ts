@@ -7,8 +7,16 @@ import type {
   TilePosition
 } from "../game/types";
 
-const WIDTH = 40;
-const HEIGHT = 30;
+const BASE_WIDTH = 40;
+const BASE_HEIGHT = 30;
+// Floors past this depth grow wider/taller than the base layout so a long
+// tier-3 descent (up to floor 8) feels progressively larger.
+export const DEEP_FLOOR_THRESHOLD = 5;
+const DEEP_WIDTH_STEP = 4;
+const DEEP_HEIGHT_STEP = 3;
+const MIN_SUPPLY_CHESTS = 1;
+const MAX_SUPPLY_CHESTS = 3;
+const MAX_SUPPLY_CHESTS_WITH_DEPTH_BONUS = 6;
 const REGULAR_ENEMY_COUNT = 5;
 const DUNGEON_NAMES: Record<number, string> = {
   1: "エンバーフォール洞窟",
@@ -100,53 +108,104 @@ export function generateDungeon(
   const tier = normalizeDungeonTier(options.tier);
   const isFinalFloor = floor >= floorCount;
   const rng = createRng(seed);
-  const grid = createFilledGrid("#");
+  const { width, height } = getDungeonDimensions(floor);
+  const extraDepth = Math.max(0, floor - DEEP_FLOOR_THRESHOLD);
+  const grid = createFilledGrid("#", width, height);
   const startRoom: Room = { x: 1, y: 1, w: 8, h: 6 };
   const midRooms = [
-    clampRoom({
-      x: randomInt(rng, 12, 16),
-      y: randomInt(rng, 2, 5),
-      w: randomInt(rng, 6, 8),
-      h: randomInt(rng, 4, 6)
-    }),
-    clampRoom({
-      x: randomInt(rng, 24, 29),
-      y: randomInt(rng, 2, 6),
-      w: randomInt(rng, 6, 8),
-      h: randomInt(rng, 4, 5)
-    }),
-    clampRoom({
-      x: randomInt(rng, 3, 7),
-      y: randomInt(rng, 12, 16),
-      w: randomInt(rng, 6, 8),
-      h: randomInt(rng, 4, 6)
-    }),
-    clampRoom({
-      x: randomInt(rng, 16, 20),
-      y: randomInt(rng, 12, 16),
-      w: randomInt(rng, 6, 9),
-      h: randomInt(rng, 5, 7)
-    }),
-    clampRoom({
-      x: randomInt(rng, 28, 32),
-      y: randomInt(rng, 12, 16),
-      w: randomInt(rng, 6, 8),
-      h: randomInt(rng, 4, 6)
-    }),
-    clampRoom({
-      x: randomInt(rng, 6, 10),
-      y: randomInt(rng, 20, 23),
-      w: randomInt(rng, 6, 8),
-      h: randomInt(rng, 4, 6)
-    })
+    clampRoom(
+      {
+        x: randomInt(rng, 12, 16),
+        y: randomInt(rng, 2, 5),
+        w: randomInt(rng, 6, 8),
+        h: randomInt(rng, 4, 6)
+      },
+      BASE_WIDTH,
+      BASE_HEIGHT
+    ),
+    clampRoom(
+      {
+        x: randomInt(rng, 24, 29),
+        y: randomInt(rng, 2, 6),
+        w: randomInt(rng, 6, 8),
+        h: randomInt(rng, 4, 5)
+      },
+      BASE_WIDTH,
+      BASE_HEIGHT
+    ),
+    clampRoom(
+      {
+        x: randomInt(rng, 3, 7),
+        y: randomInt(rng, 12, 16),
+        w: randomInt(rng, 6, 8),
+        h: randomInt(rng, 4, 6)
+      },
+      BASE_WIDTH,
+      BASE_HEIGHT
+    ),
+    clampRoom(
+      {
+        x: randomInt(rng, 16, 20),
+        y: randomInt(rng, 12, 16),
+        w: randomInt(rng, 6, 9),
+        h: randomInt(rng, 5, 7)
+      },
+      BASE_WIDTH,
+      BASE_HEIGHT
+    ),
+    clampRoom(
+      {
+        x: randomInt(rng, 28, 32),
+        y: randomInt(rng, 12, 16),
+        w: randomInt(rng, 6, 8),
+        h: randomInt(rng, 4, 6)
+      },
+      BASE_WIDTH,
+      BASE_HEIGHT
+    ),
+    clampRoom(
+      {
+        x: randomInt(rng, 6, 10),
+        y: randomInt(rng, 20, 23),
+        w: randomInt(rng, 6, 8),
+        h: randomInt(rng, 4, 6)
+      },
+      BASE_WIDTH,
+      BASE_HEIGHT
+    )
   ];
-  const endRoom = clampRoom({
-    x: randomInt(rng, 26, 29),
-    y: randomInt(rng, 20, 23),
-    w: 8,
-    h: 6
-  });
-  const rooms = [startRoom, ...midRooms, endRoom];
+  const endRoom = clampRoom(
+    {
+      x: randomInt(rng, 26, 29),
+      y: randomInt(rng, 20, 23),
+      w: 8,
+      h: 6
+    },
+    BASE_WIDTH,
+    BASE_HEIGHT
+  );
+  // Deep floors (beyond DEEP_FLOOR_THRESHOLD) get extra rooms chained off the
+  // end room, spreading progressively into the newly available width/height
+  // so the map actually grows into a bigger explorable space instead of just
+  // padding the border with unused walls.
+  const deepRooms: Room[] = [];
+  for (let index = 0; index < extraDepth; index += 1) {
+    const spreadX = BASE_WIDTH - 6 + index * DEEP_WIDTH_STEP;
+    const spreadY = BASE_HEIGHT - 10 + index * DEEP_HEIGHT_STEP;
+    deepRooms.push(
+      clampRoom(
+        {
+          x: randomInt(rng, spreadX, spreadX + 4),
+          y: randomInt(rng, spreadY, spreadY + 6),
+          w: randomInt(rng, 6, 9),
+          h: randomInt(rng, 5, 7)
+        },
+        width,
+        height
+      )
+    );
+  }
+  const rooms = [startRoom, ...midRooms, endRoom, ...deepRooms];
 
   rooms.forEach((room) => carveRoom(grid, room));
   for (let index = 1; index < rooms.length; index += 1) {
@@ -245,20 +304,23 @@ export function generateDungeon(
     });
   }
 
-  const supplyChest = findOpenFloorNear(
-    grid,
-    roomCenter(midRooms[(floor - 1) % midRooms.length]),
-    reserved
-  );
-  placeMarker(grid, supplyChest, "B");
-  reserved.add(positionKey(supplyChest));
+  const chestRoomPool = deepRooms.length > 0 ? [...midRooms, ...deepRooms] : midRooms;
+  const supplyChestCount = getSupplyChestCount(floor, rng());
+  const supplyChests: TilePosition[] = [];
+  for (let index = 0; index < supplyChestCount; index += 1) {
+    const room = chestRoomPool[(floor - 1 + index) % chestRoomPool.length];
+    const supplyChest = findOpenFloorNear(grid, roomCenter(room), reserved);
+    placeMarker(grid, supplyChest, "B");
+    reserved.add(positionKey(supplyChest));
+    addChestAccessRequirement(grid, supplyChest, reserved, requiredTiles);
+    supplyChests.push(supplyChest);
+  }
 
-  addChestAccessRequirement(grid, supplyChest, reserved, requiredTiles);
   if (relicChest) {
     addChestAccessRequirement(grid, relicChest, reserved, requiredTiles);
   }
 
-  addWaterPools(grid, rng, midRooms, reserved, requiredTiles);
+  addWaterPools(grid, rng, chestRoomPool, reserved, requiredTiles);
   placeMarker(grid, spawn, "U");
 
   return {
@@ -271,12 +333,12 @@ export function generateDungeon(
     portals,
     npcs: [],
     chests: [
-      {
-        id: `dungeon-t${tier}-b${floor}-supply-chest`,
-        x: supplyChest.x,
-        y: supplyChest.y,
+      ...supplyChests.map((position, index) => ({
+        id: `dungeon-t${tier}-b${floor}-supply-chest-${index + 1}`,
+        x: position.x,
+        y: position.y,
         reward: pickSupplyChestReward(floor, floorCount, rng)
-      },
+      })),
       ...(relicChest
         ? [
             {
@@ -330,6 +392,24 @@ export function hasFinalRelicForTier(tier: number): boolean {
   return normalizeDungeonTier(tier) <= FINAL_RELIC_MAX_TIER;
 }
 
+export function getDungeonDimensions(floor: number): { width: number; height: number } {
+  const extraDepth = Math.max(0, floor - DEEP_FLOOR_THRESHOLD);
+  return {
+    width: BASE_WIDTH + extraDepth * DEEP_WIDTH_STEP,
+    height: BASE_HEIGHT + extraDepth * DEEP_HEIGHT_STEP
+  };
+}
+
+// `roll` is a caller-supplied value in [0, 1) so both the seeded local
+// generator (via its rng) and the worker's deterministic AI-assist path
+// (via a hash of floor/tier) can share this formula.
+export function getSupplyChestCount(floor: number, roll: number): number {
+  const base = MIN_SUPPLY_CHESTS + Math.floor(clamp(roll, 0, 0.999999) * MAX_SUPPLY_CHESTS);
+  const extraDepth = Math.max(0, floor - DEEP_FLOOR_THRESHOLD);
+  const depthBonus = Math.floor(extraDepth / 2);
+  return Math.min(base + depthBonus, MAX_SUPPLY_CHESTS_WITH_DEPTH_BONUS);
+}
+
 function normalizeDungeonTier(tier: number | undefined): number {
   if (tier && tier >= 3) {
     return 3;
@@ -345,16 +425,16 @@ function createRng(seed: number): Rng {
   };
 }
 
-function createFilledGrid(tile: string): Grid {
-  return Array.from({ length: HEIGHT }, () => Array.from({ length: WIDTH }, () => tile));
+function createFilledGrid(tile: string, width: number, height: number): Grid {
+  return Array.from({ length: height }, () => Array.from({ length: width }, () => tile));
 }
 
-function clampRoom(room: Room): Room {
-  const w = clamp(room.w, 3, WIDTH - 2);
-  const h = clamp(room.h, 3, HEIGHT - 2);
+function clampRoom(room: Room, width: number, height: number): Room {
+  const w = clamp(room.w, 3, width - 2);
+  const h = clamp(room.h, 3, height - 2);
   return {
-    x: clamp(room.x, 1, WIDTH - w - 1),
-    y: clamp(room.y, 1, HEIGHT - h - 1),
+    x: clamp(room.x, 1, width - w - 1),
+    y: clamp(room.y, 1, height - h - 1),
     w,
     h
   };
@@ -425,8 +505,8 @@ function findOpenFloorNear(
     }
   }
 
-  for (let y = 1; y < HEIGHT - 1; y += 1) {
-    for (let x = 1; x < WIDTH - 1; x += 1) {
+  for (let y = 1; y < grid.length - 1; y += 1) {
+    for (let x = 1; x < grid[y].length - 1; x += 1) {
       const position = { x, y };
       if (isOpenFloor(grid, position, reserved)) {
         return position;

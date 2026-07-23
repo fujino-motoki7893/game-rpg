@@ -1,4 +1,5 @@
 import {
+  DEEP_FLOOR_THRESHOLD,
   generateDungeon,
   getDungeonEnemyKeysForTier,
   getDungeonGuardianKeyForTier,
@@ -6,6 +7,7 @@ import {
   getFieldDungeonEntranceForTier,
   getGuardianIdForTier,
   getRelicChestIdForTier,
+  getSupplyChestCount,
   hasFinalRelicForTier
 } from "../data/dungeonGenerator";
 import { isDungeonEnemyKey, type DungeonEnemyKey } from "../data/enemies";
@@ -91,7 +93,11 @@ export default {
 
 async function createDungeonResponse(request: Request, env: Env): Promise<Response> {
   const context = await readDungeonRequest(request);
-  if (!env.GROQ_API_KEY) {
+  // Deep floors grow past the AI prompt's fixed 40x30 grid (see
+  // getDungeonDimensions), so the client would reject an AI map for them
+  // anyway — skip the wasted Groq call and go straight to the local
+  // generator, which already produces the correctly-sized layout.
+  if (!env.GROQ_API_KEY || context.floor > DEEP_FLOOR_THRESHOLD) {
     return jsonResponse({ map: generateDungeon(context), source: "worker-local" });
   }
 
@@ -201,8 +207,8 @@ async function generateGroqDungeon(env: Env, context: DungeonRequest): Promise<M
             "The outer border must be #. Put U at x=1,y=1.",
             "This is a large map (40x30) — carve several distinct rooms connected by corridors, not just one small cluster; spread rooms and enemies across the full width and height.",
             hasFinalRelic
-              ? "The server will add one supply chest automatically. Only place B when this floor needs the final relic chest."
-              : "The server will add one supply chest automatically. This dungeon has no relic to find, so never place B — the goal is only to defeat the guardian.",
+              ? "The server will add one or more supply chests automatically. Only place B when this floor needs the final relic chest."
+              : "The server will add one or more supply chests automatically. This dungeon has no relic to find, so never place B — the goal is only to defeat the guardian.",
             isFinalFloor
               ? hasFinalRelic
                 ? "This is the final floor. Put one B chest and one D guardian near the deeper side of the dungeon. Do not place V."
@@ -457,18 +463,29 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
     });
   }
 
-  const supplyChest = findOpenFloorNear(
-    rows,
-    { x: 8 + (context.floor % 3) * 10, y: 8 + (context.floor % 2) * 10 },
-    reserved
-  );
-  if (!supplyChest) {
-    return undefined;
+  const chestCountRoll = (hashString(`chest-count-${context.tier}-${context.floor}`) % 1000) / 1000;
+  const supplyChestCount = getSupplyChestCount(context.floor, chestCountRoll);
+  const supplyChests: TilePosition[] = [];
+  for (let index = 0; index < supplyChestCount; index += 1) {
+    const preferred = {
+      x: 8 + ((context.floor + index) % 3) * 10,
+      y: 8 + ((context.floor + index) % 2) * 10
+    };
+    const position = findOpenFloorNear(rows, preferred, reserved);
+    if (!position) {
+      if (supplyChests.length === 0) {
+        return undefined;
+      }
+      break;
+    }
+    reserved.add(positionKey(position));
+    supplyChests.push(position);
   }
-  reserved.add(positionKey(supplyChest));
 
   rows[spawn.y][spawn.x] = "U";
-  rows[supplyChest.y][supplyChest.x] = "B";
+  supplyChests.forEach((position) => {
+    rows[position.y][position.x] = "B";
+  });
   if (chest) {
     rows[chest.y][chest.x] = "B";
   }
@@ -480,9 +497,13 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
   }
 
   let chestAccessTiles: TilePosition[] = [];
-  let supplyChestAccessTiles = ensureChestAccess(rows, supplyChest);
-  if (supplyChestAccessTiles.length === 0) {
-    return undefined;
+  let supplyChestAccessTiles: TilePosition[] = [];
+  for (const position of supplyChests) {
+    const access = ensureChestAccess(rows, position);
+    if (access.length === 0) {
+      return undefined;
+    }
+    supplyChestAccessTiles.push(...access);
   }
 
   if (chest && guardian) {
@@ -502,7 +523,9 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
   if (!canReachAll(rows, spawn, requiredTiles)) {
     requiredTiles.forEach((target) => carveCorridor(rows, spawn, target));
     rows[spawn.y][spawn.x] = "U";
-    rows[supplyChest.y][supplyChest.x] = "B";
+    supplyChests.forEach((position) => {
+      rows[position.y][position.x] = "B";
+    });
     if (chest) {
       rows[chest.y][chest.x] = "B";
     }
@@ -515,7 +538,7 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
     if (chest && guardian) {
       chestAccessTiles = ensureChestAccess(rows, chest, guardian);
     }
-    supplyChestAccessTiles = ensureChestAccess(rows, supplyChest);
+    supplyChestAccessTiles = supplyChests.flatMap((position) => ensureChestAccess(rows, position));
   }
 
   if (!canReachAll(rows, spawn, requiredTiles)) {
@@ -532,12 +555,12 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
     portals,
     npcs: [],
     chests: [
-      {
-        id: `dungeon-t${context.tier}-b${context.floor}-supply-chest`,
-        x: supplyChest.x,
-        y: supplyChest.y,
+      ...supplyChests.map((position, index) => ({
+        id: `dungeon-t${context.tier}-b${context.floor}-supply-chest-${index + 1}`,
+        x: position.x,
+        y: position.y,
         reward: pickSupplyChestReward(context.floor, context.floorCount)
-      },
+      })),
       ...(chest
         ? [
             {
