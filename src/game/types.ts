@@ -95,7 +95,13 @@ export interface PortalDefinition extends TilePosition {
   toX: number;
   toY: number;
   toFloor?: number;
-  kind?: "map" | "stairs-up" | "stairs-down";
+  /**
+   * "edge" portals sit on an otherwise-blocked border tile just past the
+   * last walkable tile; walking into them transitions the map instead of
+   * bumping into a wall, so crossing feels like walking off the map's edge
+   * rather than stepping onto a marked door tile.
+   */
+  kind?: "map" | "stairs-up" | "stairs-down" | "edge";
   /** Which dungeon tier this portal leads into/within (only meaningful when toMap is "dungeon"). */
   dungeonTier?: number;
 }

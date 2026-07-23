@@ -64,6 +64,7 @@ import type {
   MapDefinition,
   MapId,
   NpcDefinition,
+  PortalDefinition,
   TilePosition
 } from "../game/types";
 
@@ -368,6 +369,11 @@ export class WorldScene extends Phaser.Scene {
   private createObjects(): void {
     this.enemyObjects.clear();
     this.currentMap.portals.forEach((portal) => {
+      if (portal.kind === "edge") {
+        // Edge portals sit on a border tile that's meant to read as open
+        // terrain leading off the map, not a marked door — no icon sprite.
+        return;
+      }
       const texture =
         portal.kind === "stairs-up"
           ? "tile-stairs-up"
@@ -521,6 +527,13 @@ export class WorldScene extends Phaser.Scene {
     const enemy = this.enemyAt(target);
     if (enemy) {
       this.startBattle(enemy);
+      return;
+    }
+
+    const edgePortal = this.edgePortalAt(target);
+    if (edgePortal) {
+      this.hideTargetHint();
+      void this.traversePortal(edgePortal);
       return;
     }
 
@@ -973,13 +986,20 @@ export class WorldScene extends Phaser.Scene {
 
   private async checkPortal(): Promise<void> {
     const portal = this.currentMap.portals.find(
-      (candidate) => candidate.x === this.playerTile.x && candidate.y === this.playerTile.y
+      (candidate) =>
+        candidate.kind !== "edge" &&
+        candidate.x === this.playerTile.x &&
+        candidate.y === this.playerTile.y
     );
 
     if (!portal) {
       return;
     }
 
+    await this.traversePortal(portal);
+  }
+
+  private async traversePortal(portal: PortalDefinition): Promise<void> {
     this.applyRespawnRules(this.currentMap.id, portal.toMap);
 
     if (portal.toMap === "dungeon") {
@@ -1166,6 +1186,12 @@ export class WorldScene extends Phaser.Scene {
 
   private portalAt(position: TilePosition) {
     return this.currentMap.portals.find((portal) => portal.x === position.x && portal.y === position.y);
+  }
+
+  private edgePortalAt(position: TilePosition): PortalDefinition | undefined {
+    return this.currentMap.portals.find(
+      (portal) => portal.kind === "edge" && portal.x === position.x && portal.y === position.y
+    );
   }
 
   private frontTile(): TilePosition {
