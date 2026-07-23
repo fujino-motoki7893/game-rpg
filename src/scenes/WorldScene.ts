@@ -791,9 +791,18 @@ export class WorldScene extends Phaser.Scene {
 
     if (npc.id === "elder") {
       if (!hasFlag("questAccepted")) {
+        const save = getSave();
+        save.gold += 10;
         markFlag("questAccepted");
+        persistSave();
         stateChanged = true;
-        dialogue = getNpcDialogue(npc.id);
+        dialogue = [
+          "村長ローアン: エンバーフォール洞窟には、太陽石という古い秘宝が眠っている。",
+          "村長ローアン: ストーンブルックのために、取り戻してくれるか？",
+          "村長ローアン: 手付けに、これを持っていっておくれ。",
+          "金貨10枚を受け取った。",
+          "クエスト開始: 太陽石を探す"
+        ];
       } else if (hasFlag("treasureFound") && !hasFlag("questComplete")) {
         const save = getSave();
         save.gold += 40;
