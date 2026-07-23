@@ -11,13 +11,20 @@ import {
   getNextStaticLunaLine,
   getNpcDialogue
 } from "../data/dialogues";
-import { getFieldDungeonEntranceForTier } from "../data/dungeonGenerator";
+import { getFieldDungeonEntranceForTier, getGuardianIdForTier } from "../data/dungeonGenerator";
 import { createDungeon } from "../data/dungeonService";
 import { ENEMIES } from "../data/enemies";
 import { EQUIPMENT } from "../data/equipment";
 import { ITEMS } from "../data/items";
 import { BLOCKING_TILES, getMapDefinition, MAPS } from "../data/maps";
-import { GAME_EVENTS, MAP_OFFSET_X, MAP_OFFSET_Y, TILE_SIZE } from "../game/constants";
+import {
+  GAME_EVENTS,
+  HUD_BOTTOM_HEIGHT,
+  HUD_TOP_HEIGHT,
+  MAP_OFFSET_X,
+  MAP_OFFSET_Y,
+  TILE_SIZE
+} from "../game/constants";
 import {
   addItem,
   addEquipment,
@@ -141,7 +148,9 @@ export class WorldScene extends Phaser.Scene {
     this.events.once("shutdown", this.shutdown, this);
 
     const save = getSave();
-    void this.loadMap(save.mapId, { x: save.x, y: save.y });
+    void this.loadMap(save.mapId, { x: save.x, y: save.y }).then(() => {
+      this.checkFinalBossDefeat();
+    });
   }
 
   private shutdown(): void {
@@ -227,7 +236,12 @@ export class WorldScene extends Phaser.Scene {
     const mapPixelWidth = this.currentMap.rows[0].length * TILE_SIZE;
     const mapPixelHeight = this.currentMap.rows.length * TILE_SIZE;
     const camera = this.cameras.main;
-    camera.setBounds(0, 0, mapPixelWidth, mapPixelHeight);
+    camera.setBounds(
+      0,
+      -HUD_TOP_HEIGHT,
+      mapPixelWidth,
+      mapPixelHeight + HUD_TOP_HEIGHT + HUD_BOTTOM_HEIGHT
+    );
     camera.startFollow(this.player, true, 1, 1);
   }
 
@@ -432,7 +446,7 @@ export class WorldScene extends Phaser.Scene {
     if (
       this.currentMap.id !== "dungeon" ||
       getActiveDungeonTier() !== 3 ||
-      !isEnemyDefeated("dungeon-guardian") ||
+      !isEnemyDefeated(getGuardianIdForTier(3)) ||
       hasFlag("finalBeastDefeated")
     ) {
       return;
@@ -851,14 +865,14 @@ export class WorldScene extends Phaser.Scene {
     }
 
     const isRelicChest = chest.reward?.type === "relic" || chest.id === "relic-chest";
-    if (isRelicChest && !getSave().defeatedEnemies.includes("dungeon-guardian")) {
+    const dungeonTier = getActiveDungeonTier();
+    if (isRelicChest && !getSave().defeatedEnemies.includes(getGuardianIdForTier(dungeonTier))) {
       this.showDialogue(["守護者の紋章が刻まれた封印で開かない。"]);
       return;
     }
 
     markFlag(`${chest.id}-opened`);
     if (isRelicChest) {
-      const dungeonTier = getActiveDungeonTier();
       const relicName = dungeonTier >= 2 ? "月影石" : "太陽石";
       markFlag(dungeonTier >= 2 ? "secondTreasureFound" : "treasureFound");
       resetDungeonEnemyDefeats();

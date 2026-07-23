@@ -4,6 +4,7 @@ import {
   getDungeonGuardianKeyForTier,
   getDungeonNameForTier,
   getFieldDungeonEntranceForTier,
+  getGuardianIdForTier,
   getRelicChestIdForTier,
   hasFinalRelicForTier
 } from "../data/dungeonGenerator";
@@ -558,7 +559,7 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
       ...(guardian
         ? [
             {
-              id: "dungeon-guardian",
+              id: getGuardianIdForTier(context.tier),
               enemyKey: getDungeonGuardianKeyForTier(context.tier),
               x: guardian.x,
               y: guardian.y

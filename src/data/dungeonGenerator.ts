@@ -238,7 +238,7 @@ export function generateDungeon(
 
   if (guardian) {
     enemies.push({
-      id: "dungeon-guardian",
+      id: getGuardianIdForTier(tier),
       enemyKey: getDungeonGuardianKeyForTier(tier),
       x: guardian.x,
       y: guardian.y
@@ -302,6 +302,14 @@ export function getDungeonNameForTier(tier: number): string {
 
 export function getDungeonGuardianKeyForTier(tier: number): string {
   return DUNGEON_GUARDIAN_KEYS[normalizeDungeonTier(tier)] ?? DUNGEON_GUARDIAN_KEYS[1];
+}
+
+// Tier-scoped so a guardian defeat in one tier's dungeon never suppresses the
+// guardian spawn on another tier's final floor (they used to share the
+// literal id "dungeon-guardian", which could leave a later tier's boss
+// silently un-spawned if the defeat flag carried over, e.g. across a resume).
+export function getGuardianIdForTier(tier: number): string {
+  return `dungeon-guardian-t${normalizeDungeonTier(tier)}`;
 }
 
 export function getRelicChestIdForTier(tier: number): string {

@@ -2,6 +2,7 @@ import {
   generateDungeon,
   getDungeonEnemyKeysForTier,
   getDungeonGuardianKeyForTier,
+  getGuardianIdForTier,
   hasFinalRelicForTier
 } from "./dungeonGenerator";
 import { ENEMIES } from "./enemies";
@@ -83,9 +84,10 @@ function isDungeonMap(value: unknown, floor: number, floorCount: number, tier: n
   }
 
   const guardianKey = getDungeonGuardianKeyForTier(tier);
+  const guardianId = getGuardianIdForTier(tier);
   const allowedEnemyKeys = new Set<string>(getDungeonEnemyKeysForTier(tier));
   const enemyKeysValid = map.enemies.every((enemy) =>
-    enemy.id === "dungeon-guardian"
+    enemy.id === guardianId
       ? enemy.enemyKey === guardianKey
       : allowedEnemyKeys.has(enemy.enemyKey)
   );
@@ -103,7 +105,7 @@ function isDungeonMap(value: unknown, floor: number, floorCount: number, tier: n
         : !map.chests.some((chest) => chest.reward?.type === "relic")) &&
       map.enemies.some(
         (enemy) =>
-          enemy.id === "dungeon-guardian" &&
+          enemy.id === guardianId &&
           enemy.enemyKey === guardianKey &&
           isTilePosition(enemy)
       )

@@ -1,3 +1,4 @@
+import { getGuardianIdForTier } from "./dungeonGenerator";
 import type { MapDefinition, MapId } from "../game/types";
 
 export const MAPS: Record<MapId, MapDefinition> = {
@@ -134,7 +135,7 @@ export const MAPS: Record<MapId, MapDefinition> = {
       { id: "dungeon-bat-1", enemyKey: "bat", x: 17, y: 7 },
       { id: "dungeon-skeleton-2", enemyKey: "skeleton", x: 5, y: 11 },
       { id: "dungeon-mage-3", enemyKey: "mage", x: 10, y: 10 },
-      { id: "dungeon-guardian", enemyKey: "guardian", x: 15, y: 13 }
+      { id: getGuardianIdForTier(1), enemyKey: "guardian", x: 15, y: 13 }
     ]
   }
 };
