@@ -18,7 +18,7 @@ import {
   hasFlag
 } from "../game/GameState";
 import { getObjective } from "../data/dialogues";
-import type { MapDefinition, TilePosition } from "../game/types";
+import type { MapDefinition, NpcDefinition, TilePosition } from "../game/types";
 
 const MINIMAP_SIZE = 128;
 const MINIMAP_RIGHT = 776;
@@ -202,6 +202,25 @@ export class UIScene extends Phaser.Scene {
         graphics.fillRect(chestX, chestY, size, size);
       }
     });
+
+    graphics.fillStyle(0x7fe3c0, 0.95);
+    map.npcs.forEach((npc) => {
+      if (!this.isNpcVisible(npc)) {
+        return;
+      }
+      if (revealed && !revealed.has(npc.y * cols + npc.x)) {
+        return;
+      }
+      graphics.fillCircle(
+        offsetX + (npc.x + 0.5) * scale,
+        offsetY + (npc.y + 0.5) * scale,
+        Math.max(1.5, scale * 0.3)
+      );
+    });
+  }
+
+  private isNpcVisible(npc: NpcDefinition): boolean {
+    return (!npc.requiresFlag || hasFlag(npc.requiresFlag)) && (!npc.hiddenIfFlag || !hasFlag(npc.hiddenIfFlag));
   }
 
   private updateMinimapPlayer(position: TilePosition): void {
