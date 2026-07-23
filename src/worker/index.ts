@@ -8,6 +8,7 @@ import {
   getGuardianIdForTier,
   getRelicChestIdForTier,
   getSupplyChestCount,
+  getSupplyChestEquipmentPool,
   hasFinalRelicForTier
 } from "../data/dungeonGenerator";
 import { isDungeonEnemyKey, type DungeonEnemyKey } from "../data/enemies";
@@ -559,7 +560,7 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
         id: `dungeon-t${context.tier}-b${context.floor}-supply-chest-${index + 1}`,
         x: position.x,
         y: position.y,
-        reward: pickSupplyChestReward(context.floor, context.floorCount)
+        reward: pickSupplyChestReward(context.floor, context.floorCount, context.tier)
       })),
       ...(chest
         ? [
@@ -794,11 +795,12 @@ function ensureChestAccess(
   return accessTiles;
 }
 
-function pickSupplyChestReward(floor: number, floorCount: number): ChestReward {
+function pickSupplyChestReward(floor: number, floorCount: number, tier: number): ChestReward {
   const depth = floor / floorCount;
   if (depth < 0.34) {
     if (floor > 1 && floor % 4 === 0) {
-      return { type: "equipment", equipmentId: "clothCap", quantity: 1 };
+      const pool = getSupplyChestEquipmentPool("early", tier);
+      return { type: "equipment", equipmentId: pool[floor % pool.length], quantity: 1 };
     }
     if (floor > 1 && floor % 3 === 0) {
       return { type: "item", itemId: "returnFeather", quantity: 1 };
@@ -810,7 +812,8 @@ function pickSupplyChestReward(floor: number, floorCount: number): ChestReward {
   }
   if (depth < 0.74) {
     if (floor % 4 === 0) {
-      return { type: "equipment", equipmentId: "ironSword", quantity: 1 };
+      const pool = getSupplyChestEquipmentPool("mid", tier);
+      return { type: "equipment", equipmentId: pool[floor % pool.length], quantity: 1 };
     }
     if (floor % 3 === 0) {
       return { type: "item", itemId: "returnFeather", quantity: 1 };
@@ -821,7 +824,8 @@ function pickSupplyChestReward(floor: number, floorCount: number): ChestReward {
     return { type: "item", itemId: "strongHerb", quantity: 1 };
   }
   if (floor % 5 === 0) {
-    return { type: "equipment", equipmentId: "emberCharm", quantity: 1 };
+    const pool = getSupplyChestEquipmentPool("late", tier);
+    return { type: "equipment", equipmentId: pool[floor % pool.length], quantity: 1 };
   }
   if (floor % 2 === 0) {
     return { type: "item", itemId: "returnFeather", quantity: 1 };

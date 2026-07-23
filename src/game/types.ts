@@ -69,7 +69,13 @@ export type EquipmentId =
   | "travelerPants"
   | "reinforcedGreaves"
   | "silverRing"
-  | "emberCharm";
+  | "emberCharm"
+  | "steelRapier"
+  | "scaleMail"
+  | "towerShield"
+  | "swiftGreaves"
+  | "hornedHelm"
+  | "sagesPendant";
 export type EquipmentInventory = Partial<Record<EquipmentId, number>>;
 export type EquipmentLoadout = Partial<Record<EquipmentSlot, EquipmentId>>;
 

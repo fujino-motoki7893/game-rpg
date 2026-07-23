@@ -66,7 +66,13 @@ export const EQUIPMENT_ORDER: EquipmentId[] = [
   "travelerPants",
   "reinforcedGreaves",
   "silverRing",
-  "emberCharm"
+  "emberCharm",
+  "steelRapier",
+  "scaleMail",
+  "towerShield",
+  "swiftGreaves",
+  "hornedHelm",
+  "sagesPendant"
 ];
 
 export const EQUIPMENT_SHOP_ORDER: EquipmentId[] = [
@@ -195,6 +201,66 @@ export const EQUIPMENT: Record<EquipmentId, EquipmentDefinition> = {
     sellPrice: 60,
     attackBonus: 1,
     maxMpBonus: 4
+  },
+  steelRapier: {
+    id: "steelRapier",
+    name: "鋼のレイピア",
+    category: "weapon",
+    description: "攻撃+7 素早さ+2",
+    rarity: 3,
+    sellPrice: 70,
+    attackBonus: 7,
+    speedBonus: 2
+  },
+  scaleMail: {
+    id: "scaleMail",
+    name: "鱗の鎧",
+    category: "bodyUpper",
+    description: "防御+4 HP+6",
+    rarity: 3,
+    sellPrice: 72,
+    defenseBonus: 4,
+    maxHpBonus: 6
+  },
+  towerShield: {
+    id: "towerShield",
+    name: "タワーシールド",
+    category: "shield",
+    description: "防御+4 HP+5",
+    rarity: 3,
+    sellPrice: 68,
+    defenseBonus: 4,
+    maxHpBonus: 5
+  },
+  swiftGreaves: {
+    id: "swiftGreaves",
+    name: "疾風の脚甲",
+    category: "bodyLower",
+    description: "素早さ+3 HP+2",
+    rarity: 3,
+    sellPrice: 66,
+    speedBonus: 3,
+    maxHpBonus: 2
+  },
+  hornedHelm: {
+    id: "hornedHelm",
+    name: "角兜",
+    category: "head",
+    description: "防御+3 攻撃+1",
+    rarity: 3,
+    sellPrice: 64,
+    defenseBonus: 3,
+    attackBonus: 1
+  },
+  sagesPendant: {
+    id: "sagesPendant",
+    name: "賢者のペンダント",
+    category: "accessory",
+    description: "MP+6 攻撃+2",
+    rarity: 4,
+    sellPrice: 90,
+    maxMpBonus: 6,
+    attackBonus: 2
   }
 };
 

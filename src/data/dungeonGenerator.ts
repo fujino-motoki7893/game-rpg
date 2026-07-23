@@ -2,6 +2,7 @@ import { DUNGEON_ENEMY_KEYS, type DungeonEnemyKey } from "./enemies";
 import type {
   ChestReward,
   EnemySpawn,
+  EquipmentId,
   MapDefinition,
   PortalDefinition,
   TilePosition
@@ -59,6 +60,35 @@ const DUNGEON_ENEMY_WEIGHTS_BY_TIER: Record<number, DungeonEnemyKey[]> = {
     "stoneGolem",
     "mimic"
   ]
+};
+type SupplyChestEquipmentBucket = "early" | "mid" | "late";
+// New gear is layered on top of the tier-1 pool starting at tier 2, and
+// tier 3 layers in a few extra rare finds on top of that — mirroring
+// DUNGEON_ENEMY_WEIGHTS_BY_TIER's "new content from tier 2 on" shape.
+const SUPPLY_CHEST_EQUIPMENT_BY_TIER: Record<SupplyChestEquipmentBucket, Record<number, EquipmentId[]>> = {
+  early: {
+    1: ["clothCap", "roundShield"],
+    2: ["clothCap", "roundShield", "ironHelm"],
+    3: ["clothCap", "roundShield", "ironHelm"]
+  },
+  mid: {
+    1: ["ironSword", "kiteShield"],
+    2: ["ironSword", "kiteShield", "steelRapier", "scaleMail"],
+    3: ["ironSword", "kiteShield", "steelRapier", "scaleMail"]
+  },
+  late: {
+    1: ["chainMail", "reinforcedGreaves", "emberCharm"],
+    2: ["chainMail", "reinforcedGreaves", "emberCharm", "towerShield", "swiftGreaves"],
+    3: [
+      "chainMail",
+      "reinforcedGreaves",
+      "emberCharm",
+      "towerShield",
+      "swiftGreaves",
+      "hornedHelm",
+      "sagesPendant"
+    ]
+  }
 };
 const DUNGEON_GUARDIAN_KEYS: Record<number, string> = {
   1: "guardian",
@@ -337,7 +367,7 @@ export function generateDungeon(
         id: `dungeon-t${tier}-b${floor}-supply-chest-${index + 1}`,
         x: position.x,
         y: position.y,
-        reward: pickSupplyChestReward(floor, floorCount, rng)
+        reward: pickSupplyChestReward(floor, floorCount, tier, rng)
       })),
       ...(relicChest
         ? [
@@ -386,6 +416,14 @@ export function getDungeonEnemyKeysForTier(tier: number): DungeonEnemyKey[] {
   const weights =
     DUNGEON_ENEMY_WEIGHTS_BY_TIER[normalizeDungeonTier(tier)] ?? DEFAULT_DUNGEON_ENEMY_WEIGHTS;
   return [...new Set(weights)];
+}
+
+export function getSupplyChestEquipmentPool(
+  bucket: SupplyChestEquipmentBucket,
+  tier: number
+): EquipmentId[] {
+  const pools = SUPPLY_CHEST_EQUIPMENT_BY_TIER[bucket];
+  return pools[normalizeDungeonTier(tier)] ?? pools[1];
 }
 
 export function hasFinalRelicForTier(tier: number): boolean {
@@ -534,14 +572,15 @@ function addChestAccessRequirement(
   requiredTiles.push(...accessTiles);
 }
 
-function pickSupplyChestReward(floor: number, floorCount: number, rng: Rng): ChestReward {
+function pickSupplyChestReward(floor: number, floorCount: number, tier: number, rng: Rng): ChestReward {
   const depth = floor / floorCount;
   if (depth < 0.34) {
     const roll = rng();
     if (roll < 0.1) {
+      const pool = getSupplyChestEquipmentPool("early", tier);
       return {
         type: "equipment",
-        equipmentId: rng() < 0.5 ? "clothCap" : "roundShield",
+        equipmentId: pool[randomInt(rng, 0, pool.length - 1)],
         quantity: 1
       };
     }
@@ -555,9 +594,10 @@ function pickSupplyChestReward(floor: number, floorCount: number, rng: Rng): Che
   if (depth < 0.74) {
     const roll = rng();
     if (roll < 0.16) {
+      const pool = getSupplyChestEquipmentPool("mid", tier);
       return {
         type: "equipment",
-        equipmentId: rng() < 0.5 ? "ironSword" : "kiteShield",
+        equipmentId: pool[randomInt(rng, 0, pool.length - 1)],
         quantity: 1
       };
     }
@@ -573,10 +613,10 @@ function pickSupplyChestReward(floor: number, floorCount: number, rng: Rng): Che
   }
   const roll = rng();
   if (roll < 0.22) {
-    const equipmentIds = ["chainMail", "reinforcedGreaves", "emberCharm"] as const;
+    const pool = getSupplyChestEquipmentPool("late", tier);
     return {
       type: "equipment",
-      equipmentId: equipmentIds[randomInt(rng, 0, equipmentIds.length - 1)],
+      equipmentId: pool[randomInt(rng, 0, pool.length - 1)],
       quantity: 1
     };
   }
