@@ -20,18 +20,17 @@ import {
   ITEMS,
   SHOP_BUY_ITEM_ORDER
 } from "../data/items";
+import { COMPANIONS, COMPANION_ORDER } from "../data/companions";
 import { GAME_EVENTS } from "../game/constants";
 import {
   buyEquipment,
   buyItem,
-  getCompanion2EquippedEquipment,
   getCompanionEquippedEquipment,
   getEquipmentCount,
   getEquippedEquipment,
   getItemCount,
   getSave,
   hasCompanion,
-  hasCompanion2,
   previewEquipmentSlot,
   sellEquipment,
   sellItem
@@ -225,12 +224,11 @@ export class ShopScene extends Phaser.Scene {
     }
 
     const lines: string[] = [this.describeEquipmentUpgrade("自分", getEquippedEquipment(slot), entry.id)];
-    if (hasCompanion()) {
-      lines.push(this.describeEquipmentUpgrade("ルナ", getCompanionEquippedEquipment(slot), entry.id));
-    }
-    if (hasCompanion2()) {
-      lines.push(this.describeEquipmentUpgrade("ガイスト", getCompanion2EquippedEquipment(slot), entry.id));
-    }
+    COMPANION_ORDER.forEach((id) => {
+      if (hasCompanion(id)) {
+        lines.push(this.describeEquipmentUpgrade(COMPANIONS[id].name, getCompanionEquippedEquipment(id, slot), entry.id));
+      }
+    });
     return lines;
   }
 

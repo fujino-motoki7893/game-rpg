@@ -1,13 +1,10 @@
 import Phaser from "phaser";
+import { COMPANIONS, COMPANION_ORDER } from "../data/companions";
 import { getDungeonNameForTier } from "../data/dungeonGenerator";
 import { BLOCKING_TILES, getMapDefinition } from "../data/maps";
 import { GAME_EVENTS } from "../game/constants";
 import {
   getActiveDungeonTier,
-  getCompanion2Hp,
-  getCompanion2MaxHp,
-  getCompanion2MaxMp,
-  getCompanion2Mp,
   getCompanionHp,
   getCompanionMaxHp,
   getCompanionMaxMp,
@@ -19,10 +16,10 @@ import {
   getPlayerMaxMp,
   getSave,
   hasCompanion,
-  hasCompanion2,
   hasFlag
 } from "../game/GameState";
 import { getObjective } from "../data/dialogues";
+import type { CompanionId } from "../data/companions";
 import type { MapDefinition, NpcDefinition, TilePosition } from "../game/types";
 
 const MINIMAP_SIZE = 128;
@@ -37,8 +34,7 @@ export class UIScene extends Phaser.Scene {
   private objectiveText?: Phaser.GameObjects.Text;
   private mapText?: Phaser.GameObjects.Text;
   private playerStatusText?: Phaser.GameObjects.Text;
-  private lunaStatusText?: Phaser.GameObjects.Text;
-  private geistStatusText?: Phaser.GameObjects.Text;
+  private allyStatusTexts = new Map<CompanionId, Phaser.GameObjects.Text>();
   private controlsText?: Phaser.GameObjects.Text;
   private toastText?: Phaser.GameObjects.Text;
   private toastTimer?: Phaser.Time.TimerEvent;
@@ -64,12 +60,13 @@ export class UIScene extends Phaser.Scene {
     this.playerStatusText = this.add
       .text(776, 554, "", this.textStyle(16, "#f4df7e"))
       .setOrigin(1, 0);
-    this.lunaStatusText = this.add
-      .text(776, 576, "", this.textStyle(16, "#b28aff"))
-      .setOrigin(1, 0);
-    this.geistStatusText = this.add
-      .text(776, 596, "", this.textStyle(16, "#d6a15a"))
-      .setOrigin(1, 0);
+    this.allyStatusTexts.clear();
+    COMPANION_ORDER.forEach((id, index) => {
+      const text = this.add
+        .text(776, 576 + index * 20, "", this.textStyle(16, COMPANIONS[id].hpBarColorHex))
+        .setOrigin(1, 0);
+      this.allyStatusTexts.set(id, text);
+    });
     this.controlsText = this.add.text(24, 612, "", this.textStyle(14, "#9fb4c6"));
     this.toastText = this.add
       .text(400, 505, "", this.textStyle(16, "#ffffff"))
@@ -101,22 +98,20 @@ export class UIScene extends Phaser.Scene {
     const maxHp = getPlayerMaxHp();
     const maxMp = getPlayerMaxMp();
     this.playerStatusText?.setText(`Lv ${save.level}  HP ${save.hp}/${maxHp}  MP ${save.mp}/${maxMp}`);
-    if (hasCompanion()) {
-      this.lunaStatusText?.setText(
-        `ルナ Lv ${save.level}  HP ${getCompanionHp()}/${getCompanionMaxHp()}  MP ${getCompanionMp()}/${getCompanionMaxMp()}`
-      );
-    } else {
-      this.lunaStatusText?.setText("");
-    }
-    if (hasCompanion2()) {
-      this.geistStatusText?.setText(
-        `ガイスト Lv ${save.level}  HP ${getCompanion2Hp()}/${getCompanion2MaxHp()}  MP ${getCompanion2Mp()}/${getCompanion2MaxMp()}`
-      );
-    } else {
-      this.geistStatusText?.setText("");
-    }
+    COMPANION_ORDER.forEach((id) => {
+      const text = this.allyStatusTexts.get(id);
+      if (hasCompanion(id)) {
+        text?.setText(
+          `${COMPANIONS[id].name} Lv ${save.level}  HP ${getCompanionHp(id)}/${getCompanionMaxHp(id)}  MP ${getCompanionMp(id)}/${getCompanionMaxMp(id)}`
+        );
+      } else {
+        text?.setText("");
+      }
+    });
+    // Only Luna has a field chat (L key) — Geist's dialogue lives in the
+    // menu tab only, so the hint stays specific to her rather than looping.
     this.controlsText?.setText(
-      hasCompanion()
+      hasCompanion("luna")
         ? "操作: 移動 矢印/WASD  決定 Space/Enter  メニュー M/Esc  ルナと話す L  リセット R"
         : "操作: 移動 矢印/WASD  決定 Space/Enter  メニュー M/Esc  リセット R"
     );

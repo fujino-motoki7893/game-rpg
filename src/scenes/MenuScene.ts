@@ -1,7 +1,6 @@
 import Phaser from "phaser";
 import { getCharacterIdleAnimationKey } from "../data/characterSprites";
-import { COMPANION_SKILL_ORDER, COMPANION_SKILLS } from "../data/companionSkills";
-import { COMPANION2_SKILL_ORDER, COMPANION2_SKILLS } from "../data/companion2Skills";
+import { COMPANIONS, COMPANION_ORDER, isCompanionId } from "../data/companions";
 import {
   EQUIPMENT,
   EQUIPMENT_ORDER,
@@ -25,22 +24,14 @@ import { getSkillHealAmount, SKILL_ORDER, SKILLS } from "../data/skills";
 import { GAME_EVENTS } from "../game/constants";
 import {
   getActiveDungeonTier,
-  getCompanion2Attack,
-  getCompanion2Defense,
-  getCompanion2EquippedEquipment,
-  getCompanion2Hp,
-  getCompanion2MaxHp,
-  getCompanion2MaxMp,
-  getCompanion2Mp,
-  getCompanion2Speed,
   getCompanionAttack,
   getCompanionDefense,
-  getCompanionSpeed,
   getCompanionEquippedEquipment,
   getCompanionHp,
   getCompanionMaxHp,
   getCompanionMaxMp,
   getCompanionMp,
+  getCompanionSpeed,
   getCurrentDungeonFloor,
   getDungeonFloorCount,
   getEquipmentCount,
@@ -53,33 +44,28 @@ import {
   getPlayerMaxMp,
   getSave,
   hasCompanion,
-  hasCompanion2,
   isExpandedWorldUnlocked,
   consumeItem,
   equipEquipment,
   equipEquipmentToCompanion,
-  equipEquipmentToCompanion2,
   useHealingSkill,
   useHealingSkillOnCompanion,
-  useHealingSkillOnCompanion2,
   useItem,
-  useItemOnCompanion,
-  useItemOnCompanion2
+  useItemOnCompanion
 } from "../game/GameState";
+import type { CompanionId } from "../data/companions";
 import type { EquipmentId, ItemId } from "../game/types";
 
-type MenuTab = "items" | "skills" | "equipment" | "status" | "companion" | "companion2";
-type CharacterKey = "hero" | "luna" | "geist";
-type HealTarget = "self" | "companion" | "companion2";
+type BaseMenuTab = "items" | "skills" | "equipment" | "status";
+type MenuTab = BaseMenuTab | CompanionId;
+type CharacterKey = "hero" | CompanionId;
 
-const BASE_TABS: MenuTab[] = ["items", "skills", "equipment", "status"];
-const TAB_LABELS: Record<MenuTab, string> = {
+const BASE_TABS: BaseMenuTab[] = ["items", "skills", "equipment", "status"];
+const BASE_TAB_LABELS: Record<BaseMenuTab, string> = {
   items: "持ち物",
   skills: "スキル",
   equipment: "装備",
-  status: "強さ",
-  companion: "ルナ",
-  companion2: "ガイスト"
+  status: "強さ"
 };
 const GEIST_LINES = [
   "ガイスト: ……(鎧が小さく震える)",
@@ -168,16 +154,23 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private getVisibleTabs(): MenuTab[] {
-    return [
-      ...BASE_TABS,
-      ...(hasCompanion() ? (["companion"] as const) : []),
-      ...(hasCompanion2() ? (["companion2"] as const) : [])
-    ];
+    return [...BASE_TABS, ...COMPANION_ORDER.filter((id) => hasCompanion(id))];
+  }
+
+  private getActiveAllies(): CompanionId[] {
+    return COMPANION_ORDER.filter((id) => hasCompanion(id));
+  }
+
+  private getTabLabel(tab: MenuTab): string {
+    if (isCompanionId(tab)) {
+      return COMPANIONS[tab].name;
+    }
+    return BASE_TAB_LABELS[tab];
   }
 
   private createTabButton(tab: MenuTab, x: number, y: number, width: number): void {
     const button = this.add
-      .text(x, y, TAB_LABELS[tab], {
+      .text(x, y, this.getTabLabel(tab), {
         ...this.textStyle(width < 96 ? 16 : 18, "#101820"),
         backgroundColor: "#f2d27a",
         padding: { x: width < 96 ? 12 : 18, y: 9 },
@@ -224,12 +217,12 @@ export class MenuScene extends Phaser.Scene {
       this.renderSkills();
     } else if (this.activeTab === "equipment") {
       this.renderEquipment();
-    } else if (this.activeTab === "companion") {
-      this.renderCompanion();
-    } else if (this.activeTab === "companion2") {
-      this.renderCompanion2();
-    } else {
+    } else if (this.activeTab === "status") {
       this.renderStatus();
+    } else if (this.activeTab === "luna") {
+      this.renderCompanion();
+    } else if (this.activeTab === "geist") {
+      this.renderCompanion2();
     }
 
     this.finalizeContentScroll();
@@ -309,8 +302,9 @@ export class MenuScene extends Phaser.Scene {
         .setDepth(102)
     );
 
+    const activeAllies = this.getActiveAllies();
     const showAllyTarget =
-      (hasCompanion() || hasCompanion2()) && (canItemHealHp(selectedItem) || canItemRestoreMp(selectedItem));
+      activeAllies.length > 0 && (canItemHealHp(selectedItem) || canItemRestoreMp(selectedItem));
 
     if (showAllyTarget) {
       const count = getItemCount(selectedItem);
@@ -319,52 +313,31 @@ export class MenuScene extends Phaser.Scene {
         ((canItemHealHp(selectedItem) && hp < maxAllyHp) ||
           (canItemRestoreMp(selectedItem) && mp < maxAllyMp));
       const canUseSelf = canUseOn(save.hp, maxHp, save.mp, maxMp);
-      const canUseCompanion = canUseOn(
-        getCompanionHp(),
-        getCompanionMaxHp(),
-        getCompanionMp(),
-        getCompanionMaxMp()
-      );
-      const canUseCompanion2 = canUseOn(
-        getCompanion2Hp(),
-        getCompanion2MaxHp(),
-        getCompanion2Mp(),
-        getCompanion2MaxMp()
-      );
 
       let allyLineY = 440;
-      if (hasCompanion()) {
+      activeAllies.forEach((id) => {
+        const definition = COMPANIONS[id];
         this.addContent(
           this.add
             .text(
               154,
               allyLineY,
-              `ルナ HP ${getCompanionHp()}/${getCompanionMaxHp()}  MP ${getCompanionMp()}/${getCompanionMaxMp()}`,
-              this.textStyle(15, "#b28aff")
+              `${definition.name} HP ${getCompanionHp(id)}/${getCompanionMaxHp(id)}  MP ${getCompanionMp(id)}/${getCompanionMaxMp(id)}`,
+              this.textStyle(15, definition.hpBarColorHex)
             )
             .setDepth(102)
         );
         allyLineY += 20;
-      }
-      if (hasCompanion2()) {
-        this.addContent(
-          this.add
-            .text(
-              154,
-              allyLineY,
-              `ガイスト HP ${getCompanion2Hp()}/${getCompanion2MaxHp()}  MP ${getCompanion2Mp()}/${getCompanion2MaxMp()}`,
-              this.textStyle(15, "#d6a15a")
-            )
-            .setDepth(102)
-        );
-        allyLineY += 20;
-      }
+      });
       this.addContent(
         this.add.text(154, allyLineY, `所持ゴールド ${save.gold}G`, this.textStyle(15, "#d9e5ef")).setDepth(102)
       );
 
-      this.renderAllyTargetButtons(412, canUseSelf, canUseCompanion, canUseCompanion2, (target) =>
-        this.useSelectedItem(target)
+      this.renderAllyTargetButtons(
+        412,
+        canUseSelf,
+        (id) => canUseOn(getCompanionHp(id), getCompanionMaxHp(id), getCompanionMp(id), getCompanionMaxMp(id)),
+        (target) => this.useSelectedItem(target)
       );
     } else {
       this.addContent(
@@ -390,19 +363,15 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private renderSkills(): void {
-    if (hasCompanion() || hasCompanion2()) {
+    const activeAllies = this.getActiveAllies();
+    if (activeAllies.length > 0) {
       this.renderCharacterToggle(this.skillsCharacter, (character) => {
         this.skillsCharacter = character;
       });
     }
 
-    if (this.skillsCharacter === "luna" && hasCompanion()) {
-      this.renderLunaSkills();
-      return;
-    }
-
-    if (this.skillsCharacter === "geist" && hasCompanion2()) {
-      this.renderGeistSkills();
+    if (isCompanionId(this.skillsCharacter) && hasCompanion(this.skillsCharacter)) {
+      this.renderCompanionSkillList(this.skillsCharacter);
       return;
     }
 
@@ -414,12 +383,9 @@ export class MenuScene extends Phaser.Scene {
     onSelect: (character: CharacterKey) => void
   ): void {
     const options: { key: CharacterKey; label: string }[] = [{ key: "hero", label: "主人公" }];
-    if (hasCompanion()) {
-      options.push({ key: "luna", label: "ルナ" });
-    }
-    if (hasCompanion2()) {
-      options.push({ key: "geist", label: "ガイスト" });
-    }
+    this.getActiveAllies().forEach((id) => {
+      options.push({ key: id, label: COMPANIONS[id].name });
+    });
 
     options.forEach((option, index) => {
       const selected = current === option.key;
@@ -445,33 +411,26 @@ export class MenuScene extends Phaser.Scene {
     });
   }
 
-  /** Right-aligned row of "self"/"Luna"/"Geist" target buttons, shrinking
-   *  each button to fit whichever allies are actually in the party. */
+  /**
+   * Right-aligned row of "self"/ally target buttons, one per companion
+   * actually in the party, shrinking to bare names once there are more
+   * than two targets to fit them all.
+   */
   private renderAllyTargetButtons(
     y: number,
     selfEnabled: boolean,
-    companionEnabled: boolean,
-    companion2Enabled: boolean,
-    onSelect: (target: HealTarget) => void
+    allyEnabled: (id: CompanionId) => boolean,
+    onSelect: (target: "self" | CompanionId) => void
   ): void {
-    // With all three targets shown at once there isn't room for the fuller
-    // "◯に使う" phrasing (Geist's name alone is already as wide as "ルナに
-    //使う"), so fall back to bare names — the section header already makes
-    // "use on whom" clear from context.
-    const compact = hasCompanion() && hasCompanion2();
-    const options: Array<{ target: HealTarget; label: string; enabled: boolean }> = [
+    const activeAllies = this.getActiveAllies();
+    const compact = activeAllies.length > 1;
+    const options: Array<{ target: "self" | CompanionId; label: string; enabled: boolean }> = [
       { target: "self", label: compact ? "自分" : "自分に使う", enabled: selfEnabled }
     ];
-    if (hasCompanion()) {
-      options.push({ target: "companion", label: compact ? "ルナ" : "ルナに使う", enabled: companionEnabled });
-    }
-    if (hasCompanion2()) {
-      options.push({
-        target: "companion2",
-        label: compact ? "ガイスト" : "ガイストに使う",
-        enabled: companion2Enabled
-      });
-    }
+    activeAllies.forEach((id) => {
+      const name = COMPANIONS[id].name;
+      options.push({ target: id, label: compact ? name : `${name}に使う`, enabled: allyEnabled(id) });
+    });
 
     const width = options.length > 2 ? 74 : 90;
     const gap = 6;
@@ -498,11 +457,11 @@ export class MenuScene extends Phaser.Scene {
     });
   }
 
-  private renderLunaSkills(): void {
+  private renderCompanionSkillList(id: CompanionId): void {
     const save = getSave();
+    const definition = COMPANIONS[id];
 
-    COMPANION_SKILL_ORDER.forEach((skillId, index) => {
-      const skill = COMPANION_SKILLS[skillId];
+    definition.getAllSkills().forEach((skill, index) => {
       const learned = save.level >= skill.requiredLevel;
       const y = 259 + index * 40;
       const row = this.add
@@ -537,66 +496,13 @@ export class MenuScene extends Phaser.Scene {
         .text(
           154,
           416,
-          `ルナ HP ${getCompanionHp()}/${getCompanionMaxHp()}  MP ${getCompanionMp()}/${getCompanionMaxMp()}`,
-          this.textStyle(18, "#b28aff")
+          `${definition.name} HP ${getCompanionHp(id)}/${getCompanionMaxHp(id)}  MP ${getCompanionMp(id)}/${getCompanionMaxMp(id)}`,
+          this.textStyle(18, definition.hpBarColorHex)
         )
         .setDepth(102)
     );
     this.addContent(
-      this.add
-        .text(154, 440, "ルナは戦闘中、状況に応じて自動でこれらの行動を行う。", this.textStyle(14, "#9fb4c6"))
-        .setDepth(102)
-    );
-  }
-
-  private renderGeistSkills(): void {
-    const save = getSave();
-
-    COMPANION2_SKILL_ORDER.forEach((skillId, index) => {
-      const skill = COMPANION2_SKILLS[skillId];
-      const learned = save.level >= skill.requiredLevel;
-      const y = 259 + index * 40;
-      const row = this.add
-        .rectangle(388, y + 14, 468, 38, 0x111a24, 0.58)
-        .setStrokeStyle(1, 0x34475a, 0.45)
-        .setDepth(101);
-      this.addContent(row);
-      this.addContent(
-        this.add
-          .text(190, y, skill.name, this.textStyle(18, learned ? "#fff4cf" : "#748393"))
-          .setDepth(102)
-      );
-      this.addContent(
-        this.add
-          .text(306, y, skill.mpCost > 0 ? `MP${skill.mpCost}` : "-", this.textStyle(16, learned ? "#d9e5ef" : "#748393"))
-          .setDepth(102)
-      );
-      this.addContent(
-        this.add
-          .text(
-            376,
-            y,
-            learned ? skill.description : `Lv${skill.requiredLevel}で習得`,
-            this.textStyle(14, learned ? "#9fb4c6" : "#748393")
-          )
-          .setDepth(102)
-      );
-    });
-
-    this.addContent(
-      this.add
-        .text(
-          154,
-          416,
-          `ガイスト HP ${getCompanion2Hp()}/${getCompanion2MaxHp()}  MP ${getCompanion2Mp()}/${getCompanion2MaxMp()}`,
-          this.textStyle(18, "#d6a15a")
-        )
-        .setDepth(102)
-    );
-    this.addContent(
-      this.add
-        .text(154, 440, "ガイストは戦闘中、MPが十分なときほど強力な一撃を選んで放つ。", this.textStyle(14, "#9fb4c6"))
-        .setDepth(102)
+      this.add.text(154, 440, definition.behaviorDescription, this.textStyle(14, "#9fb4c6")).setDepth(102)
     );
   }
 
@@ -656,36 +562,27 @@ export class MenuScene extends Phaser.Scene {
         .setDepth(102)
     );
 
-    if ((hasCompanion() || hasCompanion2()) && selectedIsHeal) {
+    const activeAllies = this.getActiveAllies();
+    if (activeAllies.length > 0 && selectedIsHeal) {
       const canAfford = selectedLearned && save.mp >= selectedSkill.mpCost;
       const canUseSelf = canAfford && save.hp < maxHp;
-      const canUseCompanion = canAfford && getCompanionHp() < getCompanionMaxHp();
-      const canUseCompanion2 = canAfford && getCompanion2Hp() < getCompanion2MaxHp();
 
       let allyLineY = 440;
-      if (hasCompanion()) {
+      activeAllies.forEach((id) => {
+        const definition = COMPANIONS[id];
         this.addContent(
           this.add
-            .text(154, allyLineY, `ルナ HP ${getCompanionHp()}/${getCompanionMaxHp()}`, this.textStyle(15, "#b28aff"))
+            .text(154, allyLineY, `${definition.name} HP ${getCompanionHp(id)}/${getCompanionMaxHp(id)}`, this.textStyle(15, definition.hpBarColorHex))
             .setDepth(102)
         );
         allyLineY += 20;
-      }
-      if (hasCompanion2()) {
-        this.addContent(
-          this.add
-            .text(
-              154,
-              allyLineY,
-              `ガイスト HP ${getCompanion2Hp()}/${getCompanion2MaxHp()}`,
-              this.textStyle(15, "#d6a15a")
-            )
-            .setDepth(102)
-        );
-      }
+      });
 
-      this.renderAllyTargetButtons(412, canUseSelf, canUseCompanion, canUseCompanion2, (target) =>
-        this.useSelectedSkill(target)
+      this.renderAllyTargetButtons(
+        412,
+        canUseSelf,
+        (id) => canAfford && getCompanionHp(id) < getCompanionMaxHp(id),
+        (target) => this.useSelectedSkill(target)
       );
     } else {
       const useLabel = this.getSelectedSkillUseLabel(selectedLearned, selectedIsHeal, canUseSelected);
@@ -729,25 +626,24 @@ export class MenuScene extends Phaser.Scene {
       Math.max(0, ownedEquipment.length - 1)
     );
 
-    if (hasCompanion() || hasCompanion2()) {
+    const activeAllies = this.getActiveAllies();
+    if (activeAllies.length > 0) {
       this.renderCharacterToggle(this.equipmentCharacter, (character) => {
         this.equipmentCharacter = character;
       });
     }
 
-    const showingLuna = hasCompanion() && this.equipmentCharacter === "luna";
-    const showingGeist = hasCompanion2() && this.equipmentCharacter === "geist";
+    const showingId =
+      isCompanionId(this.equipmentCharacter) && hasCompanion(this.equipmentCharacter)
+        ? this.equipmentCharacter
+        : undefined;
 
     this.addContent(
       this.add.text(154, 258, "装備中", this.textStyle(16, "#f4df7e")).setDepth(102)
     );
     EQUIPMENT_SLOTS.forEach((slot, index) => {
       const y = 282 + index * 20;
-      const equipmentId = showingLuna
-        ? getCompanionEquippedEquipment(slot)
-        : showingGeist
-          ? getCompanion2EquippedEquipment(slot)
-          : getEquippedEquipment(slot);
+      const equipmentId = showingId ? getCompanionEquippedEquipment(showingId, slot) : getEquippedEquipment(slot);
       const name = equipmentId ? EQUIPMENT[equipmentId].name : "-";
       this.addContent(
         this.add.text(154, y, EQUIPMENT_SLOT_LABELS[slot], this.textStyle(13, "#9fb4c6")).setDepth(102)
@@ -797,14 +693,12 @@ export class MenuScene extends Phaser.Scene {
       });
     }
 
-    const statsLine = showingLuna
-      ? `ルナ HP ${getCompanionHp()}/${getCompanionMaxHp()}  MP ${getCompanionMp()}/${getCompanionMaxMp()}  攻 ${getCompanionAttack()}  防 ${getCompanionDefense()}  速 ${getCompanionSpeed()}`
-      : showingGeist
-        ? `ガイスト HP ${getCompanion2Hp()}/${getCompanion2MaxHp()}  MP ${getCompanion2Mp()}/${getCompanion2MaxMp()}  攻 ${getCompanion2Attack()}  防 ${getCompanion2Defense()}  速 ${getCompanion2Speed()}`
-        : `HP ${save.hp}/${getPlayerMaxHp()}  MP ${save.mp}/${getPlayerMaxMp()}  攻 ${getPlayerAttack()}  防 ${getPlayerDefense()}  速 ${getPlayerSpeed()}`;
+    const statsLine = showingId
+      ? `${COMPANIONS[showingId].name} HP ${getCompanionHp(showingId)}/${getCompanionMaxHp(showingId)}  MP ${getCompanionMp(showingId)}/${getCompanionMaxMp(showingId)}  攻 ${getCompanionAttack(showingId)}  防 ${getCompanionDefense(showingId)}  速 ${getCompanionSpeed(showingId)}`
+      : `HP ${save.hp}/${getPlayerMaxHp()}  MP ${save.mp}/${getPlayerMaxMp()}  攻 ${getPlayerAttack()}  防 ${getPlayerDefense()}  速 ${getPlayerSpeed()}`;
     this.addContent(
       this.add
-        .text(154, 432, statsLine, this.textStyle(16, showingLuna ? "#b28aff" : showingGeist ? "#d6a15a" : "#f4df7e"))
+        .text(154, 432, statsLine, this.textStyle(16, showingId ? COMPANIONS[showingId].hpBarColorHex : "#f4df7e"))
         .setDepth(102)
     );
 
@@ -827,54 +721,43 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private renderStatus(): void {
-    const anyCompanion = hasCompanion() || hasCompanion2();
-    if (anyCompanion) {
+    const activeAllies = this.getActiveAllies();
+    if (activeAllies.length > 0) {
       this.renderCharacterToggle(this.statusCharacter, (character) => {
         this.statusCharacter = character;
       });
     }
 
-    const showingLuna = hasCompanion() && this.statusCharacter === "luna";
-    const showingGeist = hasCompanion2() && this.statusCharacter === "geist";
-    const startY = anyCompanion ? 259 : 226;
+    const showingId =
+      isCompanionId(this.statusCharacter) && hasCompanion(this.statusCharacter) ? this.statusCharacter : undefined;
+    const startY = activeAllies.length > 0 ? 259 : 226;
 
     const save = getSave();
-    const rows = showingLuna
+    const rows = showingId
       ? [
           ["レベル", String(save.level)],
-          ["HP", `${getCompanionHp()}/${getCompanionMaxHp()}`],
-          ["MP", `${getCompanionMp()}/${getCompanionMaxMp()}`],
-          ["攻撃", String(getCompanionAttack())],
-          ["防御", String(getCompanionDefense())],
-          ["素早さ", String(getCompanionSpeed())],
+          ["HP", `${getCompanionHp(showingId)}/${getCompanionMaxHp(showingId)}`],
+          ["MP", `${getCompanionMp(showingId)}/${getCompanionMaxMp(showingId)}`],
+          ["攻撃", String(getCompanionAttack(showingId))],
+          ["防御", String(getCompanionDefense(showingId))],
+          ["素早さ", String(getCompanionSpeed(showingId))],
           ["EXP", String(save.exp)],
           ["次のレベルまで", String(Math.max(0, save.level * 12 - save.exp))]
         ]
-      : showingGeist
-        ? [
-            ["レベル", String(save.level)],
-            ["HP", `${getCompanion2Hp()}/${getCompanion2MaxHp()}`],
-            ["MP", `${getCompanion2Mp()}/${getCompanion2MaxMp()}`],
-            ["攻撃", String(getCompanion2Attack())],
-            ["防御", String(getCompanion2Defense())],
-            ["素早さ", String(getCompanion2Speed())],
-            ["EXP", String(save.exp)],
-            ["次のレベルまで", String(Math.max(0, save.level * 12 - save.exp))]
-          ]
-        : [
-            ["レベル", String(save.level)],
-            ["HP", `${save.hp}/${getPlayerMaxHp()}`],
-            ["MP", `${save.mp}/${getPlayerMaxMp()}`],
-            ["攻撃", String(getPlayerAttack())],
-            ["防御", String(getPlayerDefense())],
-            ["素早さ", String(getPlayerSpeed())],
-            ["EXP", String(save.exp)],
-            ["次のレベルまで", String(Math.max(0, save.level * 12 - save.exp))],
-            ["ゴールド", String(save.gold)],
-            ["現在地", this.currentMapName()]
-          ];
-    const spacing = anyCompanion ? 26 : 32;
-    const valueColor = showingLuna ? "#b28aff" : showingGeist ? "#d6a15a" : "#fff4cf";
+      : [
+          ["レベル", String(save.level)],
+          ["HP", `${save.hp}/${getPlayerMaxHp()}`],
+          ["MP", `${save.mp}/${getPlayerMaxMp()}`],
+          ["攻撃", String(getPlayerAttack())],
+          ["防御", String(getPlayerDefense())],
+          ["素早さ", String(getPlayerSpeed())],
+          ["EXP", String(save.exp)],
+          ["次のレベルまで", String(Math.max(0, save.level * 12 - save.exp))],
+          ["ゴールド", String(save.gold)],
+          ["現在地", this.currentMapName()]
+        ];
+    const spacing = activeAllies.length > 0 ? 26 : 32;
+    const valueColor = showingId ? COMPANIONS[showingId].hpBarColorHex : "#fff4cf";
 
     rows.forEach(([label, value], index) => {
       const y = startY + index * spacing;
@@ -966,7 +849,7 @@ export class MenuScene extends Phaser.Scene {
 
         this.lunaLine = line;
         this.lunaLoading = false;
-        if (this.activeTab === "companion") {
+        if (this.activeTab === "luna") {
           this.renderContent();
         }
       });
@@ -1044,7 +927,7 @@ export class MenuScene extends Phaser.Scene {
     this.renderContent();
   }
 
-  private useSelectedItem(target: HealTarget = "self"): void {
+  private useSelectedItem(target: "self" | CompanionId = "self"): void {
     const itemId = ITEM_ORDER[this.selectedItemIndex];
     const item = ITEMS[itemId];
     if (getItemCount(itemId) <= 0) {
@@ -1052,9 +935,9 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
-    if (target === "companion" || target === "companion2") {
-      const result = target === "companion" ? useItemOnCompanion(itemId) : useItemOnCompanion2(itemId);
-      const label = target === "companion" ? "ルナの" : "ガイストの";
+    if (isCompanionId(target)) {
+      const result = useItemOnCompanion(target, itemId);
+      const label = `${COMPANIONS[target].name}の`;
       if (!result.used) {
         this.setMessage(this.getItemFailureMessage(result.reason, label));
         return;
@@ -1108,25 +991,23 @@ export class MenuScene extends Phaser.Scene {
     }
 
     const equipment = EQUIPMENT[equipmentId];
-    const targetingLuna = hasCompanion() && this.equipmentCharacter === "luna";
-    const targetingGeist = hasCompanion2() && this.equipmentCharacter === "geist";
-    const result = targetingLuna
-      ? equipEquipmentToCompanion(equipmentId)
-      : targetingGeist
-        ? equipEquipmentToCompanion2(equipmentId)
-        : equipEquipment(equipmentId);
+    const targetId =
+      isCompanionId(this.equipmentCharacter) && hasCompanion(this.equipmentCharacter)
+        ? this.equipmentCharacter
+        : undefined;
+    const result = targetId ? equipEquipmentToCompanion(targetId, equipmentId) : equipEquipment(equipmentId);
     if (!result.equipped || !result.slot) {
       this.setMessage(`${equipment.name}を装備できなかった。`);
       return;
     }
 
-    const targetLabel = targetingLuna ? "ルナの" : targetingGeist ? "ガイストの" : "";
+    const targetLabel = targetId ? `${COMPANIONS[targetId].name}の` : "";
     this.setMessage(`${targetLabel}${equipment.name}を${EQUIPMENT_SLOT_LABELS[result.slot]}に装備した。`);
     this.game.events.emit(GAME_EVENTS.stateChanged);
     this.renderContent();
   }
 
-  private useSelectedSkill(target: HealTarget = "self"): void {
+  private useSelectedSkill(target: "self" | CompanionId = "self"): void {
     const skillId = SKILL_ORDER[this.selectedSkillIndex];
     const skill = SKILLS[skillId];
     const save = getSave();
@@ -1146,17 +1027,14 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
-    if (target === "companion" || target === "companion2") {
-      const name = target === "companion" ? "ルナ" : "ガイスト";
-      const currentHp = target === "companion" ? getCompanionHp() : getCompanion2Hp();
-      const maxAllyHp = target === "companion" ? getCompanionMaxHp() : getCompanion2MaxHp();
-      if (currentHp >= maxAllyHp) {
+    if (isCompanionId(target)) {
+      const name = COMPANIONS[target].name;
+      if (getCompanionHp(target) >= getCompanionMaxHp(target)) {
         this.setMessage(`${name}のHPは満タンだ。`);
         return;
       }
 
-      const result =
-        target === "companion" ? useHealingSkillOnCompanion(skillId) : useHealingSkillOnCompanion2(skillId);
+      const result = useHealingSkillOnCompanion(target, skillId);
       if (!result.used) {
         this.setMessage(`${skill.name}を使えなかった。`);
         return;
@@ -1230,8 +1108,7 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
-    const scrollableTab =
-      this.activeTab === "status" || this.activeTab === "companion" || this.activeTab === "companion2";
+    const scrollableTab = this.activeTab === "status" || isCompanionId(this.activeTab);
     if (scrollableTab && event.code === "ArrowUp") {
       this.scrollContentBy(-40);
       return;
@@ -1257,12 +1134,12 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
-    if ((event.code === "Space" || event.code === "Enter") && this.activeTab === "companion") {
+    if ((event.code === "Space" || event.code === "Enter") && this.activeTab === "luna") {
       this.talkToLuna();
       return;
     }
 
-    if ((event.code === "Space" || event.code === "Enter") && this.activeTab === "companion2") {
+    if ((event.code === "Space" || event.code === "Enter") && this.activeTab === "geist") {
       this.talkToGeist();
     }
   }

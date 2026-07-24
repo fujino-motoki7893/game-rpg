@@ -1,3 +1,5 @@
+import type { CompanionId } from "../data/companions";
+
 export type Direction = "up" | "down" | "left" | "right";
 export type MapId = "village" | "field" | "dungeon" | "hiddenVillage";
 
@@ -85,6 +87,13 @@ export type EquipmentId =
 export type EquipmentInventory = Partial<Record<EquipmentId, number>>;
 export type EquipmentLoadout = Partial<Record<EquipmentSlot, EquipmentId>>;
 
+/** One companion's persisted vitals/loadout, keyed by CompanionId in GameSave.companions. */
+export interface CompanionSaveState {
+  hp?: number;
+  mp?: number;
+  equipment?: EquipmentLoadout;
+}
+
 export interface ItemReward {
   type: "item";
   itemId: ItemId;
@@ -160,13 +169,8 @@ export interface GameSave {
   equipmentInventory: EquipmentInventory;
   equipment: EquipmentLoadout;
   flags: Record<string, boolean>;
-  companionHp?: number;
-  companionMp?: number;
-  companionEquipment?: EquipmentLoadout;
-  /** Geist, the armored ally recruited in the tier-4 dungeon — a second, independent companion slot alongside Luna. */
-  companion2Hp?: number;
-  companion2Mp?: number;
-  companion2Equipment?: EquipmentLoadout;
+  /** Each recruited companion's vitals/loadout, keyed by id — add a new CompanionId (data/companions.ts) to give it a slot here. */
+  companions?: Partial<Record<CompanionId, CompanionSaveState>>;
   defeatedEnemies: string[];
   /** Which dungeon tier the player is currently inside (or last entered). */
   activeDungeonTier?: number;

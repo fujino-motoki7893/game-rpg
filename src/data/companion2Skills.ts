@@ -1,6 +1,6 @@
-export type Companion2SkillId = "ironFist" | "heavyBlow" | "crushingSlam";
+import type { CompanionSkillEffect } from "./companions";
 
-export type Companion2SkillEffect = { type: "attack"; multiplier: number };
+export type Companion2SkillId = "ironFist" | "heavyBlow" | "crushingSlam";
 
 export interface Companion2SkillDefinition {
   id: Companion2SkillId;
@@ -8,7 +8,7 @@ export interface Companion2SkillDefinition {
   requiredLevel: number;
   mpCost: number;
   description: string;
-  effect: Companion2SkillEffect;
+  effect: CompanionSkillEffect;
 }
 
 export const COMPANION2_SKILL_ORDER: Companion2SkillId[] = ["ironFist", "heavyBlow", "crushingSlam"];

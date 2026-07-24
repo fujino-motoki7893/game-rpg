@@ -34,8 +34,6 @@ import {
   addEquipment,
   ensureDungeonProgress,
   getActiveDungeonTier,
-  getCompanion2MaxHp,
-  getCompanion2MaxMp,
   getCompanionMaxHp,
   getCompanionMaxMp,
   getGeneratedDungeonFloor,
@@ -45,21 +43,17 @@ import {
   getPlayerMaxMp,
   getSave,
   hasCompanion,
-  hasCompanion2,
   hasFlag,
   healCompanion,
-  healCompanion2,
   healPlayer,
   isEnemyDefeated,
   isExpandedWorldUnlocked,
   markFlag,
   persistSave,
   recruitCompanion,
-  recruitCompanion2,
   resetSave,
   resetDungeonEnemyDefeats,
   resetFieldEnemyDefeats,
-  restoreCompanion2Mp,
   restoreCompanionMp,
   restorePlayerMp,
   setActiveDungeonTier,
@@ -67,6 +61,8 @@ import {
   setGeneratedDungeonFloor,
   setPlayerPosition
 } from "../game/GameState";
+import { COMPANION_ORDER, COMPANIONS } from "../data/companions";
+import type { CompanionId } from "../data/companions";
 import type {
   ChestDefinition,
   Direction,
@@ -112,12 +108,11 @@ export class WorldScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Sprite;
   private playerShadow?: Phaser.GameObjects.Ellipse;
   private playerTile: TilePosition = { x: 0, y: 0 };
-  private companionSprite?: Phaser.GameObjects.Sprite;
-  private companionShadow?: Phaser.GameObjects.Ellipse;
-  private companionTile?: TilePosition;
-  private companion2Sprite?: Phaser.GameObjects.Sprite;
-  private companion2Shadow?: Phaser.GameObjects.Ellipse;
-  private companion2Tile?: TilePosition;
+  /** One follower per recruited companion, in COMPANION_ORDER's party-line order (player -> allyFollowers[0] -> allyFollowers[1] -> ...). */
+  private allyFollowers = new Map<
+    CompanionId,
+    { sprite: Phaser.GameObjects.Sprite; shadow: Phaser.GameObjects.Ellipse; tile: TilePosition }
+  >();
   private facing: Direction = "down";
   private moving = false;
   private dialogueLines: string[] = [];
@@ -233,8 +228,7 @@ export class WorldScene extends Phaser.Scene {
       );
       this.alignCharacterSprite(this.player, "player").setDepth(20);
       this.playCharacterIdle(this.player, "player", this.facing);
-      this.setupCompanionFollower(entryTile);
-      this.setupCompanion2Follower(entryTile);
+      this.setupAllyFollowers(entryTile);
       this.createDialoguePanel();
       this.createTargetHintPanel();
       this.setupCamera();
@@ -261,124 +255,64 @@ export class WorldScene extends Phaser.Scene {
     camera.startFollow(this.player, true, 1, 1);
   }
 
-  private setupCompanionFollower(entryTile: TilePosition): void {
-    this.companionSprite = undefined;
-    this.companionShadow = undefined;
-    this.companionTile = undefined;
+  /**
+   * Rebuilds one follower sprite per recruited companion. Depth/party-order
+   * both follow COMPANION_ORDER, so a newly added companion just needs an
+   * entry in data/companions.ts to get a follower slot here.
+   */
+  private setupAllyFollowers(entryTile: TilePosition): void {
+    this.allyFollowers.clear();
 
-    if (!hasCompanion()) {
-      return;
-    }
+    COMPANION_ORDER.forEach((id, index) => {
+      if (!hasCompanion(id)) {
+        return;
+      }
 
-    this.companionTile = { ...entryTile };
-    this.companionShadow = this.add
-      .ellipse(this.toWorldX(entryTile.x), this.toWorldY(entryTile.y) + 13, 20, 6, 0x05080b, 0.3)
-      .setDepth(18);
-    this.companionSprite = this.add.sprite(
-      this.toWorldX(entryTile.x),
-      this.toWorldY(entryTile.y),
-      "companion-luna",
-      0
-    );
-    this.alignCharacterSprite(this.companionSprite, "companion-luna").setDepth(18.5);
-    this.playCharacterIdle(this.companionSprite, "companion-luna", this.facing);
+      const texture = COMPANIONS[id].texture;
+      const depth = 18 - index * 0.5;
+      const shadow = this.add
+        .ellipse(this.toWorldX(entryTile.x), this.toWorldY(entryTile.y) + 13, 20, 6, 0x05080b, 0.3)
+        .setDepth(depth);
+      const sprite = this.add.sprite(this.toWorldX(entryTile.x), this.toWorldY(entryTile.y), texture, 0);
+      this.alignCharacterSprite(sprite, texture).setDepth(depth + 0.5);
+      this.playCharacterIdle(sprite, texture, this.facing);
+      this.allyFollowers.set(id, { sprite, shadow, tile: { ...entryTile } });
+    });
   }
 
-  private moveCompanion(target: TilePosition): void {
-    if (!this.companionSprite || !this.companionTile) {
+  private moveAllyFollower(id: CompanionId, target: TilePosition): void {
+    const follower = this.allyFollowers.get(id);
+    if (!follower) {
       return;
     }
 
-    if (this.companionTile.x === target.x && this.companionTile.y === target.y) {
+    if (follower.tile.x === target.x && follower.tile.y === target.y) {
       return;
     }
 
-    const direction = this.getDirectionBetween(this.companionTile, target);
-    const companionSprite = this.companionSprite;
-    this.companionTile = target;
+    const texture = COMPANIONS[id].texture;
+    const direction = this.getDirectionBetween(follower.tile, target);
+    follower.tile = target;
     if (direction) {
-      this.playCharacterWalk(companionSprite, "companion-luna", direction);
+      this.playCharacterWalk(follower.sprite, texture, direction);
     }
     this.tweens.add({
-      targets: companionSprite,
+      targets: follower.sprite,
       x: this.toWorldX(target.x),
       y: this.toWorldY(target.y),
       duration: 125,
       ease: "Sine.easeInOut",
       onComplete: () => {
-        this.playCharacterIdle(companionSprite, "companion-luna", direction ?? "down");
+        this.playCharacterIdle(follower.sprite, texture, direction ?? "down");
       }
     });
-
-    if (this.companionShadow) {
-      this.tweens.add({
-        targets: this.companionShadow,
-        x: this.toWorldX(target.x),
-        y: this.toWorldY(target.y) + 13,
-        duration: 125,
-        ease: "Sine.easeInOut"
-      });
-    }
-  }
-
-  private setupCompanion2Follower(entryTile: TilePosition): void {
-    this.companion2Sprite = undefined;
-    this.companion2Shadow = undefined;
-    this.companion2Tile = undefined;
-
-    if (!hasCompanion2()) {
-      return;
-    }
-
-    this.companion2Tile = { ...entryTile };
-    this.companion2Shadow = this.add
-      .ellipse(this.toWorldX(entryTile.x), this.toWorldY(entryTile.y) + 13, 20, 6, 0x05080b, 0.3)
-      .setDepth(17);
-    this.companion2Sprite = this.add.sprite(
-      this.toWorldX(entryTile.x),
-      this.toWorldY(entryTile.y),
-      "companion-geist",
-      0
-    );
-    this.alignCharacterSprite(this.companion2Sprite, "companion-geist").setDepth(17.5);
-    this.playCharacterIdle(this.companion2Sprite, "companion-geist", this.facing);
-  }
-
-  private moveCompanion2(target: TilePosition): void {
-    if (!this.companion2Sprite || !this.companion2Tile) {
-      return;
-    }
-
-    if (this.companion2Tile.x === target.x && this.companion2Tile.y === target.y) {
-      return;
-    }
-
-    const direction = this.getDirectionBetween(this.companion2Tile, target);
-    const companion2Sprite = this.companion2Sprite;
-    this.companion2Tile = target;
-    if (direction) {
-      this.playCharacterWalk(companion2Sprite, "companion-geist", direction);
-    }
     this.tweens.add({
-      targets: companion2Sprite,
+      targets: follower.shadow,
       x: this.toWorldX(target.x),
-      y: this.toWorldY(target.y),
+      y: this.toWorldY(target.y) + 13,
       duration: 125,
-      ease: "Sine.easeInOut",
-      onComplete: () => {
-        this.playCharacterIdle(companion2Sprite, "companion-geist", direction ?? "down");
-      }
+      ease: "Sine.easeInOut"
     });
-
-    if (this.companion2Shadow) {
-      this.tweens.add({
-        targets: this.companion2Shadow,
-        x: this.toWorldX(target.x),
-        y: this.toWorldY(target.y) + 13,
-        duration: 125,
-        ease: "Sine.easeInOut"
-      });
-    }
   }
 
   private async resolveMap(mapId: MapId): Promise<MapDefinition> {
@@ -640,17 +574,25 @@ export class WorldScene extends Phaser.Scene {
     }
 
     const previousPlayerTile = { ...this.playerTile };
-    const previousCompanionTile = this.companionTile ? { ...this.companionTile } : undefined;
     this.moving = true;
     this.hideTargetHint();
     this.playerTile = target;
     this.playCharacterWalk(this.player, "player", direction);
     setPlayerPosition(this.currentMap.id, target.x, target.y);
     this.game.events.emit(GAME_EVENTS.playerMoved, { ...target });
-    this.moveCompanion(previousPlayerTile);
-    // Geist trails Luna rather than the player directly, so with both
-    // recruited the party lines up player -> Luna -> Geist single-file.
-    this.moveCompanion2(previousCompanionTile ?? previousPlayerTile);
+    // Each ally trails whoever is directly ahead of it in COMPANION_ORDER
+    // (the first trails the player), so the party lines up single-file:
+    // player -> ally[0] -> ally[1] -> ...
+    let previousTile = previousPlayerTile;
+    COMPANION_ORDER.forEach((id) => {
+      const follower = this.allyFollowers.get(id);
+      if (!follower) {
+        return;
+      }
+      const ownPreviousTile = { ...follower.tile };
+      this.moveAllyFollower(id, previousTile);
+      previousTile = ownPreviousTile;
+    });
     this.tweens.add({
       targets: this.player,
       x: this.toWorldX(target.x),
@@ -835,7 +777,7 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
 
-    if (!hasCompanion()) {
+    if (!hasCompanion("luna")) {
       return;
     }
 
@@ -895,14 +837,12 @@ export class WorldScene extends Phaser.Scene {
       }
       healPlayer(getPlayerMaxHp());
       restorePlayerMp(getPlayerMaxMp());
-      if (hasCompanion()) {
-        healCompanion(getCompanionMaxHp());
-        restoreCompanionMp(getCompanionMaxMp());
-      }
-      if (hasCompanion2()) {
-        healCompanion2(getCompanion2MaxHp());
-        restoreCompanion2Mp(getCompanion2MaxMp());
-      }
+      COMPANION_ORDER.forEach((id) => {
+        if (hasCompanion(id)) {
+          healCompanion(id, getCompanionMaxHp(id));
+          restoreCompanionMp(id, getCompanionMaxMp(id));
+        }
+      });
       stateChanged = true;
       dialogue = firstHerbGift
         ? ["ミラ: 傷を癒しましょう。", "ミラ: 予備の薬草も荷物に入れておきました。"]
@@ -910,7 +850,7 @@ export class WorldScene extends Phaser.Scene {
     }
 
     if (npc.id === "luna") {
-      recruitCompanion();
+      recruitCompanion("luna");
       stateChanged = true;
       shouldReloadMap = true;
       dialogue = [
@@ -922,7 +862,7 @@ export class WorldScene extends Phaser.Scene {
     }
 
     if (npc.id === "geist") {
-      recruitCompanion2();
+      recruitCompanion("geist");
       stateChanged = true;
       shouldReloadMap = true;
       dialogue = [

@@ -1,8 +1,6 @@
-export type CompanionSkillId = "magicBolt" | "healingLight" | "greaterHealingLight";
+import type { CompanionSkillEffect } from "./companions";
 
-export type CompanionSkillEffect =
-  | { type: "attack" }
-  | { type: "heal"; healRatio: number; triggerRatio: number };
+export type CompanionSkillId = "magicBolt" | "healingLight" | "greaterHealingLight";
 
 export interface CompanionSkillDefinition {
   id: CompanionSkillId;
@@ -26,7 +24,7 @@ export const COMPANION_SKILLS: Record<CompanionSkillId, CompanionSkillDefinition
     requiredLevel: 1,
     mpCost: 0,
     description: "通常攻撃として敵にダメージを与える",
-    effect: { type: "attack" }
+    effect: { type: "attack", multiplier: 1 }
   },
   healingLight: {
     id: "healingLight",
