@@ -24,10 +24,12 @@ import { GAME_EVENTS } from "../game/constants";
 import {
   buyEquipment,
   buyItem,
+  getCompanionEquippedEquipment,
   getEquipmentCount,
   getEquippedEquipment,
   getItemCount,
   getSave,
+  hasCompanion,
   previewEquipmentSlot,
   sellEquipment,
   sellItem
@@ -203,28 +205,38 @@ export class ShopScene extends Phaser.Scene {
         .setDepth(102)
     );
 
-    const upgradeLine = this.getEquipmentUpgradeLine(selectedEntry);
-    if (upgradeLine) {
+    this.getEquipmentUpgradeLines(selectedEntry).forEach((line, index) => {
       this.addContent(
-        this.add.text(154, 440, upgradeLine, this.textStyle(14, "#9fb4c6")).setDepth(102)
+        this.add.text(154, 440 + index * 20, line, this.textStyle(14, "#9fb4c6")).setDepth(102)
       );
-    }
+    });
   }
 
-  private getEquipmentUpgradeLine(entry: TradeEntry): string | undefined {
+  private getEquipmentUpgradeLines(entry: TradeEntry): string[] {
     if (entry.kind !== "equipment" || this.activeTab !== "buy") {
-      return undefined;
+      return [];
     }
 
     const slot = previewEquipmentSlot(entry.id);
     if (!slot) {
-      return undefined;
+      return [];
     }
 
-    const currentId = getEquippedEquipment(slot);
+    const lines: string[] = [this.describeEquipmentUpgrade("自分", getEquippedEquipment(slot), entry.id)];
+    if (hasCompanion()) {
+      lines.push(this.describeEquipmentUpgrade("ルナ", getCompanionEquippedEquipment(slot), entry.id));
+    }
+    return lines;
+  }
+
+  private describeEquipmentUpgrade(
+    owner: string,
+    currentId: EquipmentId | undefined,
+    candidateId: EquipmentId
+  ): string {
     const currentName = currentId ? EQUIPMENT[currentId].name : "なし";
-    const delta = getEquipmentStatDelta(currentId, entry.id);
-    return `装備中(${currentName})と比較: ${delta}`;
+    const delta = getEquipmentStatDelta(currentId, candidateId);
+    return `${owner}: 装備中(${currentName})と比較 ${delta}`;
   }
 
   private selectItem(index: number): void {
