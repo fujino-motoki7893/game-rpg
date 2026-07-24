@@ -149,7 +149,7 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     speed: 10,
     exp: 34,
     gold: 38,
-    texture: "enemy-guardian",
+    texture: "enemy-deep-guardian",
     boss: true
   },
   eclipseBeast: {
@@ -160,7 +160,7 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     speed: 13,
     exp: 54,
     gold: 72,
-    texture: "enemy-guardian",
+    texture: "enemy-eclipse-beast",
     boss: true
   },
   mistSovereign: {
@@ -171,7 +171,7 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     speed: 15,
     exp: 78,
     gold: 105,
-    texture: "enemy-guardian",
+    texture: "enemy-mist-sovereign",
     boss: true
   }
 };

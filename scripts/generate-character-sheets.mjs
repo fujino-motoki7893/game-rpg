@@ -64,7 +64,13 @@ const sheets = [
   { key: "enemy-wolf", size: 32, kind: "wolf", base: "#83878f", shade: "#3f444c" },
   { key: "enemy-mage", size: 32, kind: "mage", base: "#7551b0", shade: "#33264f" },
   { key: "enemy-mimic", size: 32, kind: "mimic", base: "#9c572f", shade: "#3a2115" },
-  { key: "enemy-guardian", size: 48, kind: "guardian", base: "#b05643", shade: "#4b2825" }
+  // enemy-guardian.png is NOT generated here — it's cut from an external LPC
+  // golem sheet by generate-monster-sprites-external.mjs (see CREDITS.md).
+  // The tier 2-4 bosses below get their own original procedural designs so
+  // each dungeon boss reads as a distinct creature instead of a recolor.
+  { key: "enemy-deep-guardian", size: 48, kind: "deepGuardian", base: "#4f6fa8", shade: "#223252" },
+  { key: "enemy-eclipse-beast", size: 48, kind: "eclipseBeast", base: "#5a2a63", shade: "#241129" },
+  { key: "enemy-mist-sovereign", size: 48, kind: "mistSovereign", base: "#3f6b63", shade: "#1c332e" }
 ];
 
 await fs.mkdir(outputDir, { recursive: true });
@@ -102,8 +108,14 @@ function drawFrame(sheet, direction, step) {
   if (sheet.kind === "humanoid") {
     return drawHumanoid(sheet, direction, step);
   }
-  if (sheet.kind === "guardian") {
-    return drawGuardian(sheet, direction, step);
+  if (sheet.kind === "deepGuardian") {
+    return drawDeepGuardian(sheet, direction, step);
+  }
+  if (sheet.kind === "eclipseBeast") {
+    return drawEclipseBeast(sheet, direction, step);
+  }
+  if (sheet.kind === "mistSovereign") {
+    return drawMistSovereign(sheet, direction, step);
   }
   return drawCreature(sheet, direction, step);
 }
@@ -208,32 +220,75 @@ function drawCreature(sheet, direction, step) {
   }
 }
 
-function drawGuardian(sheet, direction, step) {
+// Tier 2 boss: an armored guardian like tier 1's, but with a separate
+// helmed head, an icy crown, and glowing frost eyes so it reads as a
+// distinct "cold moon knight" rather than a recolor of the sun guardian.
+function drawDeepGuardian(sheet, direction, step) {
   const draw = scaler(sheet.size);
   return [
-    draw.rect(7, 10 + step, 18, 20, "#1a1616"),
-    draw.rect(8, 11 + step, 16, 18, sheet.base),
-    draw.rect(5, 10 + step, 8, 6, sheet.shade),
-    draw.rect(19, 10 + step, 8, 6, sheet.shade),
-    draw.rect(10, 6 + step, 12, 4, "#f0c14b"),
-    draw.rect(12, 4 + step, 8, 2, "#f4d977"),
-    draw.rect(11, 22 + step, 5, 5, sheet.shade),
-    draw.rect(18, 22 - step, 5, 5, sheet.shade),
-    drawEyes(draw, direction, 12, 16 + step)
+    draw.rect(7, 14 + step, 18, 16, "#0f1420"),
+    draw.rect(8, 15 + step, 16, 14, sheet.base),
+    draw.rect(5, 14 + step, 8, 6, sheet.shade),
+    draw.rect(19, 14 + step, 8, 6, sheet.shade),
+    draw.rect(14, 23 + step, 4, 4, "#bfe0ff"),
+    draw.rect(10, 5 + step, 12, 10, "#0f1420"),
+    draw.rect(11, 6 + step, 10, 8, sheet.shade),
+    draw.path("M 11 5 L 16 0 L 21 5 Z", "#dff0ff"),
+    drawEyes(draw, direction, 12, 10 + step, "#bfe0ff", 2)
   ].join("");
 }
 
-function drawEyes(draw, direction, x, y) {
+// Tier 3 boss: a feral winged beast rather than another knight, so the
+// silhouette itself signals "this is a different kind of threat."
+function drawEclipseBeast(sheet, direction, step) {
+  const draw = scaler(sheet.size);
+  const eyeX = direction === "left" ? 13 : direction === "right" ? 17 : 15;
+  return [
+    draw.path(`M 8 ${19 + step} L 0 8 L 10 ${25 + step} Z`, sheet.shade),
+    draw.path(`M 24 ${19 - step} L 32 8 L 22 ${25 - step} Z`, sheet.shade),
+    draw.rect(7, 16 + step, 18, 12, sheet.shade),
+    draw.rect(8, 17 + step, 16, 10, sheet.base),
+    draw.rect(11, 8 + step, 10, 10, sheet.base),
+    draw.path(`M 11 ${9 + step} L 8 3 L 14 ${9 + step} Z`, sheet.shade),
+    draw.path(`M 21 ${9 + step} L 24 3 L 18 ${9 + step} Z`, sheet.shade),
+    draw.rect(9, 26 + step, 4, 4, sheet.shade),
+    draw.rect(19, 26 - step, 4, 4, sheet.shade),
+    direction === "up" ? "" : draw.ellipse(eyeX, 12 + step, 3, 2, "#ff5654"),
+    direction === "up" ? "" : draw.ellipse(eyeX === 15 ? 21 : eyeX + 6, 12 + step, 3, 2, "#ff5654")
+  ].join("");
+}
+
+// Tier 4 boss (final): a robed demon king — tall, caped, crowned with horns
+// and trailing mist — the most imposing shape of the four bosses.
+function drawMistSovereign(sheet, direction, step) {
+  const draw = scaler(sheet.size);
+  return [
+    draw.path(`M 9 16 L 23 16 L 27 ${30 + step} L 5 ${30 + step} Z`, sheet.shade),
+    draw.rect(10, 12 + step, 12, 10, sheet.base),
+    draw.rect(6 + (direction === "left" ? -1 : 0), 13 + step, 5, 3, sheet.shade),
+    draw.rect(21 + (direction === "right" ? 1 : 0), 13 + step, 5, 3, sheet.shade),
+    draw.rect(12, 6 + step, 8, 8, sheet.base),
+    draw.path("M 12 7 L 8 1 L 13 7 Z", "#1c332e"),
+    draw.path("M 20 7 L 24 1 L 19 7 Z", "#1c332e"),
+    draw.rect(11, 5 + step, 10, 2, "#bff5e8"),
+    direction === "up" ? "" : draw.rect(13, 9 + step, 2, 2, "#bff5e8"),
+    direction === "up" ? "" : draw.rect(17, 9 + step, 2, 2, "#bff5e8"),
+    draw.ellipse(9, 29 + step, 4, 2, "rgba(226,255,247,0.4)"),
+    draw.ellipse(23, 29 - step, 4, 2, "rgba(226,255,247,0.4)")
+  ].join("");
+}
+
+function drawEyes(draw, direction, x, y, color = "#111111", size = 3) {
   if (direction === "up") {
     return "";
   }
   if (direction === "left") {
-    return draw.rect(x, y, 3, 3, "#111111");
+    return draw.rect(x, y, size, size, color);
   }
   if (direction === "right") {
-    return draw.rect(x + 7, y, 3, 3, "#111111");
+    return draw.rect(x + 7, y, size, size, color);
   }
-  return [draw.rect(x, y, 3, 3, "#111111"), draw.rect(x + 7, y, 3, 3, "#111111")].join("");
+  return [draw.rect(x, y, size, size, color), draw.rect(x + 7, y, size, size, color)].join("");
 }
 
 function scaler(size) {

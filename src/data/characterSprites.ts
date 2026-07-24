@@ -126,6 +126,30 @@ export const CHARACTER_SPRITES: CharacterSpriteDefinition[] = [
     battleScale: 2.15
   },
   {
+    key: "enemy-deep-guardian",
+    path: "assets/characters/enemy-deep-guardian.png",
+    frameWidth: 48,
+    frameHeight: 48,
+    role: "creature",
+    battleScale: 2.15
+  },
+  {
+    key: "enemy-eclipse-beast",
+    path: "assets/characters/enemy-eclipse-beast.png",
+    frameWidth: 48,
+    frameHeight: 48,
+    role: "creature",
+    battleScale: 2.15
+  },
+  {
+    key: "enemy-mist-sovereign",
+    path: "assets/characters/enemy-mist-sovereign.png",
+    frameWidth: 48,
+    frameHeight: 48,
+    role: "creature",
+    battleScale: 2.15
+  },
+  {
     key: "companion-luna",
     path: "assets/characters/companion-luna.png",
     frameWidth: 48,

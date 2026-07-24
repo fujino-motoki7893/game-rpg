@@ -15,6 +15,12 @@ OpenGameArt.org上の単体モンスター素材(人型骨格に依らない独�
 きれいに収まらない構成(狼はPSD配布で二足/四足ポーズが混在、ミミックは開閉状態のみで
 歩行フレームが無い)のため、安全に変換できる目処が立った時点で対応します。
 
+`enemy-deep-guardian.png` / `enemy-eclipse-beast.png` / `enemy-mist-sovereign.png`(tier
+2〜4のボス)も `scripts/generate-character-sheets.mjs` によるプロシージャル生成です。
+以前は4体のボスが全員 `enemy-guardian.png`(LPC Golem素材)を共有していたため見分けが
+つかなかったので、tier1はそのままゴーレム素材を使い、tier2〜4はこのプロジェクト独自の
+新規デザイン(氷の兜を被った守護者/角と翼を持つ魔獣/霧を纏う魔王)として描き分けました。
+
 生成に使用した個別アセットは複数ライセンス(OGA-BY 3.0 / CC-BY-SA 3.0 / CC-BY 4.0 / GPL 2.0 / GPL 3.0 など)で
 提供されています。使用したすべてのアセットに共通して選択可能なのは **GPL 3.0** のみだったため、
 このプロジェクトでは GPL 3.0 に基づいて利用しています。GPL 3.0 は表示(attribution)と、
