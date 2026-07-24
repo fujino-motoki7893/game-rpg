@@ -6,6 +6,9 @@ import {
   getCharacterIdleAnimationKey,
   getCharacterWalkAnimationKey
 } from "../data/characterSprites";
+import { getDungeonTileThemeForTier, type DungeonWallAccent } from "../data/dungeonGenerator";
+
+const DUNGEON_TIERS = [1, 2, 3, 4];
 
 type CreatureType =
   | "slime"
@@ -40,8 +43,16 @@ export class BootScene extends Phaser.Scene {
     this.createTile("tile-house", "#86533d", "#5e382c", "house");
     this.createTile("tile-tree", "#1f5e38", "#153f2a", "tree");
     this.createTile("tile-rock", "#58606b", "#3c424a", "rock");
-    this.createTile("tile-cave", "#312c35", "#1c1920", "cave");
-    this.createTile("tile-floor", "#6a5d48", "#423b31", "floor");
+    DUNGEON_TIERS.forEach((tier) => {
+      const theme = getDungeonTileThemeForTier(tier);
+      this.createTile(`tile-cave-t${tier}`, theme.wallBase, theme.wallShade, "cave", {
+        highlight: theme.wallHighlight,
+        accent: theme.accent
+      });
+      this.createTile(`tile-floor-t${tier}`, theme.floorBase, theme.floorShade, "floor", {
+        highlight: theme.floorHighlight
+      });
+    });
     this.createTile("tile-portal", "#614c9a", "#d9cfff", "portal");
     this.createTile("tile-stairs-up", "#6a5d48", "#423b31", "stairsUp");
     this.createTile("tile-stairs-down", "#6a5d48", "#423b31", "stairsDown");
@@ -84,7 +95,8 @@ export class BootScene extends Phaser.Scene {
       | "portal"
       | "stairsUp"
       | "stairsDown"
-      | "chest"
+      | "chest",
+    patternOverride?: { highlight: string; accent?: DungeonWallAccent }
   ): void {
     const texture = this.textures.createCanvas(key, 32, 32);
     if (!texture) {
@@ -126,10 +138,15 @@ export class BootScene extends Phaser.Scene {
         this.drawRock(ctx, shadeColor, "#727b86");
         break;
       case "cave":
-        this.drawDungeonStone(ctx, shadeColor, "#4a4250");
+        this.drawDungeonStone(
+          ctx,
+          shadeColor,
+          patternOverride?.highlight ?? "#4a4250",
+          patternOverride?.accent
+        );
         break;
       case "floor":
-        this.drawDungeonFloor(ctx, shadeColor, "#7c6f56");
+        this.drawDungeonFloor(ctx, shadeColor, patternOverride?.highlight ?? "#7c6f56");
         break;
       case "portal":
         this.drawPortal(ctx, shadeColor);
@@ -255,7 +272,12 @@ export class BootScene extends Phaser.Scene {
     ctx.globalAlpha = 1;
   }
 
-  private drawDungeonStone(ctx: CanvasRenderingContext2D, shadeColor: string, highlightColor: string): void {
+  private drawDungeonStone(
+    ctx: CanvasRenderingContext2D,
+    shadeColor: string,
+    highlightColor: string,
+    accent?: DungeonWallAccent
+  ): void {
     ctx.strokeStyle = shadeColor;
     ctx.lineWidth = 1;
     [8, 18, 28].forEach((y) => {
@@ -269,6 +291,66 @@ export class BootScene extends Phaser.Scene {
     ctx.fillRect(3, 4, 10, 2);
     ctx.fillRect(19, 20, 8, 2);
     ctx.globalAlpha = 1;
+
+    if (accent) {
+      this.drawWallAccent(ctx, highlightColor, accent);
+    }
+  }
+
+  // Each dungeon tier's wall gets a small motif on top of its brick pattern
+  // and color palette, so tiers read as distinct places at a glance rather
+  // than the same stonework only recolored.
+  private drawWallAccent(
+    ctx: CanvasRenderingContext2D,
+    highlightColor: string,
+    accent: DungeonWallAccent
+  ): void {
+    ctx.fillStyle = highlightColor;
+    switch (accent) {
+      case "ember":
+        ctx.globalAlpha = 0.55;
+        ctx.beginPath();
+        ctx.arc(24, 10, 1.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(9, 23, 1.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        break;
+      case "crystal":
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(24, 5);
+        ctx.lineTo(27, 10);
+        ctx.lineTo(24, 15);
+        ctx.lineTo(21, 10);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        break;
+      case "rune":
+        ctx.globalAlpha = 0.5;
+        ctx.strokeStyle = highlightColor;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(8, 21);
+        ctx.lineTo(8, 29);
+        ctx.moveTo(5, 25);
+        ctx.lineTo(11, 25);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(8, 25, 4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        break;
+      case "mist":
+        ctx.globalAlpha = 0.3;
+        ctx.beginPath();
+        ctx.ellipse(20, 27, 10, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        break;
+    }
   }
 
   private drawDungeonFloor(ctx: CanvasRenderingContext2D, shadeColor: string, highlightColor: string): void {

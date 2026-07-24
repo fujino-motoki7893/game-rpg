@@ -320,7 +320,7 @@ export class WorldScene extends Phaser.Scene {
     const { floorCount, currentFloor } = ensureDungeonProgress(dungeonTier);
     const generatedDungeon = getGeneratedDungeonFloor(currentFloor, dungeonTier);
     if (generatedDungeon && this.hasSupplyChest(generatedDungeon)) {
-      return generatedDungeon;
+      return { ...generatedDungeon, tier: dungeonTier };
     }
 
     const previousFloor =
@@ -341,7 +341,7 @@ export class WorldScene extends Phaser.Scene {
         ? `AIがB${currentFloor}Fを描き替えた`
         : `B${currentFloor}Fの地形が変化した`
     );
-    return dungeon;
+    return { ...dungeon, tier: dungeonTier };
   }
 
   private drawMap(): void {
@@ -1451,6 +1451,8 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private getTileTexture(tile: string): string {
+    const isDungeon = this.currentMap.id === "dungeon";
+    const dungeonTier = this.currentMap.tier ?? 1;
     switch (tile) {
       case ",":
       case "S":
@@ -1463,7 +1465,7 @@ export class WorldScene extends Phaser.Scene {
       case "H":
         return "tile-house";
       case "#":
-        return this.currentMap.id === "dungeon" ? "tile-cave" : "tile-tree";
+        return isDungeon ? `tile-cave-t${dungeonTier}` : "tile-tree";
       case "^":
       case "C":
         return "tile-rock";
@@ -1474,9 +1476,9 @@ export class WorldScene extends Phaser.Scene {
       case "T":
       case "U":
       case "V":
-        return "tile-floor";
+        return isDungeon ? `tile-floor-t${dungeonTier}` : "tile-grass";
       default:
-        return this.currentMap.id === "dungeon" ? "tile-floor" : "tile-grass";
+        return isDungeon ? `tile-floor-t${dungeonTier}` : "tile-grass";
     }
   }
 

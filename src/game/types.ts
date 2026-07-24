@@ -126,6 +126,8 @@ export interface MapDefinition {
   name: string;
   floor?: number;
   floorCount?: number;
+  /** Which dungeon tier this map's interior should be themed as (only meaningful when id is "dungeon"). */
+  tier?: number;
   rows: string[];
   spawn: TilePosition;
   portals: PortalDefinition[];

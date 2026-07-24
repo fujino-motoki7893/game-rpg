@@ -120,6 +120,58 @@ const RELIC_CHEST_IDS: Record<number, string> = {
   2: "moon-relic-chest"
 };
 const FINAL_RELIC_MAX_TIER = 2;
+export type DungeonWallAccent = "ember" | "crystal" | "rune" | "mist";
+export interface DungeonTileTheme {
+  wallBase: string;
+  wallShade: string;
+  wallHighlight: string;
+  floorBase: string;
+  floorShade: string;
+  floorHighlight: string;
+  accent: DungeonWallAccent;
+}
+// Each tier gets its own wall/floor palette (and a small wall accent motif) so
+// the dungeons read as visually distinct places, not just the same corridors
+// recolored once — matching the increasingly ominous tier names above
+// (ember cave -> obsidian depths -> lunar eclipse -> misty depths).
+const DUNGEON_TILE_THEME_BY_TIER: Record<number, DungeonTileTheme> = {
+  1: {
+    wallBase: "#3a2a22",
+    wallShade: "#211510",
+    wallHighlight: "#c9793f",
+    floorBase: "#6a5d48",
+    floorShade: "#423b31",
+    floorHighlight: "#caa25a",
+    accent: "ember"
+  },
+  2: {
+    wallBase: "#20242f",
+    wallShade: "#111319",
+    wallHighlight: "#5ec9e6",
+    floorBase: "#2b2f3a",
+    floorShade: "#1a1d24",
+    floorHighlight: "#4fb3d1",
+    accent: "crystal"
+  },
+  3: {
+    wallBase: "#2a1f3a",
+    wallShade: "#160f21",
+    wallHighlight: "#b98fe0",
+    floorBase: "#332942",
+    floorShade: "#1e1729",
+    floorHighlight: "#8f6fc9",
+    accent: "rune"
+  },
+  4: {
+    wallBase: "#22302f",
+    wallShade: "#121b1a",
+    wallHighlight: "#7fd9c4",
+    floorBase: "#2b3a38",
+    floorShade: "#182422",
+    floorHighlight: "#5fb8a0",
+    accent: "mist"
+  }
+};
 const DEFAULT_DUNGEON_ENEMY_WEIGHTS: DungeonEnemyKey[] = [
   "goblin",
   "goblin",
@@ -378,6 +430,7 @@ export function generateDungeon(
     name: `${getDungeonNameForTier(tier)} B${floor}F`,
     floor,
     floorCount,
+    tier,
     spawn,
     rows: grid.map((row) => row.join("")),
     portals,
@@ -430,6 +483,10 @@ export function getRelicChestIdForTier(tier: number): string {
 
 export function getFieldDungeonEntranceForTier(tier: number): TilePosition {
   return FIELD_DUNGEON_ENTRANCES[normalizeDungeonTier(tier)] ?? FIELD_DUNGEON_ENTRANCES[1];
+}
+
+export function getDungeonTileThemeForTier(tier: number): DungeonTileTheme {
+  return DUNGEON_TILE_THEME_BY_TIER[normalizeDungeonTier(tier)] ?? DUNGEON_TILE_THEME_BY_TIER[1];
 }
 
 export function getDungeonEnemyKeysForTier(tier: number): DungeonEnemyKey[] {
