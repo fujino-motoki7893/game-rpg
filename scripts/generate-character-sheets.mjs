@@ -70,7 +70,11 @@ const sheets = [
   // each dungeon boss reads as a distinct creature instead of a recolor.
   { key: "enemy-deep-guardian", size: 48, kind: "deepGuardian", base: "#4f6fa8", shade: "#223252" },
   { key: "enemy-eclipse-beast", size: 48, kind: "eclipseBeast", base: "#5a2a63", shade: "#241129" },
-  { key: "enemy-mist-sovereign", size: 48, kind: "mistSovereign", base: "#3f6b63", shade: "#1c332e" }
+  { key: "enemy-mist-sovereign", size: 48, kind: "mistSovereign", base: "#3f6b63", shade: "#1c332e" },
+  // Geist, the armored ally recruited in tier 4: a warm bronze palette and a
+  // horizontal visor + shoulder-lantern motif keep it visually distinct from
+  // the (cooler-toned) bosses above despite sharing the armored-knight build.
+  { key: "companion-geist", size: 48, kind: "armorAlly", base: "#8a5a2f", shade: "#4a2f16" }
 ];
 
 await fs.mkdir(outputDir, { recursive: true });
@@ -116,6 +120,9 @@ function drawFrame(sheet, direction, step) {
   }
   if (sheet.kind === "mistSovereign") {
     return drawMistSovereign(sheet, direction, step);
+  }
+  if (sheet.kind === "armorAlly") {
+    return drawArmorAlly(sheet, direction, step);
   }
   return drawCreature(sheet, direction, step);
 }
@@ -275,6 +282,27 @@ function drawMistSovereign(sheet, direction, step) {
     direction === "up" ? "" : draw.rect(17, 9 + step, 2, 2, "#bff5e8"),
     draw.ellipse(9, 29 + step, 4, 2, "rgba(226,255,247,0.4)"),
     draw.ellipse(23, 29 - step, 4, 2, "rgba(226,255,247,0.4)")
+  ].join("");
+}
+
+// Geist, the tier-4 armored ally: same knight build as the bosses, but a
+// warm bronze palette, a horizontal gold visor band, and shoulder lanterns
+// instead of a crown/crest — reads as sturdy and friendly rather than
+// menacing, and keeps a distinct silhouette from deepGuardian's ice crown.
+function drawArmorAlly(sheet, direction, step) {
+  const draw = scaler(sheet.size);
+  return [
+    draw.rect(7, 14 + step, 18, 16, "#2e1f10"),
+    draw.rect(8, 15 + step, 16, 14, sheet.base),
+    draw.rect(5, 13 + step, 8, 7, sheet.shade),
+    draw.rect(19, 13 + step, 8, 7, sheet.shade),
+    draw.ellipse(9, 15 + step, 2, 2, "#ffe6a0"),
+    draw.ellipse(23, 15 + step, 2, 2, "#ffe6a0"),
+    draw.rect(14, 23 + step, 4, 4, "#ffdf8a"),
+    draw.rect(10, 5 + step, 12, 9, "#2e1f10"),
+    draw.rect(11, 6 + step, 10, 7, sheet.shade),
+    draw.rect(10, 9 + step, 12, 2, "#ffe6a0"),
+    drawEyes(draw, direction, 12, 11 + step, "#2e1f10", 2)
   ].join("");
 }
 

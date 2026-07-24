@@ -5,6 +5,7 @@ import {
   getCharacterOriginY
 } from "../data/characterSprites";
 import { getCompanionSkillsForLevel } from "../data/companionSkills";
+import { getCompanion2SkillsForLevel } from "../data/companion2Skills";
 import { ENEMIES } from "../data/enemies";
 import {
   canItemHealHp,
@@ -17,7 +18,15 @@ import { SKILLS } from "../data/skills";
 import { GAME_EVENTS } from "../game/constants";
 import {
   damageCompanion,
+  damageCompanion2,
   damagePlayer,
+  getCompanion2Attack,
+  getCompanion2Defense,
+  getCompanion2Hp,
+  getCompanion2MaxHp,
+  getCompanion2MaxMp,
+  getCompanion2Mp,
+  getCompanion2Speed,
   getCompanionAttack,
   getCompanionDefense,
   getCompanionHp,
@@ -36,17 +45,21 @@ import {
   getTotalItemCount,
   grantReward,
   hasCompanion,
+  hasCompanion2,
   hasLearnedSkill,
   healPlayer,
   markEnemyDefeated,
   persistSave,
   setPlayerPosition,
+  spendCompanion2Mp,
   spendCompanionMp,
   spendMp,
   useItem,
   useItemOnCompanion,
+  useItemOnCompanion2,
   useHealingSkill,
   useHealingSkillOnCompanion,
+  useHealingSkillOnCompanion2,
 } from "../game/GameState";
 import type { SkillDefinition } from "../data/skills";
 import type { BattlePayload, EnemyDefinition, ItemId } from "../game/types";
@@ -58,20 +71,27 @@ export class BattleScene extends Phaser.Scene {
   private playerTurn = true;
   private battleOver = false;
   private companionActive = false;
-  private turnOrder: Array<"player" | "companion" | "enemy"> = [];
+  private companion2Active = false;
+  private turnOrder: Array<"player" | "companion" | "companion2" | "enemy"> = [];
   private turnIndex = 0;
   private pendingAdvanceAt?: number;
   private playerX = 205;
+  private companionX = 272;
+  private companion2X = 272;
+  private logY = 390;
   private playerSprite?: Phaser.GameObjects.Sprite;
   private enemySprite?: Phaser.GameObjects.Sprite;
   private companionSprite?: Phaser.GameObjects.Sprite;
+  private companion2Sprite?: Phaser.GameObjects.Sprite;
   private playerHpFill?: Phaser.GameObjects.Rectangle;
   private enemyHpFill?: Phaser.GameObjects.Rectangle;
   private companionHpFill?: Phaser.GameObjects.Rectangle;
+  private companion2HpFill?: Phaser.GameObjects.Rectangle;
   private logText?: Phaser.GameObjects.Text;
   private playerHpText?: Phaser.GameObjects.Text;
   private enemyHpText?: Phaser.GameObjects.Text;
   private companionHpText?: Phaser.GameObjects.Text;
+  private companion2HpText?: Phaser.GameObjects.Text;
   private buttons: Phaser.GameObjects.Text[] = [];
 
   constructor() {
@@ -83,24 +103,32 @@ export class BattleScene extends Phaser.Scene {
     this.playerSprite = undefined;
     this.enemySprite = undefined;
     this.companionSprite = undefined;
+    this.companion2Sprite = undefined;
     this.playerHpFill = undefined;
     this.enemyHpFill = undefined;
     this.companionHpFill = undefined;
+    this.companion2HpFill = undefined;
     this.logText = undefined;
     this.playerHpText = undefined;
     this.enemyHpText = undefined;
     this.companionHpText = undefined;
+    this.companion2HpText = undefined;
     this.enemy = ENEMIES[payload.enemyKey] ?? ENEMIES.goblin;
     this.enemyInstanceId = payload.enemyInstanceId;
     this.enemyHp = this.enemy.maxHp;
     this.playerTurn = true;
     this.battleOver = false;
     this.companionActive = hasCompanion();
+    this.companion2Active = hasCompanion2();
     this.turnOrder = [];
     this.turnIndex = 0;
     this.pendingAdvanceAt = undefined;
 
-    this.playerX = this.companionActive ? 160 : 205;
+    const allyCount = (this.companionActive ? 1 : 0) + (this.companion2Active ? 1 : 0);
+    this.playerX = allyCount === 2 ? 110 : allyCount === 1 ? 160 : 205;
+    this.companionX = allyCount === 2 ? 280 : 272;
+    this.companion2X = allyCount === 2 ? 195 : 272;
+    this.logY = allyCount === 2 ? 408 : 390;
 
     this.add.rectangle(400, 320, 800, 640, 0x07090d, 0.88);
     this.add.rectangle(400, 324, 660, 456, 0x101923, 0.98).setStrokeStyle(3, 0xd8bc72);
@@ -122,13 +150,23 @@ export class BattleScene extends Phaser.Scene {
     this.playCharacterIdle(this.playerSprite, "player");
 
     if (this.companionActive) {
-      this.add.ellipse(272, 288, 74, 16, 0x05080b, 0.32);
+      this.add.ellipse(this.companionX, 288, 74, 16, 0x05080b, 0.32);
       this.companionSprite = this.add
-        .sprite(272, 232, "companion-luna", 0)
+        .sprite(this.companionX, 232, "companion-luna", 0)
         .setOrigin(0.5, getCharacterOriginY("companion-luna"))
         .setScale(getCharacterBattleScale("companion-luna", 2.3))
         .setDepth(4);
       this.playCharacterIdle(this.companionSprite, "companion-luna");
+    }
+
+    if (this.companion2Active) {
+      this.add.ellipse(this.companion2X, 288, 74, 16, 0x05080b, 0.32);
+      this.companion2Sprite = this.add
+        .sprite(this.companion2X, 232, "companion-geist", 0)
+        .setOrigin(0.5, getCharacterOriginY("companion-geist"))
+        .setScale(getCharacterBattleScale("companion-geist", 2.15))
+        .setDepth(4);
+      this.playCharacterIdle(this.companion2Sprite, "companion-geist");
     }
 
     this.playerHpText = this.add.text(116, 300, "", this.textStyle(17, "#f5f1dc"));
@@ -140,14 +178,36 @@ export class BattleScene extends Phaser.Scene {
     this.add.rectangle(116, 322, 188, 10).setStrokeStyle(1, 0xf1d585, 0.8).setOrigin(0, 0.5);
     this.add.rectangle(448, 322, 188, 10).setStrokeStyle(1, 0xf1d585, 0.8).setOrigin(0, 0.5);
 
+    // Luna always keeps the first ally row; Geist shares that same row when
+    // he's the only ally present, or drops to a second row below her when
+    // both are recruited — a fixed layout so nothing swaps position turn to
+    // turn.
+    const companionRowY = 342;
+    const companion2RowY = allyCount === 2 ? 380 : 342;
     if (this.companionActive) {
-      this.companionHpText = this.add.text(116, 342, "", this.textStyle(17, "#f5f1dc"));
-      this.add.rectangle(116, 364, 188, 10, 0x1c2732, 1).setOrigin(0, 0.5);
-      this.companionHpFill = this.add.rectangle(118, 364, 184, 6, 0xb28aff, 1).setOrigin(0, 0.5);
-      this.add.rectangle(116, 364, 188, 10).setStrokeStyle(1, 0xf1d585, 0.8).setOrigin(0, 0.5);
+      this.companionHpText = this.add.text(116, companionRowY, "", this.textStyle(17, "#f5f1dc"));
+      this.add.rectangle(116, companionRowY + 22, 188, 10, 0x1c2732, 1).setOrigin(0, 0.5);
+      this.companionHpFill = this.add
+        .rectangle(118, companionRowY + 22, 184, 6, 0xb28aff, 1)
+        .setOrigin(0, 0.5);
+      this.add
+        .rectangle(116, companionRowY + 22, 188, 10)
+        .setStrokeStyle(1, 0xf1d585, 0.8)
+        .setOrigin(0, 0.5);
+    }
+    if (this.companion2Active) {
+      this.companion2HpText = this.add.text(116, companion2RowY, "", this.textStyle(17, "#f5f1dc"));
+      this.add.rectangle(116, companion2RowY + 22, 188, 10, 0x1c2732, 1).setOrigin(0, 0.5);
+      this.companion2HpFill = this.add
+        .rectangle(118, companion2RowY + 22, 184, 6, 0xd6a15a, 1)
+        .setOrigin(0, 0.5);
+      this.add
+        .rectangle(116, companion2RowY + 22, 188, 10)
+        .setStrokeStyle(1, 0xf1d585, 0.8)
+        .setOrigin(0, 0.5);
     }
 
-    this.logText = this.add.text(116, 390, "", {
+    this.logText = this.add.text(116, this.logY, "", {
       ...this.textStyle(18, "#fff4cf"),
       wordWrap: { width: 568, useAdvancedWrap: true },
       lineSpacing: 8
@@ -176,13 +236,16 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  private computeTurnOrder(): Array<"player" | "companion" | "enemy"> {
-    const actors: Array<{ id: "player" | "companion" | "enemy"; speed: number }> = [
+  private computeTurnOrder(): Array<"player" | "companion" | "companion2" | "enemy"> {
+    const actors: Array<{ id: "player" | "companion" | "companion2" | "enemy"; speed: number }> = [
       { id: "player", speed: Math.max(1, getPlayerSpeed()) },
       { id: "enemy", speed: Math.max(1, this.enemy.speed) }
     ];
     if (this.companionActive && getCompanionHp() > 0) {
       actors.push({ id: "companion", speed: Math.max(1, getCompanionSpeed()) });
+    }
+    if (this.companion2Active && getCompanion2Hp() > 0) {
+      actors.push({ id: "companion2", speed: Math.max(1, getCompanion2Speed()) });
     }
 
     return actors
@@ -207,6 +270,11 @@ export class BattleScene extends Phaser.Scene {
       this.resolveCurrentTurn(announce);
       return;
     }
+    if (actor === "companion2" && (!this.companion2Active || getCompanion2Hp() <= 0)) {
+      this.turnIndex += 1;
+      this.resolveCurrentTurn(announce);
+      return;
+    }
 
     if (actor === "player") {
       this.playerTurn = true;
@@ -220,6 +288,8 @@ export class BattleScene extends Phaser.Scene {
     this.playerTurn = false;
     if (actor === "companion") {
       this.runCompanionTurn();
+    } else if (actor === "companion2") {
+      this.runCompanion2Turn();
     } else {
       this.runEnemyTurn();
     }
@@ -261,7 +331,10 @@ export class BattleScene extends Phaser.Scene {
         `${item.name} ${getItemRarityLabel(itemId)}\nx${count}`,
         index,
         () => {
-          if (this.companionActive && (canItemHealHp(itemId) || canItemRestoreMp(itemId))) {
+          if (
+            (this.companionActive || this.companion2Active) &&
+            (canItemHealHp(itemId) || canItemRestoreMp(itemId))
+          ) {
             this.showItemTargetActions(itemId);
             return;
           }
@@ -287,12 +360,39 @@ export class BattleScene extends Phaser.Scene {
     this.clearButtons();
     this.setLog(`${item.name}を誰に使いますか?`);
 
-    const canUseOnSelf = this.playerBenefitsFromItem(itemId);
-    const canUseOnCompanion = this.companionActive && this.companionBenefitsFromItem(itemId);
+    const options = this.getAllyTargetOptions(
+      this.playerBenefitsFromItem(itemId),
+      (target) => this.useBattleItem(itemId, target),
+      () => this.companionBenefitsFromItem(itemId),
+      () => this.companion2BenefitsFromItem(itemId)
+    );
+    options.forEach((option, index) => {
+      this.createBattleButton(option.label, index, option.run, option.enabled, true);
+    });
+    this.createBattleButton("戻る", options.length, () => this.showItemActions(), true, true);
+  }
 
-    this.createBattleButton("自分", 0, () => this.useBattleItem(itemId, "self"), canUseOnSelf, true);
-    this.createBattleButton("ルナ", 1, () => this.useBattleItem(itemId, "companion"), canUseOnCompanion, true);
-    this.createBattleButton("戻る", 2, () => this.showItemActions(), true, true);
+  /**
+   * Builds the self/Luna/Geist target button list for the item- and
+   * skill-heal target menus, including only whichever allies are actually
+   * in the party so the same call site works with 0, 1, or 2 companions.
+   */
+  private getAllyTargetOptions(
+    selfEnabled: boolean,
+    run: (target: "self" | "companion" | "companion2") => void,
+    companionEnabled: () => boolean,
+    companion2Enabled: () => boolean
+  ): Array<{ label: string; enabled: boolean; run: () => void }> {
+    const options: Array<{ label: string; enabled: boolean; run: () => void }> = [
+      { label: "自分", enabled: selfEnabled, run: () => run("self") }
+    ];
+    if (this.companionActive) {
+      options.push({ label: "ルナ", enabled: companionEnabled(), run: () => run("companion") });
+    }
+    if (this.companion2Active) {
+      options.push({ label: "ガイスト", enabled: companion2Enabled(), run: () => run("companion2") });
+    }
+    return options;
   }
 
   private showSkillActions(): void {
@@ -315,7 +415,7 @@ export class BattleScene extends Phaser.Scene {
         `${skill.name}\nMP${skill.mpCost}`,
         index,
         () => {
-          if (skill.effect.type === "heal" && this.companionActive) {
+          if (skill.effect.type === "heal" && (this.companionActive || this.companion2Active)) {
             this.showHealTargetActions(skill);
             return;
           }
@@ -340,13 +440,16 @@ export class BattleScene extends Phaser.Scene {
     this.clearButtons();
     this.setLog(`${skill.name}を誰に使いますか?`);
 
-    const save = getSave();
-    const canHealSelf = save.hp < getPlayerMaxHp();
-    const canHealCompanion = getCompanionHp() < getCompanionMaxHp();
-
-    this.createBattleButton("自分", 0, () => this.useSkill(skill, "self"), canHealSelf, true);
-    this.createBattleButton("ルナ", 1, () => this.useSkill(skill, "companion"), canHealCompanion, true);
-    this.createBattleButton("戻る", 2, () => this.showSkillActions(), true, true);
+    const options = this.getAllyTargetOptions(
+      getSave().hp < getPlayerMaxHp(),
+      (target) => this.useSkill(skill, target),
+      () => getCompanionHp() < getCompanionMaxHp(),
+      () => getCompanion2Hp() < getCompanion2MaxHp()
+    );
+    options.forEach((option, index) => {
+      this.createBattleButton(option.label, index, option.run, option.enabled, true);
+    });
+    this.createBattleButton("戻る", options.length, () => this.showSkillActions(), true, true);
   }
 
   private createBattleButton(
@@ -400,30 +503,33 @@ export class BattleScene extends Phaser.Scene {
     this.endPlayerTurn();
   }
 
-  private useBattleItem(itemId: ItemId, target: "self" | "companion" = "self"): void {
+  private useBattleItem(itemId: ItemId, target: "self" | "companion" | "companion2" = "self"): void {
     if (!this.playerTurn) {
       return;
     }
 
     const item = ITEMS[itemId];
 
-    if (target === "companion") {
-      const result = useItemOnCompanion(itemId);
+    if (target === "companion" || target === "companion2") {
+      const result = target === "companion" ? useItemOnCompanion(itemId) : useItemOnCompanion2(itemId);
       if (!result.used) {
         this.setLog(this.getItemFailureMessage(item.name, result.reason));
         this.refreshHud();
         return;
       }
 
+      const sprite = target === "companion" ? this.companionSprite : this.companion2Sprite;
+      const x = target === "companion" ? this.companionX : this.companion2X;
+      const name = target === "companion" ? "ルナ" : "ガイスト";
       this.refreshHud();
       if (result.healed > 0) {
-        this.pulseTarget(this.companionSprite);
-        this.showDamageNumber(result.healed, 272, 164, "#a5ffb2", "+");
+        this.pulseTarget(sprite);
+        this.showDamageNumber(result.healed, x, 164, "#a5ffb2", "+");
       } else if (result.restoredMp > 0) {
-        this.pulseTarget(this.companionSprite);
-        this.showDamageNumber(result.restoredMp, 272, 164, "#8fc6ff", "+");
+        this.pulseTarget(sprite);
+        this.showDamageNumber(result.restoredMp, x, 164, "#8fc6ff", "+");
       }
-      this.setLog(`${item.name}をルナに使った。${this.describeHealResult(result.healed, result.restoredMp)}`);
+      this.setLog(`${item.name}を${name}に使った。${this.describeHealResult(result.healed, result.restoredMp)}`);
       this.endPlayerTurn();
       return;
     }
@@ -447,7 +553,10 @@ export class BattleScene extends Phaser.Scene {
     this.endPlayerTurn();
   }
 
-  private useSkill(skill: SkillDefinition, healTarget: "self" | "companion" = "self"): void {
+  private useSkill(
+    skill: SkillDefinition,
+    healTarget: "self" | "companion" | "companion2" = "self"
+  ): void {
     if (!this.playerTurn) {
       return;
     }
@@ -464,18 +573,22 @@ export class BattleScene extends Phaser.Scene {
     }
 
     if (skill.effect.type === "heal") {
-      if (healTarget === "companion") {
-        const result = useHealingSkillOnCompanion(skill.id);
+      if (healTarget === "companion" || healTarget === "companion2") {
+        const result =
+          healTarget === "companion" ? useHealingSkillOnCompanion(skill.id) : useHealingSkillOnCompanion2(skill.id);
+        const name = healTarget === "companion" ? "ルナ" : "ガイスト";
         if (!result.used) {
-          this.setLog(result.reason === "full-hp" ? "ルナのHPは満タンだ。" : `${skill.name}を使えなかった。`);
+          this.setLog(result.reason === "full-hp" ? `${name}のHPは満タンだ。` : `${skill.name}を使えなかった。`);
           this.refreshHud();
           return;
         }
 
+        const sprite = healTarget === "companion" ? this.companionSprite : this.companion2Sprite;
+        const x = healTarget === "companion" ? this.companionX : this.companion2X;
         this.refreshHud();
-        this.pulseTarget(this.companionSprite);
-        this.showDamageNumber(result.healed, 272, 164, "#a5ffb2", "+");
-        this.setLog(`${skill.name}でルナのHPを${result.healed}回復した。`);
+        this.pulseTarget(sprite);
+        this.showDamageNumber(result.healed, x, 164, "#a5ffb2", "+");
+        this.setLog(`${skill.name}で${name}のHPを${result.healed}回復した。`);
         this.endPlayerTurn();
         return;
       }
@@ -596,6 +709,46 @@ export class BattleScene extends Phaser.Scene {
     this.advanceTurn(700);
   }
 
+  private runCompanion2Turn(): void {
+    try {
+      this.companion2Turn();
+    } catch (error) {
+      console.error(error);
+      this.advanceTurn(200);
+    }
+  }
+
+  private companion2Turn(): void {
+    if (!this.companion2Active || getCompanion2Hp() <= 0) {
+      this.advanceTurn(300);
+      return;
+    }
+
+    // Geist has no heals — he just favors the strongest attack skill his
+    // current MP can afford, falling back to the free ironFist.
+    const level = getSave().level;
+    const attackSkills = getCompanion2SkillsForLevel(level).slice().reverse();
+    const skill =
+      attackSkills.find((candidate) => getCompanion2Mp() >= candidate.mpCost) ??
+      attackSkills[attackSkills.length - 1];
+
+    spendCompanion2Mp(skill.mpCost);
+    const baseDamage = Math.round(getCompanion2Attack() * skill.effect.multiplier);
+    const damage = Phaser.Math.Between(Math.max(1, baseDamage - 2), baseDamage + 3);
+    this.enemyHp = Math.max(0, this.enemyHp - damage);
+    this.refreshHud();
+    this.flashTarget(this.enemySprite);
+    this.showDamageNumber(damage, 560, 146, "#e0c08a");
+
+    if (this.enemyHp <= 0) {
+      this.winBattle(damage);
+      return;
+    }
+
+    this.setLog(`ガイストの${skill.name}！${damage}のダメージを与えた。`);
+    this.advanceTurn(700);
+  }
+
   private runEnemyTurn(): void {
     try {
       this.enemyTurn();
@@ -608,21 +761,55 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
+  private chooseEnemyTarget(): "player" | "companion" | "companion2" {
+    const activeCompanions: Array<"companion" | "companion2"> = [];
+    if (this.companionActive && getCompanionHp() > 0) {
+      activeCompanions.push("companion");
+    }
+    if (this.companion2Active && getCompanion2Hp() > 0) {
+      activeCompanions.push("companion2");
+    }
+    if (activeCompanions.length === 0) {
+      return "player";
+    }
+
+    // Companions share a combined 30% chance to be targeted (matching the
+    // original single-companion odds), split evenly when both are present.
+    const companionShare = 30 / activeCompanions.length;
+    const playerShare = 100 - companionShare * activeCompanions.length;
+    const roll = Phaser.Math.Between(1, 100);
+    if (roll <= playerShare) {
+      return "player";
+    }
+
+    const index = Math.min(activeCompanions.length - 1, Math.floor((roll - playerShare) / companionShare));
+    return activeCompanions[index];
+  }
+
   private enemyTurn(): void {
     const rawDamage = Phaser.Math.Between(Math.max(1, this.enemy.attack - 2), this.enemy.attack + 2);
-    const targetsCompanion =
-      this.companionActive && getCompanionHp() > 0 && Phaser.Math.Between(1, 100) <= 30;
+    const target = this.chooseEnemyTarget();
 
-    if (targetsCompanion) {
-      const damage = Math.max(1, rawDamage - getCompanionDefense());
-      damageCompanion(damage);
+    if (target === "companion" || target === "companion2") {
+      const isLuna = target === "companion";
+      const defense = isLuna ? getCompanionDefense() : getCompanion2Defense();
+      const damage = Math.max(1, rawDamage - defense);
+      if (isLuna) {
+        damageCompanion(damage);
+      } else {
+        damageCompanion2(damage);
+      }
+      const hpLeft = isLuna ? getCompanionHp() : getCompanion2Hp();
+      const sprite = isLuna ? this.companionSprite : this.companion2Sprite;
+      const x = isLuna ? this.companionX : this.companion2X;
+      const name = isLuna ? "ルナ" : "ガイスト";
       this.refreshHud();
-      this.flashTarget(this.companionSprite);
-      this.showDamageNumber(damage, 272, 164, "#ff9a7a");
+      this.flashTarget(sprite);
+      this.showDamageNumber(damage, x, 164, "#ff9a7a");
       this.setLog(
-        getCompanionHp() <= 0
-          ? `${this.enemy.name}の攻撃。ルナは倒れてしまった。`
-          : `${this.enemy.name}の攻撃。ルナが${damage}のダメージを受けた。`
+        hpLeft <= 0
+          ? `${this.enemy.name}の攻撃。${name}は倒れてしまった。`
+          : `${this.enemy.name}の攻撃。${name}が${damage}のダメージを受けた。`
       );
       this.advanceTurn(700);
       return;
@@ -717,6 +904,20 @@ export class BattleScene extends Phaser.Scene {
         6
       );
     }
+
+    if (this.companion2Active) {
+      const companion2MaxHp = getCompanion2MaxHp();
+      const companion2MaxMp = getCompanion2MaxMp();
+      const companion2Hp = getCompanion2Hp();
+      const companion2Mp = getCompanion2Mp();
+      this.companion2HpText?.setText(
+        `ガイスト HP ${companion2Hp}/${companion2MaxHp}  MP ${companion2Mp}/${companion2MaxMp}`
+      );
+      this.companion2HpFill?.setDisplaySize(
+        184 * Phaser.Math.Clamp(companion2Hp / companion2MaxHp, 0, 1),
+        6
+      );
+    }
   }
 
   private setLog(message: string): void {
@@ -757,7 +958,8 @@ export class BattleScene extends Phaser.Scene {
 
     return (
       this.playerBenefitsFromItem(itemId) ||
-      (this.companionActive && this.companionBenefitsFromItem(itemId))
+      (this.companionActive && this.companionBenefitsFromItem(itemId)) ||
+      (this.companion2Active && this.companion2BenefitsFromItem(itemId))
     );
   }
 
@@ -773,6 +975,13 @@ export class BattleScene extends Phaser.Scene {
     return (
       (canItemHealHp(itemId) && getCompanionHp() < getCompanionMaxHp()) ||
       (canItemRestoreMp(itemId) && getCompanionMp() < getCompanionMaxMp())
+    );
+  }
+
+  private companion2BenefitsFromItem(itemId: ItemId): boolean {
+    return (
+      (canItemHealHp(itemId) && getCompanion2Hp() < getCompanion2MaxHp()) ||
+      (canItemRestoreMp(itemId) && getCompanion2Mp() < getCompanion2MaxMp())
     );
   }
 

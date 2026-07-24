@@ -24,12 +24,14 @@ import { GAME_EVENTS } from "../game/constants";
 import {
   buyEquipment,
   buyItem,
+  getCompanion2EquippedEquipment,
   getCompanionEquippedEquipment,
   getEquipmentCount,
   getEquippedEquipment,
   getItemCount,
   getSave,
   hasCompanion,
+  hasCompanion2,
   previewEquipmentSlot,
   sellEquipment,
   sellItem
@@ -207,7 +209,7 @@ export class ShopScene extends Phaser.Scene {
 
     this.getEquipmentUpgradeLines(selectedEntry).forEach((line, index) => {
       this.addContent(
-        this.add.text(154, 440 + index * 20, line, this.textStyle(14, "#9fb4c6")).setDepth(102)
+        this.add.text(154, 440 + index * 18, line, this.textStyle(14, "#9fb4c6")).setDepth(102)
       );
     });
   }
@@ -225,6 +227,9 @@ export class ShopScene extends Phaser.Scene {
     const lines: string[] = [this.describeEquipmentUpgrade("自分", getEquippedEquipment(slot), entry.id)];
     if (hasCompanion()) {
       lines.push(this.describeEquipmentUpgrade("ルナ", getCompanionEquippedEquipment(slot), entry.id));
+    }
+    if (hasCompanion2()) {
+      lines.push(this.describeEquipmentUpgrade("ガイスト", getCompanion2EquippedEquipment(slot), entry.id));
     }
     return lines;
   }

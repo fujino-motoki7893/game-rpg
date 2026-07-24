@@ -34,6 +34,8 @@ import {
   addEquipment,
   ensureDungeonProgress,
   getActiveDungeonTier,
+  getCompanion2MaxHp,
+  getCompanion2MaxMp,
   getCompanionMaxHp,
   getCompanionMaxMp,
   getGeneratedDungeonFloor,
@@ -43,17 +45,21 @@ import {
   getPlayerMaxMp,
   getSave,
   hasCompanion,
+  hasCompanion2,
   hasFlag,
   healCompanion,
+  healCompanion2,
   healPlayer,
   isEnemyDefeated,
   isExpandedWorldUnlocked,
   markFlag,
   persistSave,
   recruitCompanion,
+  recruitCompanion2,
   resetSave,
   resetDungeonEnemyDefeats,
   resetFieldEnemyDefeats,
+  restoreCompanion2Mp,
   restoreCompanionMp,
   restorePlayerMp,
   setActiveDungeonTier,
@@ -109,6 +115,9 @@ export class WorldScene extends Phaser.Scene {
   private companionSprite?: Phaser.GameObjects.Sprite;
   private companionShadow?: Phaser.GameObjects.Ellipse;
   private companionTile?: TilePosition;
+  private companion2Sprite?: Phaser.GameObjects.Sprite;
+  private companion2Shadow?: Phaser.GameObjects.Ellipse;
+  private companion2Tile?: TilePosition;
   private facing: Direction = "down";
   private moving = false;
   private dialogueLines: string[] = [];
@@ -225,6 +234,7 @@ export class WorldScene extends Phaser.Scene {
       this.alignCharacterSprite(this.player, "player").setDepth(20);
       this.playCharacterIdle(this.player, "player", this.facing);
       this.setupCompanionFollower(entryTile);
+      this.setupCompanion2Follower(entryTile);
       this.createDialoguePanel();
       this.createTargetHintPanel();
       this.setupCamera();
@@ -303,6 +313,66 @@ export class WorldScene extends Phaser.Scene {
     if (this.companionShadow) {
       this.tweens.add({
         targets: this.companionShadow,
+        x: this.toWorldX(target.x),
+        y: this.toWorldY(target.y) + 13,
+        duration: 125,
+        ease: "Sine.easeInOut"
+      });
+    }
+  }
+
+  private setupCompanion2Follower(entryTile: TilePosition): void {
+    this.companion2Sprite = undefined;
+    this.companion2Shadow = undefined;
+    this.companion2Tile = undefined;
+
+    if (!hasCompanion2()) {
+      return;
+    }
+
+    this.companion2Tile = { ...entryTile };
+    this.companion2Shadow = this.add
+      .ellipse(this.toWorldX(entryTile.x), this.toWorldY(entryTile.y) + 13, 20, 6, 0x05080b, 0.3)
+      .setDepth(17);
+    this.companion2Sprite = this.add.sprite(
+      this.toWorldX(entryTile.x),
+      this.toWorldY(entryTile.y),
+      "companion-geist",
+      0
+    );
+    this.alignCharacterSprite(this.companion2Sprite, "companion-geist").setDepth(17.5);
+    this.playCharacterIdle(this.companion2Sprite, "companion-geist", this.facing);
+  }
+
+  private moveCompanion2(target: TilePosition): void {
+    if (!this.companion2Sprite || !this.companion2Tile) {
+      return;
+    }
+
+    if (this.companion2Tile.x === target.x && this.companion2Tile.y === target.y) {
+      return;
+    }
+
+    const direction = this.getDirectionBetween(this.companion2Tile, target);
+    const companion2Sprite = this.companion2Sprite;
+    this.companion2Tile = target;
+    if (direction) {
+      this.playCharacterWalk(companion2Sprite, "companion-geist", direction);
+    }
+    this.tweens.add({
+      targets: companion2Sprite,
+      x: this.toWorldX(target.x),
+      y: this.toWorldY(target.y),
+      duration: 125,
+      ease: "Sine.easeInOut",
+      onComplete: () => {
+        this.playCharacterIdle(companion2Sprite, "companion-geist", direction ?? "down");
+      }
+    });
+
+    if (this.companion2Shadow) {
+      this.tweens.add({
+        targets: this.companion2Shadow,
         x: this.toWorldX(target.x),
         y: this.toWorldY(target.y) + 13,
         duration: 125,
@@ -570,6 +640,7 @@ export class WorldScene extends Phaser.Scene {
     }
 
     const previousPlayerTile = { ...this.playerTile };
+    const previousCompanionTile = this.companionTile ? { ...this.companionTile } : undefined;
     this.moving = true;
     this.hideTargetHint();
     this.playerTile = target;
@@ -577,6 +648,9 @@ export class WorldScene extends Phaser.Scene {
     setPlayerPosition(this.currentMap.id, target.x, target.y);
     this.game.events.emit(GAME_EVENTS.playerMoved, { ...target });
     this.moveCompanion(previousPlayerTile);
+    // Geist trails Luna rather than the player directly, so with both
+    // recruited the party lines up player -> Luna -> Geist single-file.
+    this.moveCompanion2(previousCompanionTile ?? previousPlayerTile);
     this.tweens.add({
       targets: this.player,
       x: this.toWorldX(target.x),
@@ -825,6 +899,10 @@ export class WorldScene extends Phaser.Scene {
         healCompanion(getCompanionMaxHp());
         restoreCompanionMp(getCompanionMaxMp());
       }
+      if (hasCompanion2()) {
+        healCompanion2(getCompanion2MaxHp());
+        restoreCompanion2Mp(getCompanion2MaxMp());
+      }
       stateChanged = true;
       dialogue = firstHerbGift
         ? ["ミラ: 傷を癒しましょう。", "ミラ: 予備の薬草も荷物に入れておきました。"]
@@ -840,6 +918,17 @@ export class WorldScene extends Phaser.Scene {
         "ルナ: でも、次の月影石は深い洞窟の奥。一人で挑むには荷が重いはず。",
         "ルナ: 私が手助けしましょう。仲間に加えてください。",
         "ルナが仲間になった！"
+      ];
+    }
+
+    if (npc.id === "geist") {
+      recruitCompanion2();
+      stateChanged = true;
+      shouldReloadMap = true;
+      dialogue = [
+        "ガイスト……この鎧に、まだ意志が残っていたのか。",
+        "ガイスト: ……長い、眠りだった。深霧の魔王を倒すというのなら、力を貸そう。",
+        "ガイストが仲間になった！"
       ];
     }
 

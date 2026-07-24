@@ -4,6 +4,7 @@ import type {
   EnemySpawn,
   EquipmentId,
   MapDefinition,
+  NpcDefinition,
   PortalDefinition,
   TilePosition
 } from "../game/types";
@@ -425,6 +426,24 @@ export function generateDungeon(
   addWaterPools(grid, rng, chestRoomPool, reserved, requiredTiles);
   placeMarker(grid, spawn, "U");
 
+  // Geist, the armored ally, waits on tier 4's first floor — always emitted
+  // (like the guardian) and left for the world scene's existing
+  // hiddenIfFlag filtering to remove once recruited, matching how Luna's
+  // static field NPC is hidden after she joins.
+  const npcs: NpcDefinition[] = [];
+  if (tier === 4 && floor === 1) {
+    const geistPosition = findOpenFloorNear(grid, roomCenter(midRooms[3]), reserved);
+    reserved.add(positionKey(geistPosition));
+    npcs.push({
+      id: "geist",
+      name: "鎧の魔物ガイスト",
+      texture: "companion-geist",
+      x: geistPosition.x,
+      y: geistPosition.y,
+      hiddenIfFlag: "companion2Joined"
+    });
+  }
+
   return {
     id: "dungeon",
     name: `${getDungeonNameForTier(tier)} B${floor}F`,
@@ -434,7 +453,7 @@ export function generateDungeon(
     spawn,
     rows: grid.map((row) => row.join("")),
     portals,
-    npcs: [],
+    npcs,
     chests: [
       ...supplyChests.map((position, index) => ({
         id: `dungeon-t${tier}-b${floor}-supply-chest-${index + 1}`,

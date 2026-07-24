@@ -4,6 +4,10 @@ import { BLOCKING_TILES, getMapDefinition } from "../data/maps";
 import { GAME_EVENTS } from "../game/constants";
 import {
   getActiveDungeonTier,
+  getCompanion2Hp,
+  getCompanion2MaxHp,
+  getCompanion2MaxMp,
+  getCompanion2Mp,
   getCompanionHp,
   getCompanionMaxHp,
   getCompanionMaxMp,
@@ -15,6 +19,7 @@ import {
   getPlayerMaxMp,
   getSave,
   hasCompanion,
+  hasCompanion2,
   hasFlag
 } from "../game/GameState";
 import { getObjective } from "../data/dialogues";
@@ -33,6 +38,7 @@ export class UIScene extends Phaser.Scene {
   private mapText?: Phaser.GameObjects.Text;
   private playerStatusText?: Phaser.GameObjects.Text;
   private lunaStatusText?: Phaser.GameObjects.Text;
+  private geistStatusText?: Phaser.GameObjects.Text;
   private controlsText?: Phaser.GameObjects.Text;
   private toastText?: Phaser.GameObjects.Text;
   private toastTimer?: Phaser.Time.TimerEvent;
@@ -60,6 +66,9 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(1, 0);
     this.lunaStatusText = this.add
       .text(776, 576, "", this.textStyle(16, "#b28aff"))
+      .setOrigin(1, 0);
+    this.geistStatusText = this.add
+      .text(776, 596, "", this.textStyle(16, "#d6a15a"))
       .setOrigin(1, 0);
     this.controlsText = this.add.text(24, 612, "", this.textStyle(14, "#9fb4c6"));
     this.toastText = this.add
@@ -98,6 +107,13 @@ export class UIScene extends Phaser.Scene {
       );
     } else {
       this.lunaStatusText?.setText("");
+    }
+    if (hasCompanion2()) {
+      this.geistStatusText?.setText(
+        `ガイスト Lv ${save.level}  HP ${getCompanion2Hp()}/${getCompanion2MaxHp()}  MP ${getCompanion2Mp()}/${getCompanion2MaxMp()}`
+      );
+    } else {
+      this.geistStatusText?.setText("");
     }
     this.controlsText?.setText(
       hasCompanion()

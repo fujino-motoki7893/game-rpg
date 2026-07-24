@@ -163,6 +163,10 @@ export interface GameSave {
   companionHp?: number;
   companionMp?: number;
   companionEquipment?: EquipmentLoadout;
+  /** Geist, the armored ally recruited in the tier-4 dungeon — a second, independent companion slot alongside Luna. */
+  companion2Hp?: number;
+  companion2Mp?: number;
+  companion2Equipment?: EquipmentLoadout;
   defeatedEnemies: string[];
   /** Which dungeon tier the player is currently inside (or last entered). */
   activeDungeonTier?: number;

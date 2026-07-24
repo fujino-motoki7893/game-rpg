@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { getCharacterIdleAnimationKey } from "../data/characterSprites";
 import { COMPANION_SKILL_ORDER, COMPANION_SKILLS } from "../data/companionSkills";
+import { COMPANION2_SKILL_ORDER, COMPANION2_SKILLS } from "../data/companion2Skills";
 import {
   EQUIPMENT,
   EQUIPMENT_ORDER,
@@ -24,6 +25,14 @@ import { getSkillHealAmount, SKILL_ORDER, SKILLS } from "../data/skills";
 import { GAME_EVENTS } from "../game/constants";
 import {
   getActiveDungeonTier,
+  getCompanion2Attack,
+  getCompanion2Defense,
+  getCompanion2EquippedEquipment,
+  getCompanion2Hp,
+  getCompanion2MaxHp,
+  getCompanion2MaxMp,
+  getCompanion2Mp,
+  getCompanion2Speed,
   getCompanionAttack,
   getCompanionDefense,
   getCompanionSpeed,
@@ -44,18 +53,24 @@ import {
   getPlayerMaxMp,
   getSave,
   hasCompanion,
+  hasCompanion2,
   isExpandedWorldUnlocked,
   consumeItem,
   equipEquipment,
   equipEquipmentToCompanion,
+  equipEquipmentToCompanion2,
   useHealingSkill,
   useHealingSkillOnCompanion,
+  useHealingSkillOnCompanion2,
   useItem,
-  useItemOnCompanion
+  useItemOnCompanion,
+  useItemOnCompanion2
 } from "../game/GameState";
 import type { EquipmentId, ItemId } from "../game/types";
 
-type MenuTab = "items" | "skills" | "equipment" | "status" | "companion";
+type MenuTab = "items" | "skills" | "equipment" | "status" | "companion" | "companion2";
+type CharacterKey = "hero" | "luna" | "geist";
+type HealTarget = "self" | "companion" | "companion2";
 
 const BASE_TABS: MenuTab[] = ["items", "skills", "equipment", "status"];
 const TAB_LABELS: Record<MenuTab, string> = {
@@ -63,17 +78,24 @@ const TAB_LABELS: Record<MenuTab, string> = {
   skills: "スキル",
   equipment: "装備",
   status: "強さ",
-  companion: "ルナ"
+  companion: "ルナ",
+  companion2: "ガイスト"
 };
+const GEIST_LINES = [
+  "ガイスト: ……(鎧が小さく震える)",
+  "ガイスト: この身に意志が戻ったのは、貴殿のおかげだ。",
+  "ガイスト: 深霧の魔王には、油断するな。",
+  "ガイスト: 我が拳と鎧、貴殿の盾となろう。"
+];
 
 export class MenuScene extends Phaser.Scene {
   private activeTab: MenuTab = "items";
   private selectedItemIndex = 0;
   private selectedSkillIndex = 0;
   private selectedEquipmentIndex = 0;
-  private skillsCharacter: "hero" | "luna" = "hero";
-  private equipmentCharacter: "hero" | "luna" = "hero";
-  private statusCharacter: "hero" | "luna" = "hero";
+  private skillsCharacter: CharacterKey = "hero";
+  private equipmentCharacter: CharacterKey = "hero";
+  private statusCharacter: CharacterKey = "hero";
   private tabButtons: Partial<Record<MenuTab, Phaser.GameObjects.Text>> = {};
   private contentObjects: Phaser.GameObjects.GameObject[] = [];
   private contentContainer!: Phaser.GameObjects.Container;
@@ -85,6 +107,7 @@ export class MenuScene extends Phaser.Scene {
   private lunaLine = "";
   private lunaLoading = false;
   private lunaRequestToken = 0;
+  private geistLine = "";
 
   constructor() {
     super("MenuScene");
@@ -103,6 +126,7 @@ export class MenuScene extends Phaser.Scene {
     this.lunaLine = "";
     this.lunaLoading = false;
     this.lunaRequestToken = 0;
+    this.geistLine = "";
     this.contentScrollY = 0;
     this.contentMaxScroll = 0;
 
@@ -144,7 +168,11 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private getVisibleTabs(): MenuTab[] {
-    return hasCompanion() ? [...BASE_TABS, "companion"] : BASE_TABS;
+    return [
+      ...BASE_TABS,
+      ...(hasCompanion() ? (["companion"] as const) : []),
+      ...(hasCompanion2() ? (["companion2"] as const) : [])
+    ];
   }
 
   private createTabButton(tab: MenuTab, x: number, y: number, width: number): void {
@@ -198,6 +226,8 @@ export class MenuScene extends Phaser.Scene {
       this.renderEquipment();
     } else if (this.activeTab === "companion") {
       this.renderCompanion();
+    } else if (this.activeTab === "companion2") {
+      this.renderCompanion2();
     } else {
       this.renderStatus();
     }
@@ -279,65 +309,63 @@ export class MenuScene extends Phaser.Scene {
         .setDepth(102)
     );
 
-    const showCompanionTarget =
-      hasCompanion() && (canItemHealHp(selectedItem) || canItemRestoreMp(selectedItem));
+    const showAllyTarget =
+      (hasCompanion() || hasCompanion2()) && (canItemHealHp(selectedItem) || canItemRestoreMp(selectedItem));
 
-    if (showCompanionTarget) {
+    if (showAllyTarget) {
       const count = getItemCount(selectedItem);
-      const canUseSelf =
+      const canUseOn = (hp: number, maxAllyHp: number, mp: number, maxAllyMp: number) =>
         count > 0 &&
-        ((canItemHealHp(selectedItem) && save.hp < maxHp) ||
-          (canItemRestoreMp(selectedItem) && save.mp < maxMp));
-      const canUseCompanion =
-        count > 0 &&
-        ((canItemHealHp(selectedItem) && getCompanionHp() < getCompanionMaxHp()) ||
-          (canItemRestoreMp(selectedItem) && getCompanionMp() < getCompanionMaxMp()));
-
-      this.addContent(
-        this.add
-          .text(
-            154,
-            440,
-            `ルナ HP ${getCompanionHp()}/${getCompanionMaxHp()}  MP ${getCompanionMp()}/${getCompanionMaxMp()}`,
-            this.textStyle(15, "#b28aff")
-          )
-          .setDepth(102)
+        ((canItemHealHp(selectedItem) && hp < maxAllyHp) ||
+          (canItemRestoreMp(selectedItem) && mp < maxAllyMp));
+      const canUseSelf = canUseOn(save.hp, maxHp, save.mp, maxMp);
+      const canUseCompanion = canUseOn(
+        getCompanionHp(),
+        getCompanionMaxHp(),
+        getCompanionMp(),
+        getCompanionMaxMp()
       );
-      this.addContent(
-        this.add.text(154, 464, `所持ゴールド ${save.gold}G`, this.textStyle(15, "#d9e5ef")).setDepth(102)
+      const canUseCompanion2 = canUseOn(
+        getCompanion2Hp(),
+        getCompanion2MaxHp(),
+        getCompanion2Mp(),
+        getCompanion2MaxMp()
       );
 
-      const selfButton = this.add
-        .text(452, 412, "自分に使う", {
-          ...this.textStyle(16, canUseSelf ? "#101820" : "#2a3036"),
-          backgroundColor: canUseSelf ? "#f2d27a" : "#66707a",
-          padding: { x: 10, y: 10 },
-          fixedWidth: 90,
-          align: "center"
-        })
-        .setAlpha(canUseSelf ? 1 : 0.58)
-        .setDepth(102);
-      if (canUseSelf) {
-        selfButton.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.useSelectedItem("self"));
+      let allyLineY = 440;
+      if (hasCompanion()) {
+        this.addContent(
+          this.add
+            .text(
+              154,
+              allyLineY,
+              `ルナ HP ${getCompanionHp()}/${getCompanionMaxHp()}  MP ${getCompanionMp()}/${getCompanionMaxMp()}`,
+              this.textStyle(15, "#b28aff")
+            )
+            .setDepth(102)
+        );
+        allyLineY += 20;
       }
-      this.addContent(selfButton);
+      if (hasCompanion2()) {
+        this.addContent(
+          this.add
+            .text(
+              154,
+              allyLineY,
+              `ガイスト HP ${getCompanion2Hp()}/${getCompanion2MaxHp()}  MP ${getCompanion2Mp()}/${getCompanion2MaxMp()}`,
+              this.textStyle(15, "#d6a15a")
+            )
+            .setDepth(102)
+        );
+        allyLineY += 20;
+      }
+      this.addContent(
+        this.add.text(154, allyLineY, `所持ゴールド ${save.gold}G`, this.textStyle(15, "#d9e5ef")).setDepth(102)
+      );
 
-      const companionButton = this.add
-        .text(548, 412, "ルナに使う", {
-          ...this.textStyle(16, canUseCompanion ? "#101820" : "#2a3036"),
-          backgroundColor: canUseCompanion ? "#f2d27a" : "#66707a",
-          padding: { x: 10, y: 10 },
-          fixedWidth: 90,
-          align: "center"
-        })
-        .setAlpha(canUseCompanion ? 1 : 0.58)
-        .setDepth(102);
-      if (canUseCompanion) {
-        companionButton
-          .setInteractive({ useHandCursor: true })
-          .on("pointerdown", () => this.useSelectedItem("companion"));
-      }
-      this.addContent(companionButton);
+      this.renderAllyTargetButtons(412, canUseSelf, canUseCompanion, canUseCompanion2, (target) =>
+        this.useSelectedItem(target)
+      );
     } else {
       this.addContent(
         this.add.text(154, 440, `所持ゴールド ${save.gold}G`, this.textStyle(15, "#d9e5ef")).setDepth(102)
@@ -362,7 +390,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private renderSkills(): void {
-    if (hasCompanion()) {
+    if (hasCompanion() || hasCompanion2()) {
       this.renderCharacterToggle(this.skillsCharacter, (character) => {
         this.skillsCharacter = character;
       });
@@ -373,17 +401,25 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
+    if (this.skillsCharacter === "geist" && hasCompanion2()) {
+      this.renderGeistSkills();
+      return;
+    }
+
     this.renderHeroSkills();
   }
 
   private renderCharacterToggle(
-    current: "hero" | "luna",
-    onSelect: (character: "hero" | "luna") => void
+    current: CharacterKey,
+    onSelect: (character: CharacterKey) => void
   ): void {
-    const options: { key: "hero" | "luna"; label: string }[] = [
-      { key: "hero", label: "主人公" },
-      { key: "luna", label: "ルナ" }
-    ];
+    const options: { key: CharacterKey; label: string }[] = [{ key: "hero", label: "主人公" }];
+    if (hasCompanion()) {
+      options.push({ key: "luna", label: "ルナ" });
+    }
+    if (hasCompanion2()) {
+      options.push({ key: "geist", label: "ガイスト" });
+    }
 
     options.forEach((option, index) => {
       const selected = current === option.key;
@@ -405,6 +441,59 @@ export class MenuScene extends Phaser.Scene {
           this.setMessage("");
           this.renderContent();
         });
+      this.addContent(button);
+    });
+  }
+
+  /** Right-aligned row of "self"/"Luna"/"Geist" target buttons, shrinking
+   *  each button to fit whichever allies are actually in the party. */
+  private renderAllyTargetButtons(
+    y: number,
+    selfEnabled: boolean,
+    companionEnabled: boolean,
+    companion2Enabled: boolean,
+    onSelect: (target: HealTarget) => void
+  ): void {
+    // With all three targets shown at once there isn't room for the fuller
+    // "◯に使う" phrasing (Geist's name alone is already as wide as "ルナに
+    //使う"), so fall back to bare names — the section header already makes
+    // "use on whom" clear from context.
+    const compact = hasCompanion() && hasCompanion2();
+    const options: Array<{ target: HealTarget; label: string; enabled: boolean }> = [
+      { target: "self", label: compact ? "自分" : "自分に使う", enabled: selfEnabled }
+    ];
+    if (hasCompanion()) {
+      options.push({ target: "companion", label: compact ? "ルナ" : "ルナに使う", enabled: companionEnabled });
+    }
+    if (hasCompanion2()) {
+      options.push({
+        target: "companion2",
+        label: compact ? "ガイスト" : "ガイストに使う",
+        enabled: companion2Enabled
+      });
+    }
+
+    const width = options.length > 2 ? 74 : 90;
+    const gap = 6;
+    const totalWidth = options.length * width + (options.length - 1) * gap;
+    const rightEdge = 638;
+    const startX = rightEdge - totalWidth;
+
+    options.forEach((option, index) => {
+      const x = startX + index * (width + gap);
+      const button = this.add
+        .text(x, y, option.label, {
+          ...this.textStyle(options.length > 2 ? 13 : 16, option.enabled ? "#101820" : "#2a3036"),
+          backgroundColor: option.enabled ? "#f2d27a" : "#66707a",
+          padding: { x: 8, y: 10 },
+          fixedWidth: width,
+          align: "center"
+        })
+        .setAlpha(option.enabled ? 1 : 0.58)
+        .setDepth(102);
+      if (option.enabled) {
+        button.setInteractive({ useHandCursor: true }).on("pointerdown", () => onSelect(option.target));
+      }
       this.addContent(button);
     });
   }
@@ -456,6 +545,57 @@ export class MenuScene extends Phaser.Scene {
     this.addContent(
       this.add
         .text(154, 440, "ルナは戦闘中、状況に応じて自動でこれらの行動を行う。", this.textStyle(14, "#9fb4c6"))
+        .setDepth(102)
+    );
+  }
+
+  private renderGeistSkills(): void {
+    const save = getSave();
+
+    COMPANION2_SKILL_ORDER.forEach((skillId, index) => {
+      const skill = COMPANION2_SKILLS[skillId];
+      const learned = save.level >= skill.requiredLevel;
+      const y = 259 + index * 40;
+      const row = this.add
+        .rectangle(388, y + 14, 468, 38, 0x111a24, 0.58)
+        .setStrokeStyle(1, 0x34475a, 0.45)
+        .setDepth(101);
+      this.addContent(row);
+      this.addContent(
+        this.add
+          .text(190, y, skill.name, this.textStyle(18, learned ? "#fff4cf" : "#748393"))
+          .setDepth(102)
+      );
+      this.addContent(
+        this.add
+          .text(306, y, skill.mpCost > 0 ? `MP${skill.mpCost}` : "-", this.textStyle(16, learned ? "#d9e5ef" : "#748393"))
+          .setDepth(102)
+      );
+      this.addContent(
+        this.add
+          .text(
+            376,
+            y,
+            learned ? skill.description : `Lv${skill.requiredLevel}で習得`,
+            this.textStyle(14, learned ? "#9fb4c6" : "#748393")
+          )
+          .setDepth(102)
+      );
+    });
+
+    this.addContent(
+      this.add
+        .text(
+          154,
+          416,
+          `ガイスト HP ${getCompanion2Hp()}/${getCompanion2MaxHp()}  MP ${getCompanion2Mp()}/${getCompanion2MaxMp()}`,
+          this.textStyle(18, "#d6a15a")
+        )
+        .setDepth(102)
+    );
+    this.addContent(
+      this.add
+        .text(154, 440, "ガイストは戦闘中、MPが十分なときほど強力な一撃を選んで放つ。", this.textStyle(14, "#9fb4c6"))
         .setDepth(102)
     );
   }
@@ -516,54 +656,37 @@ export class MenuScene extends Phaser.Scene {
         .setDepth(102)
     );
 
-    if (hasCompanion() && selectedIsHeal) {
-      const canUseSelf =
-        selectedLearned && save.mp >= selectedSkill.mpCost && save.hp < maxHp;
-      const canUseCompanion =
-        selectedLearned && save.mp >= selectedSkill.mpCost && getCompanionHp() < getCompanionMaxHp();
+    if ((hasCompanion() || hasCompanion2()) && selectedIsHeal) {
+      const canAfford = selectedLearned && save.mp >= selectedSkill.mpCost;
+      const canUseSelf = canAfford && save.hp < maxHp;
+      const canUseCompanion = canAfford && getCompanionHp() < getCompanionMaxHp();
+      const canUseCompanion2 = canAfford && getCompanion2Hp() < getCompanion2MaxHp();
 
-      this.addContent(
-        this.add
-          .text(
-            154,
-            440,
-            `ルナ HP ${getCompanionHp()}/${getCompanionMaxHp()}`,
-            this.textStyle(15, "#b28aff")
-          )
-          .setDepth(102)
+      let allyLineY = 440;
+      if (hasCompanion()) {
+        this.addContent(
+          this.add
+            .text(154, allyLineY, `ルナ HP ${getCompanionHp()}/${getCompanionMaxHp()}`, this.textStyle(15, "#b28aff"))
+            .setDepth(102)
+        );
+        allyLineY += 20;
+      }
+      if (hasCompanion2()) {
+        this.addContent(
+          this.add
+            .text(
+              154,
+              allyLineY,
+              `ガイスト HP ${getCompanion2Hp()}/${getCompanion2MaxHp()}`,
+              this.textStyle(15, "#d6a15a")
+            )
+            .setDepth(102)
+        );
+      }
+
+      this.renderAllyTargetButtons(412, canUseSelf, canUseCompanion, canUseCompanion2, (target) =>
+        this.useSelectedSkill(target)
       );
-
-      const selfButton = this.add
-        .text(452, 412, "自分に使う", {
-          ...this.textStyle(16, canUseSelf ? "#101820" : "#2a3036"),
-          backgroundColor: canUseSelf ? "#f2d27a" : "#66707a",
-          padding: { x: 10, y: 10 },
-          fixedWidth: 90,
-          align: "center"
-        })
-        .setAlpha(canUseSelf ? 1 : 0.58)
-        .setDepth(102);
-      if (canUseSelf) {
-        selfButton.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.useSelectedSkill("self"));
-      }
-      this.addContent(selfButton);
-
-      const companionButton = this.add
-        .text(548, 412, "ルナに使う", {
-          ...this.textStyle(16, canUseCompanion ? "#101820" : "#2a3036"),
-          backgroundColor: canUseCompanion ? "#f2d27a" : "#66707a",
-          padding: { x: 10, y: 10 },
-          fixedWidth: 90,
-          align: "center"
-        })
-        .setAlpha(canUseCompanion ? 1 : 0.58)
-        .setDepth(102);
-      if (canUseCompanion) {
-        companionButton
-          .setInteractive({ useHandCursor: true })
-          .on("pointerdown", () => this.useSelectedSkill("companion"));
-      }
-      this.addContent(companionButton);
     } else {
       const useLabel = this.getSelectedSkillUseLabel(selectedLearned, selectedIsHeal, canUseSelected);
       const useButton = this.add
@@ -606,20 +729,25 @@ export class MenuScene extends Phaser.Scene {
       Math.max(0, ownedEquipment.length - 1)
     );
 
-    if (hasCompanion()) {
+    if (hasCompanion() || hasCompanion2()) {
       this.renderCharacterToggle(this.equipmentCharacter, (character) => {
         this.equipmentCharacter = character;
       });
     }
 
     const showingLuna = hasCompanion() && this.equipmentCharacter === "luna";
+    const showingGeist = hasCompanion2() && this.equipmentCharacter === "geist";
 
     this.addContent(
       this.add.text(154, 258, "装備中", this.textStyle(16, "#f4df7e")).setDepth(102)
     );
     EQUIPMENT_SLOTS.forEach((slot, index) => {
       const y = 282 + index * 20;
-      const equipmentId = showingLuna ? getCompanionEquippedEquipment(slot) : getEquippedEquipment(slot);
+      const equipmentId = showingLuna
+        ? getCompanionEquippedEquipment(slot)
+        : showingGeist
+          ? getCompanion2EquippedEquipment(slot)
+          : getEquippedEquipment(slot);
       const name = equipmentId ? EQUIPMENT[equipmentId].name : "-";
       this.addContent(
         this.add.text(154, y, EQUIPMENT_SLOT_LABELS[slot], this.textStyle(13, "#9fb4c6")).setDepth(102)
@@ -671,9 +799,13 @@ export class MenuScene extends Phaser.Scene {
 
     const statsLine = showingLuna
       ? `ルナ HP ${getCompanionHp()}/${getCompanionMaxHp()}  MP ${getCompanionMp()}/${getCompanionMaxMp()}  攻 ${getCompanionAttack()}  防 ${getCompanionDefense()}  速 ${getCompanionSpeed()}`
-      : `HP ${save.hp}/${getPlayerMaxHp()}  MP ${save.mp}/${getPlayerMaxMp()}  攻 ${getPlayerAttack()}  防 ${getPlayerDefense()}  速 ${getPlayerSpeed()}`;
+      : showingGeist
+        ? `ガイスト HP ${getCompanion2Hp()}/${getCompanion2MaxHp()}  MP ${getCompanion2Mp()}/${getCompanion2MaxMp()}  攻 ${getCompanion2Attack()}  防 ${getCompanion2Defense()}  速 ${getCompanion2Speed()}`
+        : `HP ${save.hp}/${getPlayerMaxHp()}  MP ${save.mp}/${getPlayerMaxMp()}  攻 ${getPlayerAttack()}  防 ${getPlayerDefense()}  速 ${getPlayerSpeed()}`;
     this.addContent(
-      this.add.text(154, 432, statsLine, this.textStyle(16, showingLuna ? "#b28aff" : "#f4df7e")).setDepth(102)
+      this.add
+        .text(154, 432, statsLine, this.textStyle(16, showingLuna ? "#b28aff" : showingGeist ? "#d6a15a" : "#f4df7e"))
+        .setDepth(102)
     );
 
     const canEquipSelected = ownedEquipment.length > 0;
@@ -695,14 +827,16 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private renderStatus(): void {
-    if (hasCompanion()) {
+    const anyCompanion = hasCompanion() || hasCompanion2();
+    if (anyCompanion) {
       this.renderCharacterToggle(this.statusCharacter, (character) => {
         this.statusCharacter = character;
       });
     }
 
     const showingLuna = hasCompanion() && this.statusCharacter === "luna";
-    const startY = hasCompanion() ? 259 : 226;
+    const showingGeist = hasCompanion2() && this.statusCharacter === "geist";
+    const startY = anyCompanion ? 259 : 226;
 
     const save = getSave();
     const rows = showingLuna
@@ -716,19 +850,31 @@ export class MenuScene extends Phaser.Scene {
           ["EXP", String(save.exp)],
           ["次のレベルまで", String(Math.max(0, save.level * 12 - save.exp))]
         ]
-      : [
-          ["レベル", String(save.level)],
-          ["HP", `${save.hp}/${getPlayerMaxHp()}`],
-          ["MP", `${save.mp}/${getPlayerMaxMp()}`],
-          ["攻撃", String(getPlayerAttack())],
-          ["防御", String(getPlayerDefense())],
-          ["素早さ", String(getPlayerSpeed())],
-          ["EXP", String(save.exp)],
-          ["次のレベルまで", String(Math.max(0, save.level * 12 - save.exp))],
-          ["ゴールド", String(save.gold)],
-          ["現在地", this.currentMapName()]
-        ];
-    const spacing = hasCompanion() ? 26 : 32;
+      : showingGeist
+        ? [
+            ["レベル", String(save.level)],
+            ["HP", `${getCompanion2Hp()}/${getCompanion2MaxHp()}`],
+            ["MP", `${getCompanion2Mp()}/${getCompanion2MaxMp()}`],
+            ["攻撃", String(getCompanion2Attack())],
+            ["防御", String(getCompanion2Defense())],
+            ["素早さ", String(getCompanion2Speed())],
+            ["EXP", String(save.exp)],
+            ["次のレベルまで", String(Math.max(0, save.level * 12 - save.exp))]
+          ]
+        : [
+            ["レベル", String(save.level)],
+            ["HP", `${save.hp}/${getPlayerMaxHp()}`],
+            ["MP", `${save.mp}/${getPlayerMaxMp()}`],
+            ["攻撃", String(getPlayerAttack())],
+            ["防御", String(getPlayerDefense())],
+            ["素早さ", String(getPlayerSpeed())],
+            ["EXP", String(save.exp)],
+            ["次のレベルまで", String(Math.max(0, save.level * 12 - save.exp))],
+            ["ゴールド", String(save.gold)],
+            ["現在地", this.currentMapName()]
+          ];
+    const spacing = anyCompanion ? 26 : 32;
+    const valueColor = showingLuna ? "#b28aff" : showingGeist ? "#d6a15a" : "#fff4cf";
 
     rows.forEach(([label, value], index) => {
       const y = startY + index * spacing;
@@ -736,9 +882,7 @@ export class MenuScene extends Phaser.Scene {
         this.add.text(154, y, label, this.textStyle(17, "#9fb4c6")).setDepth(102)
       );
       this.addContent(
-        this.add
-          .text(342, y, value, this.textStyle(18, showingLuna ? "#b28aff" : "#fff4cf"))
-          .setDepth(102)
+        this.add.text(342, y, value, this.textStyle(18, valueColor)).setDepth(102)
       );
     });
   }
@@ -828,6 +972,59 @@ export class MenuScene extends Phaser.Scene {
       });
   }
 
+  private renderCompanion2(): void {
+    if (!this.geistLine) {
+      this.talkToGeist();
+      return;
+    }
+
+    const portrait = this.add
+      .sprite(214, 300, "companion-geist", 0)
+      .setOrigin(0.5, 0.5)
+      .setScale(2.15)
+      .setDepth(102);
+    const idleKey = getCharacterIdleAnimationKey("companion-geist", "down");
+    if (this.anims.exists(idleKey)) {
+      portrait.play(idleKey, true);
+    }
+    this.addContent(portrait);
+
+    this.addContent(
+      this.add.text(154, 214, "ガイスト", this.textStyle(18, "#f4df7e")).setDepth(102)
+    );
+    this.addContent(
+      this.add
+        .text(316, 236, this.geistLine, {
+          ...this.textStyle(16, "#fff4cf"),
+          wordWrap: { width: 300, useAdvancedWrap: true },
+          lineSpacing: 8
+        })
+        .setDepth(102)
+    );
+
+    const talkButton = this.add
+      .text(530, 412, "話す", {
+        ...this.textStyle(18, "#101820"),
+        backgroundColor: "#f2d27a",
+        padding: { x: 18, y: 10 },
+        fixedWidth: 92,
+        align: "center"
+      })
+      .setDepth(102);
+    talkButton.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.talkToGeist());
+    this.addContent(talkButton);
+  }
+
+  private talkToGeist(): void {
+    // Geist joins for the final stretch of the story rather than carrying
+    // his own multi-chapter arc, so he gets a small static flavor pool
+    // instead of Luna's stage-aware AI chat.
+    const nextLine = Phaser.Utils.Array.GetRandom(GEIST_LINES.filter((line) => line !== this.geistLine));
+    this.geistLine = nextLine ?? GEIST_LINES[0];
+    this.setMessage("");
+    this.renderContent();
+  }
+
   private selectItem(index: number): void {
     this.selectedItemIndex = Phaser.Math.Clamp(index, 0, ITEM_ORDER.length - 1);
     this.setMessage("");
@@ -847,7 +1044,7 @@ export class MenuScene extends Phaser.Scene {
     this.renderContent();
   }
 
-  private useSelectedItem(target: "self" | "companion" = "self"): void {
+  private useSelectedItem(target: HealTarget = "self"): void {
     const itemId = ITEM_ORDER[this.selectedItemIndex];
     const item = ITEMS[itemId];
     if (getItemCount(itemId) <= 0) {
@@ -855,14 +1052,15 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
-    if (target === "companion") {
-      const result = useItemOnCompanion(itemId);
+    if (target === "companion" || target === "companion2") {
+      const result = target === "companion" ? useItemOnCompanion(itemId) : useItemOnCompanion2(itemId);
+      const label = target === "companion" ? "ルナの" : "ガイストの";
       if (!result.used) {
-        this.setMessage(this.getItemFailureMessage(result.reason, true));
+        this.setMessage(this.getItemFailureMessage(result.reason, label));
         return;
       }
 
-      this.setMessage(this.getItemUseMessage(item.name, result.healed, result.restoredMp, true));
+      this.setMessage(this.getItemUseMessage(item.name, result.healed, result.restoredMp, label));
       this.game.events.emit(GAME_EVENTS.stateChanged);
       this.renderContent();
       return;
@@ -911,19 +1109,24 @@ export class MenuScene extends Phaser.Scene {
 
     const equipment = EQUIPMENT[equipmentId];
     const targetingLuna = hasCompanion() && this.equipmentCharacter === "luna";
-    const result = targetingLuna ? equipEquipmentToCompanion(equipmentId) : equipEquipment(equipmentId);
+    const targetingGeist = hasCompanion2() && this.equipmentCharacter === "geist";
+    const result = targetingLuna
+      ? equipEquipmentToCompanion(equipmentId)
+      : targetingGeist
+        ? equipEquipmentToCompanion2(equipmentId)
+        : equipEquipment(equipmentId);
     if (!result.equipped || !result.slot) {
       this.setMessage(`${equipment.name}を装備できなかった。`);
       return;
     }
 
-    const targetLabel = targetingLuna ? "ルナの" : "";
+    const targetLabel = targetingLuna ? "ルナの" : targetingGeist ? "ガイストの" : "";
     this.setMessage(`${targetLabel}${equipment.name}を${EQUIPMENT_SLOT_LABELS[result.slot]}に装備した。`);
     this.game.events.emit(GAME_EVENTS.stateChanged);
     this.renderContent();
   }
 
-  private useSelectedSkill(target: "self" | "companion" = "self"): void {
+  private useSelectedSkill(target: HealTarget = "self"): void {
     const skillId = SKILL_ORDER[this.selectedSkillIndex];
     const skill = SKILLS[skillId];
     const save = getSave();
@@ -943,19 +1146,23 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
-    if (target === "companion") {
-      if (getCompanionHp() >= getCompanionMaxHp()) {
-        this.setMessage("ルナのHPは満タンだ。");
+    if (target === "companion" || target === "companion2") {
+      const name = target === "companion" ? "ルナ" : "ガイスト";
+      const currentHp = target === "companion" ? getCompanionHp() : getCompanion2Hp();
+      const maxAllyHp = target === "companion" ? getCompanionMaxHp() : getCompanion2MaxHp();
+      if (currentHp >= maxAllyHp) {
+        this.setMessage(`${name}のHPは満タンだ。`);
         return;
       }
 
-      const result = useHealingSkillOnCompanion(skillId);
+      const result =
+        target === "companion" ? useHealingSkillOnCompanion(skillId) : useHealingSkillOnCompanion2(skillId);
       if (!result.used) {
         this.setMessage(`${skill.name}を使えなかった。`);
         return;
       }
 
-      this.setMessage(`${skill.name}でルナのHPを${result.healed}回復した。`);
+      this.setMessage(`${skill.name}で${name}のHPを${result.healed}回復した。`);
       this.game.events.emit(GAME_EVENTS.stateChanged);
       this.renderContent();
       return;
@@ -1023,12 +1230,14 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
-    if ((this.activeTab === "status" || this.activeTab === "companion") && event.code === "ArrowUp") {
+    const scrollableTab =
+      this.activeTab === "status" || this.activeTab === "companion" || this.activeTab === "companion2";
+    if (scrollableTab && event.code === "ArrowUp") {
       this.scrollContentBy(-40);
       return;
     }
 
-    if ((this.activeTab === "status" || this.activeTab === "companion") && event.code === "ArrowDown") {
+    if (scrollableTab && event.code === "ArrowDown") {
       this.scrollContentBy(40);
       return;
     }
@@ -1050,6 +1259,11 @@ export class MenuScene extends Phaser.Scene {
 
     if ((event.code === "Space" || event.code === "Enter") && this.activeTab === "companion") {
       this.talkToLuna();
+      return;
+    }
+
+    if ((event.code === "Space" || event.code === "Enter") && this.activeTab === "companion2") {
+      this.talkToGeist();
     }
   }
 
@@ -1111,12 +1325,7 @@ export class MenuScene extends Phaser.Scene {
     );
   }
 
-  private getItemUseMessage(
-    itemName: string,
-    healed: number,
-    restoredMp: number,
-    forCompanion = false
-  ): string {
+  private getItemUseMessage(itemName: string, healed: number, restoredMp: number, targetLabel = ""): string {
     const parts: string[] = [];
     if (healed > 0) {
       parts.push(`HPを${healed}`);
@@ -1125,12 +1334,10 @@ export class MenuScene extends Phaser.Scene {
       parts.push(`MPを${restoredMp}`);
     }
 
-    const targetLabel = forCompanion ? "ルナの" : "";
     return `${itemName}で${targetLabel}${parts.join("、")}回復した。`;
   }
 
-  private getItemFailureMessage(reason?: string, forCompanion = false): string {
-    const targetLabel = forCompanion ? "ルナの" : "";
+  private getItemFailureMessage(reason?: string, targetLabel = ""): string {
     if (reason === "full-hp") {
       return `${targetLabel}HPは満タンだ。`;
     }

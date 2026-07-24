@@ -51,6 +51,8 @@ const DUNGEON_FLOOR_RANGES: Record<number, { min: number; max: number }> = {
 const FIELD_ENEMY_ID_PREFIX = "field-";
 const DUNGEON_ENEMY_ID_PREFIX = "dungeon-";
 export const COMPANION_JOINED_FLAG = "companionJoined";
+/** Geist, the armored ally recruited in the tier-4 dungeon. */
+export const COMPANION2_JOINED_FLAG = "companion2Joined";
 
 export const initialSave = (): GameSave => ({
   mapId: "village",
@@ -88,6 +90,7 @@ function loadSave(): GameSave {
     const equipmentInventory = normalizeEquipmentInventory(parsed.equipmentInventory);
     const equipment = normalizeEquipmentLoadout(parsed.equipment);
     const companionEquipment = normalizeEquipmentLoadout(parsed.companionEquipment);
+    const companion2Equipment = normalizeEquipmentLoadout(parsed.companion2Equipment);
     const level = normalizePositiveInteger(parsed.level, base.level);
     const maxHp = normalizePositiveInteger(parsed.maxHp, base.maxHp);
     const maxMp = normalizeMaxMp(parsed.maxMp, level);
@@ -95,10 +98,13 @@ function loadSave(): GameSave {
     const speed = normalizePositiveInteger(parsed.speed, base.speed);
     const equipmentStats = calculateEquipmentStats(equipment);
     const companionEquipmentStats = calculateEquipmentStats(companionEquipment);
+    const companion2EquipmentStats = calculateEquipmentStats(companion2Equipment);
     const hp = normalizeHp(parsed.hp, maxHp + equipmentStats.maxHpBonus);
     const mp = normalizeMp(parsed.mp, maxMp + equipmentStats.maxMpBonus);
     const companionMaxHp = 20 + level * 5 + companionEquipmentStats.maxHpBonus;
     const companionMaxMp = 14 + level * 4 + companionEquipmentStats.maxMpBonus;
+    const companion2MaxHp = 28 + level * 6 + companion2EquipmentStats.maxHpBonus;
+    const companion2MaxMp = 6 + level * 1 + companion2EquipmentStats.maxMpBonus;
     return {
       ...base,
       ...parsed,
@@ -113,12 +119,17 @@ function loadSave(): GameSave {
       equipmentInventory,
       equipment,
       companionEquipment,
+      companion2Equipment,
       potions: items.herb ?? 0,
       flags: parsed.flags ?? {},
       companionHp:
         parsed.companionHp !== undefined ? normalizeHp(parsed.companionHp, companionMaxHp) : undefined,
       companionMp:
         parsed.companionMp !== undefined ? normalizeMp(parsed.companionMp, companionMaxMp) : undefined,
+      companion2Hp:
+        parsed.companion2Hp !== undefined ? normalizeHp(parsed.companion2Hp, companion2MaxHp) : undefined,
+      companion2Mp:
+        parsed.companion2Mp !== undefined ? normalizeMp(parsed.companion2Mp, companion2MaxMp) : undefined,
       defeatedEnemies: parsed.defeatedEnemies ?? []
     };
   } catch {
@@ -133,6 +144,7 @@ export function getSave(): GameSave {
 export function persistSave(): void {
   ensureEquipment();
   ensureCompanionEquipment();
+  ensureCompanion2Equipment();
   clampVitalsToCurrentMax();
   syncLegacyPotionCount();
   localStorage.setItem(SAVE_KEY, JSON.stringify(save));
@@ -386,6 +398,10 @@ export function hasCompanion(): boolean {
   return hasFlag(COMPANION_JOINED_FLAG);
 }
 
+export function hasCompanion2(): boolean {
+  return hasFlag(COMPANION2_JOINED_FLAG);
+}
+
 export function getCompanionEquippedEquipment(slot: EquipmentSlot): EquipmentId | undefined {
   ensureCompanionEquipment();
   return save.companionEquipment![slot];
@@ -414,6 +430,36 @@ export function getCompanionDefense(): number {
 
 export function getCompanionSpeed(): number {
   return 6 + save.level + getCompanionEquipmentStatTotals().speedBonus;
+}
+
+export function getCompanion2EquippedEquipment(slot: EquipmentSlot): EquipmentId | undefined {
+  ensureCompanion2Equipment();
+  return save.companion2Equipment![slot];
+}
+
+export function getCompanion2EquipmentStatTotals(): EquipmentStats {
+  ensureCompanion2Equipment();
+  return calculateEquipmentStats(save.companion2Equipment!);
+}
+
+export function getCompanion2MaxHp(): number {
+  return 28 + save.level * 6 + getCompanion2EquipmentStatTotals().maxHpBonus;
+}
+
+export function getCompanion2MaxMp(): number {
+  return 6 + save.level * 1 + getCompanion2EquipmentStatTotals().maxMpBonus;
+}
+
+export function getCompanion2Attack(): number {
+  return 6 + save.level * 3 + getCompanion2EquipmentStatTotals().attackBonus;
+}
+
+export function getCompanion2Defense(): number {
+  return 4 + save.level * 2 + getCompanion2EquipmentStatTotals().defenseBonus;
+}
+
+export function getCompanion2Speed(): number {
+  return 4 + save.level + getCompanion2EquipmentStatTotals().speedBonus;
 }
 
 export function getCompanionHp(): number {
@@ -466,6 +512,60 @@ export function spendCompanionMp(amount: number): boolean {
   }
 
   save.companionMp = Math.max(0, (save.companionMp ?? 0) - amount);
+  persistSave();
+  return true;
+}
+
+export function getCompanion2Hp(): number {
+  ensureCompanion2Vitals();
+  return save.companion2Hp ?? getCompanion2MaxHp();
+}
+
+export function getCompanion2Mp(): number {
+  ensureCompanion2Vitals();
+  return save.companion2Mp ?? getCompanion2MaxMp();
+}
+
+export function recruitCompanion2(): void {
+  markFlag(COMPANION2_JOINED_FLAG);
+  save.companion2Hp = getCompanion2MaxHp();
+  save.companion2Mp = getCompanion2MaxMp();
+  persistSave();
+}
+
+export function healCompanion2(amount: number): number {
+  ensureCompanion2Vitals();
+  const before = save.companion2Hp ?? 0;
+  save.companion2Hp = Math.min(getCompanion2MaxHp(), before + amount);
+  persistSave();
+  return save.companion2Hp - before;
+}
+
+export function restoreCompanion2Mp(amount: number): number {
+  ensureCompanion2Vitals();
+  const before = save.companion2Mp ?? 0;
+  save.companion2Mp = Math.min(getCompanion2MaxMp(), before + amount);
+  persistSave();
+  return save.companion2Mp - before;
+}
+
+export function damageCompanion2(amount: number): void {
+  ensureCompanion2Vitals();
+  save.companion2Hp = Math.max(0, (save.companion2Hp ?? 0) - amount);
+  persistSave();
+}
+
+export function spendCompanion2Mp(amount: number): boolean {
+  ensureCompanion2Vitals();
+  if (amount <= 0) {
+    return true;
+  }
+
+  if ((save.companion2Mp ?? 0) < amount) {
+    return false;
+  }
+
+  save.companion2Mp = Math.max(0, (save.companion2Mp ?? 0) - amount);
   persistSave();
   return true;
 }
@@ -582,6 +682,49 @@ export function unequipCompanionEquipment(slot: EquipmentSlot): EquipEquipmentRe
   }
 
   delete save.companionEquipment![slot];
+  save.equipmentInventory[previousEquipmentId] =
+    (save.equipmentInventory[previousEquipmentId] ?? 0) + 1;
+  persistSave();
+  return { equipped: true, slot, previousEquipmentId };
+}
+
+export function equipEquipmentToCompanion2(
+  equipmentId: EquipmentId,
+  preferredSlot?: EquipmentSlot
+): EquipEquipmentResult {
+  if (!isEquipmentId(equipmentId)) {
+    return { equipped: false, reason: "unknown-equipment" };
+  }
+
+  ensureEquipment();
+  ensureCompanion2Equipment();
+  if ((save.equipmentInventory[equipmentId] ?? 0) <= 0) {
+    return { equipped: false, reason: "no-equipment" };
+  }
+
+  const slot = preferredSlot ?? getDefaultCompanion2EquipmentSlot(equipmentId);
+  if (!slot || !canEquipToSlot(equipmentId, slot)) {
+    return { equipped: false, reason: "incompatible-slot" };
+  }
+
+  const previousEquipmentId = save.companion2Equipment![slot];
+  save.equipmentInventory[equipmentId] = Math.max(0, (save.equipmentInventory[equipmentId] ?? 0) - 1);
+  if (previousEquipmentId) {
+    save.equipmentInventory[previousEquipmentId] = (save.equipmentInventory[previousEquipmentId] ?? 0) + 1;
+  }
+  save.companion2Equipment![slot] = equipmentId;
+  persistSave();
+  return { equipped: true, slot, previousEquipmentId };
+}
+
+export function unequipCompanion2Equipment(slot: EquipmentSlot): EquipEquipmentResult {
+  ensureCompanion2Equipment();
+  const previousEquipmentId = save.companion2Equipment![slot];
+  if (!previousEquipmentId) {
+    return { equipped: false, reason: "no-equipment" };
+  }
+
+  delete save.companion2Equipment![slot];
   save.equipmentInventory[previousEquipmentId] =
     (save.equipmentInventory[previousEquipmentId] ?? 0) + 1;
   persistSave();
@@ -732,6 +875,55 @@ export function useItemOnCompanion(itemId: ItemId): UseItemResult {
   };
 }
 
+export function useItemOnCompanion2(itemId: ItemId): UseItemResult {
+  if (!isItemId(itemId)) {
+    return { used: false, healed: 0, restoredMp: 0, reason: "unknown-item" };
+  }
+
+  ensureInventory();
+  if ((save.items[itemId] ?? 0) <= 0) {
+    return { used: false, healed: 0, restoredMp: 0, reason: "no-item" };
+  }
+
+  const healsHp = canItemHealHp(itemId);
+  const restoresMp = canItemRestoreMp(itemId);
+  if (!healsHp && !restoresMp) {
+    return { used: false, healed: 0, restoredMp: 0, reason: "no-effect" };
+  }
+
+  ensureCompanion2Vitals();
+  const maxHp = getCompanion2MaxHp();
+  const maxMp = getCompanion2MaxMp();
+  const currentHp = save.companion2Hp ?? maxHp;
+  const currentMp = save.companion2Mp ?? maxMp;
+  const hpFull = !healsHp || currentHp >= maxHp;
+  const mpFull = !restoresMp || currentMp >= maxMp;
+  if (hpFull && mpFull) {
+    return {
+      used: false,
+      healed: 0,
+      restoredMp: 0,
+      reason: restoresMp && !healsHp ? "full-mp" : "full-hp"
+    };
+  }
+
+  const beforeHp = currentHp;
+  const beforeMp = currentMp;
+  if (healsHp) {
+    save.companion2Hp = Math.min(maxHp, currentHp + getItemHealAmount(itemId, maxHp));
+  }
+  if (restoresMp) {
+    save.companion2Mp = Math.min(maxMp, currentMp + getItemMpRestoreAmount(itemId, maxMp));
+  }
+  save.items[itemId] = Math.max(0, (save.items[itemId] ?? 0) - 1);
+  persistSave();
+  return {
+    used: true,
+    healed: (save.companion2Hp ?? beforeHp) - beforeHp,
+    restoredMp: (save.companion2Mp ?? beforeMp) - beforeMp
+  };
+}
+
 export function usePotion(): boolean {
   return useItem("herb").used;
 }
@@ -820,6 +1012,38 @@ export function useHealingSkillOnCompanion(skillId: SkillId): UseSkillResult {
   return { used: true, healed: save.companionHp - before };
 }
 
+export function useHealingSkillOnCompanion2(skillId: SkillId): UseSkillResult {
+  if (!isSkillId(skillId)) {
+    return { used: false, healed: 0, reason: "unknown-skill" };
+  }
+
+  const skill = SKILLS[skillId];
+  if (!hasLearnedSkill(skillId)) {
+    return { used: false, healed: 0, reason: "not-learned" };
+  }
+
+  if (skill.effect.type !== "heal") {
+    return { used: false, healed: 0, reason: "not-healing" };
+  }
+
+  ensureCompanion2Vitals();
+  const maxHp = getCompanion2MaxHp();
+  const currentHp = save.companion2Hp ?? maxHp;
+  if (currentHp >= maxHp) {
+    return { used: false, healed: 0, reason: "full-hp" };
+  }
+
+  if (save.mp < skill.mpCost) {
+    return { used: false, healed: 0, reason: "not-enough-mp" };
+  }
+
+  const before = currentHp;
+  save.mp = Math.max(0, save.mp - skill.mpCost);
+  save.companion2Hp = Math.min(maxHp, currentHp + getSkillHealAmount(skill, maxHp));
+  persistSave();
+  return { used: true, healed: save.companion2Hp - before };
+}
+
 export function markFlag(flag: string): void {
   save.flags[flag] = true;
   persistSave();
@@ -866,6 +1090,10 @@ export function grantReward(exp: number, gold: number): { leveledUp: boolean; le
     if (hasFlag(COMPANION_JOINED_FLAG)) {
       save.companionHp = getCompanionMaxHp();
       save.companionMp = getCompanionMaxMp();
+    }
+    if (hasFlag(COMPANION2_JOINED_FLAG)) {
+      save.companion2Hp = getCompanion2MaxHp();
+      save.companion2Mp = getCompanion2MaxMp();
     }
     learnedSkillIds.push(...getSkillIdsLearnedAtLevel(save.level));
     leveledUp = true;
@@ -923,6 +1151,12 @@ function ensureCompanionEquipment(): void {
   }
 }
 
+function ensureCompanion2Equipment(): void {
+  if (!save.companion2Equipment) {
+    save.companion2Equipment = normalizeEquipmentLoadout(undefined);
+  }
+}
+
 function ensureCompanionVitals(): void {
   if (!hasFlag(COMPANION_JOINED_FLAG)) {
     return;
@@ -933,6 +1167,19 @@ function ensureCompanionVitals(): void {
   }
   if (save.companionMp === undefined) {
     save.companionMp = getCompanionMaxMp();
+  }
+}
+
+function ensureCompanion2Vitals(): void {
+  if (!hasFlag(COMPANION2_JOINED_FLAG)) {
+    return;
+  }
+
+  if (save.companion2Hp === undefined) {
+    save.companion2Hp = getCompanion2MaxHp();
+  }
+  if (save.companion2Mp === undefined) {
+    save.companion2Mp = getCompanion2MaxMp();
   }
 }
 
@@ -1064,6 +1311,21 @@ function getDefaultCompanionEquipmentSlot(equipmentId: EquipmentId): EquipmentSl
   return category;
 }
 
+function getDefaultCompanion2EquipmentSlot(equipmentId: EquipmentId): EquipmentSlot | undefined {
+  const category = EQUIPMENT[equipmentId].category;
+  const companion2Equipment = save.companion2Equipment ?? {};
+  if (category === "accessory") {
+    if (!companion2Equipment.accessory1) {
+      return "accessory1";
+    }
+    if (!companion2Equipment.accessory2) {
+      return "accessory2";
+    }
+    return "accessory1";
+  }
+  return category;
+}
+
 function isEquipmentSlot(value: unknown): value is EquipmentSlot {
   return (
     value === "weapon" ||
@@ -1085,6 +1347,14 @@ function clampVitalsToCurrentMax(): void {
     }
     if (save.companionMp !== undefined) {
       save.companionMp = Math.min(save.companionMp, getCompanionMaxMp());
+    }
+  }
+  if (hasFlag(COMPANION2_JOINED_FLAG)) {
+    if (save.companion2Hp !== undefined) {
+      save.companion2Hp = Math.min(save.companion2Hp, getCompanion2MaxHp());
+    }
+    if (save.companion2Mp !== undefined) {
+      save.companion2Mp = Math.min(save.companion2Mp, getCompanion2MaxMp());
     }
   }
 }

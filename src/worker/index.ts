@@ -19,7 +19,14 @@ import {
   LUNA_CASUAL_LINES
 } from "../data/lunaLines";
 import type { LunaQuestStage } from "../data/lunaLines";
-import type { ChestReward, EnemySpawn, MapDefinition, PortalDefinition, TilePosition } from "../game/types";
+import type {
+  ChestReward,
+  EnemySpawn,
+  MapDefinition,
+  NpcDefinition,
+  PortalDefinition,
+  TilePosition
+} from "../game/types";
 
 interface Env {
   ASSETS: {
@@ -516,12 +523,29 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
     }
   }
 
+  const npcs: NpcDefinition[] = [];
+  if (context.tier === 4 && context.floor === 1) {
+    const geistPosition = findOpenFloorNear(rows, { x: 14, y: 10 }, reserved);
+    if (geistPosition) {
+      reserved.add(positionKey(geistPosition));
+      npcs.push({
+        id: "geist",
+        name: "鎧の魔物ガイスト",
+        texture: "companion-geist",
+        x: geistPosition.x,
+        y: geistPosition.y,
+        hiddenIfFlag: "companion2Joined"
+      });
+    }
+  }
+
   const requiredTiles = [
     ...(guardian ? [guardian] : []),
     ...(downStairs ? [downStairs] : []),
     ...regularEnemies,
     ...supplyChestAccessTiles,
-    ...chestAccessTiles
+    ...chestAccessTiles,
+    ...npcs
   ];
   if (!canReachAll(rows, spawn, requiredTiles)) {
     requiredTiles.forEach((target) => carveCorridor(rows, spawn, target));
@@ -556,7 +580,7 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
     spawn,
     rows: rows.map((row) => row.join("")),
     portals,
-    npcs: [],
+    npcs,
     chests: [
       ...supplyChests.map((position, index) => ({
         id: `dungeon-t${context.tier}-b${context.floor}-supply-chest-${index + 1}`,
