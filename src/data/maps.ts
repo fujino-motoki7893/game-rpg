@@ -54,7 +54,7 @@ export const MAPS: Record<MapId, MapDefinition> = {
         hiddenIfFlag: "companionJoined"
       }
     ],
-    chests: [],
+    chests: [{ id: "village-chest-1", x: 6, y: 8, reward: { type: "item", itemId: "herb", quantity: 2 } }],
     enemies: []
   },
   field: {
@@ -98,7 +98,11 @@ export const MAPS: Record<MapId, MapDefinition> = {
       { x: 6, y: 24, toMap: "dungeon", toX: 1, toY: 1, dungeonTier: 1 }
     ],
     npcs: [],
-    chests: [],
+    chests: [
+      { id: "field-chest-1", x: 11, y: 4, reward: { type: "item", itemId: "returnFeather", quantity: 1 } },
+      { id: "field-chest-2", x: 24, y: 11, reward: { type: "equipment", equipmentId: "roundShield", quantity: 1 } },
+      { id: "field-chest-3", x: 9, y: 21, reward: { type: "item", itemId: "strongHerb", quantity: 1 } }
+    ],
     enemies: [
       { id: "field-slime-a", enemyKey: "slime", x: 10, y: 10 },
       { id: "field-goblin-a", enemyKey: "goblin", x: 22, y: 10 },
@@ -225,7 +229,7 @@ export const EXPANDED_MAPS: Partial<Record<MapId, MapDefinition>> = {
         hiddenIfFlag: "companionJoined"
       }
     ],
-    chests: [],
+    chests: [{ id: "village-chest-1", x: 6, y: 8, reward: { type: "item", itemId: "herb", quantity: 2 } }],
     enemies: []
   },
   field: {
@@ -273,7 +277,11 @@ export const EXPANDED_MAPS: Partial<Record<MapId, MapDefinition>> = {
       { x: 8, y: 19, toMap: "dungeon", toX: 1, toY: 1, dungeonTier: 4, requiresFlag: "finalBeastDefeated" }
     ],
     npcs: [],
-    chests: [],
+    chests: [
+      { id: "field-chest-1", x: 11, y: 4, reward: { type: "item", itemId: "returnFeather", quantity: 1 } },
+      { id: "field-chest-2", x: 24, y: 11, reward: { type: "equipment", equipmentId: "roundShield", quantity: 1 } },
+      { id: "field-chest-3", x: 9, y: 21, reward: { type: "item", itemId: "strongHerb", quantity: 1 } }
+    ],
     enemies: [
       { id: "field-slime-c", enemyKey: "slime", x: 10, y: 10 },
       { id: "field-orc-a", enemyKey: "orc", x: 22, y: 10 },
