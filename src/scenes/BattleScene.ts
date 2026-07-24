@@ -68,8 +68,12 @@ interface EnemySlot {
   alive: boolean;
   sprite?: Phaser.GameObjects.Sprite;
   hpText?: Phaser.GameObjects.Text;
-  hpFill?: Phaser.GameObjects.Rectangle;
 }
+
+/** Enemy HP is shown only as a name-color cue, not an exact bar/number. */
+const ENEMY_HP_COLOR_HEALTHY = "#ffffff";
+const ENEMY_HP_COLOR_HURT = "#ffe066";
+const ENEMY_HP_COLOR_CRITICAL = "#ff9a3c";
 
 type TurnActor = CompanionId | "player" | `enemy-${number}`;
 
@@ -173,10 +177,7 @@ export class BattleScene extends Phaser.Scene {
       this.playCharacterIdle(slot.sprite, slot.definition.texture);
 
       const rowY = enemyLayout.hpRowY[index];
-      slot.hpText = this.add.text(448, rowY, "", this.textStyle(18, "#f5f1dc"));
-      this.add.rectangle(448, rowY + 22, 188, 10, 0x1c2732, 1).setOrigin(0, 0.5);
-      slot.hpFill = this.add.rectangle(450, rowY + 22, 184, 6, 0xd95745, 1).setOrigin(0, 0.5);
-      this.add.rectangle(448, rowY + 22, 188, 10).setStrokeStyle(1, 0xf1d585, 0.8).setOrigin(0, 0.5);
+      slot.hpText = this.add.text(448, rowY + 8, "", this.textStyle(18, "#f5f1dc"));
     });
 
     this.allies.forEach((ally, index) => {
@@ -423,13 +424,7 @@ export class BattleScene extends Phaser.Scene {
     this.setLog("どの敵を狙いますか?");
     alive.forEach((enemyIndex, buttonIndex) => {
       const slot = this.enemySlots[enemyIndex];
-      this.createBattleButton(
-        `${slot.definition.name}\nHP ${slot.hp}/${slot.definition.maxHp}`,
-        buttonIndex,
-        () => run(enemyIndex),
-        true,
-        true
-      );
+      this.createBattleButton(slot.definition.name, buttonIndex, () => run(enemyIndex), true, true);
     });
     this.createBattleButton("戻る", alive.length, () => {
       this.renderMainActions();
@@ -910,6 +905,17 @@ export class BattleScene extends Phaser.Scene {
     this.scene.resume("WorldScene");
   }
 
+  private getEnemyHpColor(slot: EnemySlot): string {
+    const ratio = slot.hp / slot.definition.maxHp;
+    if (ratio > 0.6) {
+      return ENEMY_HP_COLOR_HEALTHY;
+    }
+    if (ratio > 0.3) {
+      return ENEMY_HP_COLOR_HURT;
+    }
+    return ENEMY_HP_COLOR_CRITICAL;
+  }
+
   private refreshHud(): void {
     const save = getSave();
     const maxHp = getPlayerMaxHp();
@@ -920,8 +926,7 @@ export class BattleScene extends Phaser.Scene {
     this.playerHpFill?.setDisplaySize(184 * Phaser.Math.Clamp(save.hp / maxHp, 0, 1), 6);
 
     this.enemySlots.forEach((slot) => {
-      slot.hpText?.setText(`${slot.definition.name} HP ${Math.max(slot.hp, 0)}/${slot.definition.maxHp}`);
-      slot.hpFill?.setDisplaySize(184 * Phaser.Math.Clamp(slot.hp / slot.definition.maxHp, 0, 1), 6);
+      slot.hpText?.setText(slot.definition.name).setColor(this.getEnemyHpColor(slot));
     });
 
     this.allies.forEach((ally) => {
