@@ -56,12 +56,11 @@ import {
 import type { CompanionId } from "../data/companions";
 import type { EquipmentId, ItemId } from "../game/types";
 
-type BaseMenuTab = "items" | "skills" | "equipment" | "status";
-type MenuTab = BaseMenuTab | CompanionId;
+type MenuTab = "items" | "skills" | "equipment" | "status";
 type CharacterKey = "hero" | CompanionId;
 
-const BASE_TABS: BaseMenuTab[] = ["items", "skills", "equipment", "status"];
-const BASE_TAB_LABELS: Record<BaseMenuTab, string> = {
+const BASE_TABS: MenuTab[] = ["items", "skills", "equipment", "status"];
+const BASE_TAB_LABELS: Record<MenuTab, string> = {
   items: "持ち物",
   skills: "スキル",
   equipment: "装備",
@@ -154,7 +153,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private getVisibleTabs(): MenuTab[] {
-    return [...BASE_TABS, ...COMPANION_ORDER.filter((id) => hasCompanion(id))];
+    return BASE_TABS;
   }
 
   private getActiveAllies(): CompanionId[] {
@@ -162,9 +161,6 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private getTabLabel(tab: MenuTab): string {
-    if (isCompanionId(tab)) {
-      return COMPANIONS[tab].name;
-    }
     return BASE_TAB_LABELS[tab];
   }
 
@@ -219,10 +215,6 @@ export class MenuScene extends Phaser.Scene {
       this.renderEquipment();
     } else if (this.activeTab === "status") {
       this.renderStatus();
-    } else if (this.activeTab === "luna") {
-      this.renderCompanion();
-    } else if (this.activeTab === "geist") {
-      this.renderCompanion2();
     }
 
     this.finalizeContentScroll();
@@ -733,6 +725,9 @@ export class MenuScene extends Phaser.Scene {
     const startY = activeAllies.length > 0 ? 259 : 226;
 
     const save = getSave();
+    // EXP/level-up progress is shared party-wide and already shown under
+    // 主人公, so the companion view skips it to leave room for the talk
+    // section below without overflowing the panel.
     const rows = showingId
       ? [
           ["レベル", String(save.level)],
@@ -740,9 +735,7 @@ export class MenuScene extends Phaser.Scene {
           ["MP", `${getCompanionMp(showingId)}/${getCompanionMaxMp(showingId)}`],
           ["攻撃", String(getCompanionAttack(showingId))],
           ["防御", String(getCompanionDefense(showingId))],
-          ["素早さ", String(getCompanionSpeed(showingId))],
-          ["EXP", String(save.exp)],
-          ["次のレベルまで", String(Math.max(0, save.level * 12 - save.exp))]
+          ["素早さ", String(getCompanionSpeed(showingId))]
         ]
       : [
           ["レベル", String(save.level)],
@@ -768,52 +761,74 @@ export class MenuScene extends Phaser.Scene {
         this.add.text(342, y, value, this.textStyle(18, valueColor)).setDepth(102)
       );
     });
+
+    if (showingId) {
+      const talkSectionY = startY + rows.length * spacing + 22;
+      this.addContent(
+        this.add.rectangle(154, talkSectionY - 12, 480, 2, 0x2c3946, 1).setOrigin(0, 0.5).setDepth(102)
+      );
+      this.renderCompanionTalk(showingId, talkSectionY);
+    }
   }
 
-  private renderCompanion(): void {
-    if (!this.lunaLine && !this.lunaLoading) {
-      this.talkToLuna();
+  /**
+   * A companion's "ひとこと" (one-liner chat) lives right below its stats in
+   * the same 強さ tab, rather than in its own separate tab — selecting the
+   * companion via the toggle above is enough to reach both.
+   */
+  private renderCompanionTalk(id: CompanionId, y: number): void {
+    const line = id === "luna" ? this.lunaLine : this.geistLine;
+    const loading = id === "luna" && this.lunaLoading;
+
+    if (!line && !loading) {
+      this.talkToCompanion(id);
       return;
     }
 
+    const definition = COMPANIONS[id];
     const portrait = this.add
-      .sprite(214, 300, "companion-luna", 0)
+      .sprite(190, y + 34, definition.texture, 0)
       .setOrigin(0.5, 0.5)
-      .setScale(2.6)
+      .setScale(id === "luna" ? 1.6 : 1.3)
       .setDepth(102);
-    const idleKey = getCharacterIdleAnimationKey("companion-luna", "down");
+    const idleKey = getCharacterIdleAnimationKey(definition.texture, "down");
     if (this.anims.exists(idleKey)) {
       portrait.play(idleKey, true);
     }
     this.addContent(portrait);
 
     this.addContent(
-      this.add.text(154, 214, "ルナ", this.textStyle(18, "#f4df7e")).setDepth(102)
-    );
-    this.addContent(
       this.add
-        .text(316, 236, this.lunaLine || "……", {
+        .text(260, y, loading ? "……" : line || "……", {
           ...this.textStyle(16, "#fff4cf"),
-          wordWrap: { width: 300, useAdvancedWrap: true },
+          wordWrap: { width: 340, useAdvancedWrap: true },
           lineSpacing: 8
         })
         .setDepth(102)
     );
 
     const talkButton = this.add
-      .text(530, 412, this.lunaLoading ? "……" : "話す", {
-        ...this.textStyle(18, this.lunaLoading ? "#2a3036" : "#101820"),
-        backgroundColor: this.lunaLoading ? "#66707a" : "#f2d27a",
+      .text(530, y + 60, loading ? "……" : "話す", {
+        ...this.textStyle(18, loading ? "#2a3036" : "#101820"),
+        backgroundColor: loading ? "#66707a" : "#f2d27a",
         padding: { x: 18, y: 10 },
         fixedWidth: 92,
         align: "center"
       })
-      .setAlpha(this.lunaLoading ? 0.58 : 1)
+      .setAlpha(loading ? 0.58 : 1)
       .setDepth(102);
-    if (!this.lunaLoading) {
-      talkButton.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.talkToLuna());
+    if (!loading) {
+      talkButton.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.talkToCompanion(id));
     }
     this.addContent(talkButton);
+  }
+
+  private talkToCompanion(id: CompanionId): void {
+    if (id === "luna") {
+      this.talkToLuna();
+    } else if (id === "geist") {
+      this.talkToGeist();
+    }
   }
 
   private talkToLuna(): void {
@@ -849,53 +864,10 @@ export class MenuScene extends Phaser.Scene {
 
         this.lunaLine = line;
         this.lunaLoading = false;
-        if (this.activeTab === "luna") {
+        if (this.activeTab === "status" && this.statusCharacter === "luna") {
           this.renderContent();
         }
       });
-  }
-
-  private renderCompanion2(): void {
-    if (!this.geistLine) {
-      this.talkToGeist();
-      return;
-    }
-
-    const portrait = this.add
-      .sprite(214, 300, "companion-geist", 0)
-      .setOrigin(0.5, 0.5)
-      .setScale(2.15)
-      .setDepth(102);
-    const idleKey = getCharacterIdleAnimationKey("companion-geist", "down");
-    if (this.anims.exists(idleKey)) {
-      portrait.play(idleKey, true);
-    }
-    this.addContent(portrait);
-
-    this.addContent(
-      this.add.text(154, 214, "ガイスト", this.textStyle(18, "#f4df7e")).setDepth(102)
-    );
-    this.addContent(
-      this.add
-        .text(316, 236, this.geistLine, {
-          ...this.textStyle(16, "#fff4cf"),
-          wordWrap: { width: 300, useAdvancedWrap: true },
-          lineSpacing: 8
-        })
-        .setDepth(102)
-    );
-
-    const talkButton = this.add
-      .text(530, 412, "話す", {
-        ...this.textStyle(18, "#101820"),
-        backgroundColor: "#f2d27a",
-        padding: { x: 18, y: 10 },
-        fixedWidth: 92,
-        align: "center"
-      })
-      .setDepth(102);
-    talkButton.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.talkToGeist());
-    this.addContent(talkButton);
   }
 
   private talkToGeist(): void {
@@ -1108,7 +1080,7 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
-    const scrollableTab = this.activeTab === "status" || isCompanionId(this.activeTab);
+    const scrollableTab = this.activeTab === "status";
     if (scrollableTab && event.code === "ArrowUp") {
       this.scrollContentBy(-40);
       return;
@@ -1134,13 +1106,12 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
-    if ((event.code === "Space" || event.code === "Enter") && this.activeTab === "luna") {
-      this.talkToLuna();
-      return;
-    }
-
-    if ((event.code === "Space" || event.code === "Enter") && this.activeTab === "geist") {
-      this.talkToGeist();
+    if (
+      (event.code === "Space" || event.code === "Enter") &&
+      this.activeTab === "status" &&
+      isCompanionId(this.statusCharacter)
+    ) {
+      this.talkToCompanion(this.statusCharacter);
     }
   }
 
