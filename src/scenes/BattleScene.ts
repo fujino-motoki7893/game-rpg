@@ -260,7 +260,13 @@ export class BattleScene extends Phaser.Scene {
       this.createBattleButton(
         `${item.name} ${getItemRarityLabel(itemId)}\nx${count}`,
         index,
-        () => this.useBattleItem(itemId),
+        () => {
+          if (this.companionActive && (canItemHealHp(itemId) || canItemRestoreMp(itemId))) {
+            this.showItemTargetActions(itemId);
+            return;
+          }
+          this.useBattleItem(itemId);
+        },
         this.canUseBattleItem(itemId),
         true
       );
@@ -270,6 +276,23 @@ export class BattleScene extends Phaser.Scene {
       this.renderMainActions();
       this.setLog("あなたの番だ。");
     }, true, true);
+  }
+
+  private showItemTargetActions(itemId: ItemId): void {
+    if (!this.playerTurn) {
+      return;
+    }
+
+    const item = ITEMS[itemId];
+    this.clearButtons();
+    this.setLog(`${item.name}を誰に使いますか?`);
+
+    const canUseOnSelf = this.playerBenefitsFromItem(itemId);
+    const canUseOnCompanion = this.companionActive && this.companionBenefitsFromItem(itemId);
+
+    this.createBattleButton("自分", 0, () => this.useBattleItem(itemId, "self"), canUseOnSelf, true);
+    this.createBattleButton("ルナ", 1, () => this.useBattleItem(itemId, "companion"), canUseOnCompanion, true);
+    this.createBattleButton("戻る", 2, () => this.showItemActions(), true, true);
   }
 
   private showSkillActions(): void {
@@ -377,14 +400,14 @@ export class BattleScene extends Phaser.Scene {
     this.endPlayerTurn();
   }
 
-  private useBattleItem(itemId: ItemId): void {
+  private useBattleItem(itemId: ItemId, target: "self" | "companion" = "self"): void {
     if (!this.playerTurn) {
       return;
     }
 
     const item = ITEMS[itemId];
 
-    if (!this.playerBenefitsFromItem(itemId) && this.companionActive && this.companionBenefitsFromItem(itemId)) {
+    if (target === "companion") {
       const result = useItemOnCompanion(itemId);
       if (!result.used) {
         this.setLog(this.getItemFailureMessage(item.name, result.reason));
