@@ -102,7 +102,7 @@ const STAGE_LINES: Record<Exclude<LunaQuestStage, "casual">, LunaStaticLine> = {
   },
   "third-quest-complete": {
     id: "stage-third-quest-complete",
-    text: "ルナ: あなたのおかげで、あの日守れなかったものを、今度こそ守れた気がします。ありがとう。"
+    text: "ルナ: 谷には静けさが戻りましたね。でも、草原の奥に霧に隠れた里があるとか。私たちの冒険は、まだ始まったばかりです。"
   },
   "final-beast-defeated": {
     id: "stage-final-beast-defeated",
@@ -149,7 +149,7 @@ export function describeLunaStage(stage: LunaQuestStage): string {
     case "fourth-quest-active":
       return "月蝕の魔獣を倒した後に見つかった、霧に隠れた里から、深霧の魔王討伐を頼まれたばかり。これから坑道の奥へ向かうところ。";
     case "third-quest-complete":
-      return "月蝕の魔獣を討伐し、村長への報告も終えた。旅の大きな山場を越え、穏やかな安堵に包まれている。ルナは自分の故郷にまつわる古い傷が、今度こそ癒えたように感じている。";
+      return "月蝕の魔獣を討伐し、村長への報告も終えた。谷には穏やかな夜が戻ったが、草原の奥に霧隠れの里という新たな行き先が見えてきたところ。旅はここで終わりではなく、新しい章の始まりだとルナは感じている。";
     case "final-beast-defeated":
       return "月蝕の魔獣をちょうど討ち果たしたところ。ルナは自分の故郷にまつわる古い傷に触れており、感慨深い様子。";
     case "third-quest-active":

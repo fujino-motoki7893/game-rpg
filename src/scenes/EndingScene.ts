@@ -3,10 +3,10 @@ import Phaser from "phaser";
 const EPILOGUE_LINES: string[] = [
   "月蝕の魔獣は光の粒となって消え、谷に静寂が戻った。",
   "村長ローアン: 太陽石、月影石、そして今日の勇気。ストーンブルックは、幾度となくおぬしたちに救われたな。",
-  "ルナ: 私、この村に来てよかった。あなたと出会えて、本当によかった。",
-  "ルナ: これから先も、隣を歩かせてくださいね。",
-  "こうして、ストーンブルックの谷に再び穏やかな夜が訪れた。",
-  "- おわり -"
+  "ルナ: でも……この谷の外にも、まだ知られざる脅威が眠っているような気がします。",
+  "ルナ: これから先も、隣を歩かせてくださいね。私たちの冒険は、まだ終わっていませんから。",
+  "こうして、ストーンブルックの谷に穏やかな夜が戻った。だが、これは物語の終わりではない。",
+  "- 冒険の始まり -"
 ];
 
 export class EndingScene extends Phaser.Scene {
@@ -22,7 +22,7 @@ export class EndingScene extends Phaser.Scene {
     this.index = 0;
 
     this.add.rectangle(400, 320, 800, 640, 0x05070a, 0.94).setDepth(0);
-    this.add.text(400, 130, "エピローグ", this.textStyle(28, "#f4df7e")).setOrigin(0.5).setDepth(1);
+    this.add.text(400, 130, "冒険の始まり", this.textStyle(28, "#f4df7e")).setOrigin(0.5).setDepth(1);
     this.add.rectangle(400, 170, 360, 2, 0xd6b56a, 0.7).setDepth(1);
     this.lineText = this.add
       .text(400, 320, "", {

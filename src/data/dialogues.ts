@@ -172,7 +172,7 @@ export function getObjective(): string {
   }
 
   if (hasFlag("thirdQuestComplete")) {
-    return "谷に戻った平穏を見守る";
+    return "草原の奥に現れた霧隠れの里を訪ねる";
   }
 
   if (hasFlag("finalBeastDefeated")) {
