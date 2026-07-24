@@ -42,7 +42,11 @@ export class UIScene extends Phaser.Scene {
   private minimapPlayerDot?: Phaser.GameObjects.Arc;
   private minimapTransform = { offsetX: 0, offsetY: 0, scale: 1 };
   private currentMapDef?: MapDefinition;
-  private dungeonRevealed = new WeakMap<MapDefinition, Set<number>>();
+  // Keyed by "tier-floor" rather than the MapDefinition object itself:
+  // resolveMap() rebuilds a fresh object (`{ ...cached, tier }`) every time
+  // the player re-enters an already-generated floor, so a WeakMap keyed by
+  // reference would forget everything the moment you left and came back.
+  private dungeonRevealed = new Map<string, Set<number>>();
 
   constructor() {
     super("UIScene");
@@ -129,11 +133,16 @@ export class UIScene extends Phaser.Scene {
     this.redrawMinimap(map);
   }
 
+  private getDungeonFloorKey(map: MapDefinition): string {
+    return `${map.tier ?? 1}-${map.floor ?? 1}`;
+  }
+
   private getRevealedTiles(map: MapDefinition): Set<number> {
-    let revealed = this.dungeonRevealed.get(map);
+    const key = this.getDungeonFloorKey(map);
+    let revealed = this.dungeonRevealed.get(key);
     if (!revealed) {
       revealed = new Set<number>();
-      this.dungeonRevealed.set(map, revealed);
+      this.dungeonRevealed.set(key, revealed);
     }
     return revealed;
   }
