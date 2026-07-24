@@ -811,7 +811,8 @@ export class WorldScene extends Phaser.Scene {
     let onDialogueComplete: (() => void) | undefined;
 
     if (npc.id === "healer") {
-      if (!hasFlag("healerHerbGiven")) {
+      const firstHerbGift = !hasFlag("healerHerbGiven");
+      if (firstHerbGift) {
         addItem("herb", 1);
         markFlag("healerHerbGiven");
       }
@@ -825,6 +826,9 @@ export class WorldScene extends Phaser.Scene {
         restoreCompanionMp(getCompanionMaxMp());
       }
       stateChanged = true;
+      dialogue = firstHerbGift
+        ? ["ミラ: 傷を癒しましょう。", "ミラ: 予備の薬草も荷物に入れておきました。"]
+        : ["ミラ: 傷を癒しましょう。"];
     }
 
     if (npc.id === "luna") {

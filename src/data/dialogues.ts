@@ -70,13 +70,6 @@ export function getNpcDialogue(npcId: string): string[] {
     ];
   }
 
-  if (npcId === "healer") {
-    return [
-      "ミラ: 傷を癒しましょう。",
-      "ミラ: 予備の薬草も荷物に入れておきました。"
-    ];
-  }
-
   if (npcId === "shopkeeper") {
     return ["道具屋ニコ: 旅の準備なら、うちに任せて。"];
   }
