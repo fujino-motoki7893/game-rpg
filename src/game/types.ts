@@ -179,6 +179,8 @@ export interface GameSave {
 }
 
 export interface BattlePayload {
+  /** The map enemy that triggered the fight; markEnemyDefeated() uses this to remove it from the map. */
   enemyInstanceId: string;
-  enemyKey: string;
+  /** 1-3 enemies in this fight. Any extras beyond the first are ambush reinforcements with no map presence of their own. */
+  enemyKeys: string[];
 }

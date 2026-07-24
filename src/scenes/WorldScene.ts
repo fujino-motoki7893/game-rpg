@@ -1041,9 +1041,25 @@ export class WorldScene extends Phaser.Scene {
 
     this.scene.launch("BattleScene", {
       enemyInstanceId: enemy.id,
-      enemyKey: enemy.enemyKey
+      enemyKeys: this.buildEncounterGroup(enemy)
     });
     this.scene.pause();
+  }
+
+  /**
+   * From dungeon tier 3 onward, a non-boss encounter can pull in 1-3 of the
+   * same enemy at once. Bosses (guardians) always fight alone, and field
+   * encounters are never grouped.
+   */
+  private buildEncounterGroup(enemy: EnemySpawn): string[] {
+    const definition = ENEMIES[enemy.enemyKey];
+    const isGroupableDungeonFloor = this.currentMap.id === "dungeon" && (this.currentMap.tier ?? 1) >= 3;
+    if (!isGroupableDungeonFloor || definition?.boss) {
+      return [enemy.enemyKey];
+    }
+
+    const count = Phaser.Math.Between(1, 3);
+    return Array.from({ length: count }, () => enemy.enemyKey);
   }
 
   private canOpenMenu(): boolean {

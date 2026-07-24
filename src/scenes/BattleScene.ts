@@ -60,6 +60,19 @@ interface AllySlot {
   hpFill?: Phaser.GameObjects.Rectangle;
 }
 
+interface EnemySlot {
+  key: string;
+  definition: EnemyDefinition;
+  hp: number;
+  x: number;
+  alive: boolean;
+  sprite?: Phaser.GameObjects.Sprite;
+  hpText?: Phaser.GameObjects.Text;
+  hpFill?: Phaser.GameObjects.Rectangle;
+}
+
+type TurnActor = CompanionId | "player" | `enemy-${number}`;
+
 /**
  * Pixel layout by party size — the one piece of this scene that a new
  * companion genuinely can't inherit for free, since where sprites/HP rows
@@ -74,25 +87,28 @@ const ALLY_LAYOUT_BY_COUNT: Record<number, { playerX: number; allyX: number[]; h
   2: { playerX: 110, allyX: [280, 195], hpRowY: [342, 380], logY: 408 }
 };
 
+/** Sprite/HP-row placement for a 1-3 enemy encounter group. */
+const ENEMY_LAYOUT_BY_COUNT: Record<number, { enemyX: number[]; hpRowY: number[] }> = {
+  1: { enemyX: [560], hpRowY: [300] },
+  2: { enemyX: [520, 612], hpRowY: [300, 338] },
+  3: { enemyX: [480, 560, 640], hpRowY: [300, 338, 376] }
+};
+
 export class BattleScene extends Phaser.Scene {
-  private enemy!: EnemyDefinition;
+  private enemySlots: EnemySlot[] = [];
   private enemyInstanceId = "";
-  private enemyHp = 0;
   private playerTurn = true;
   private battleOver = false;
   private allies: AllySlot[] = [];
-  private turnOrder: Array<CompanionId | "player" | "enemy"> = [];
+  private turnOrder: TurnActor[] = [];
   private turnIndex = 0;
   private pendingAdvanceAt?: number;
   private playerX = 205;
   private logY = 390;
   private playerSprite?: Phaser.GameObjects.Sprite;
-  private enemySprite?: Phaser.GameObjects.Sprite;
   private playerHpFill?: Phaser.GameObjects.Rectangle;
-  private enemyHpFill?: Phaser.GameObjects.Rectangle;
   private logText?: Phaser.GameObjects.Text;
   private playerHpText?: Phaser.GameObjects.Text;
-  private enemyHpText?: Phaser.GameObjects.Text;
   private buttons: Phaser.GameObjects.Text[] = [];
 
   constructor() {
@@ -102,15 +118,22 @@ export class BattleScene extends Phaser.Scene {
   create(payload: BattlePayload): void {
     this.buttons = [];
     this.playerSprite = undefined;
-    this.enemySprite = undefined;
     this.playerHpFill = undefined;
-    this.enemyHpFill = undefined;
     this.logText = undefined;
     this.playerHpText = undefined;
-    this.enemyHpText = undefined;
-    this.enemy = ENEMIES[payload.enemyKey] ?? ENEMIES.goblin;
     this.enemyInstanceId = payload.enemyInstanceId;
-    this.enemyHp = this.enemy.maxHp;
+    const enemyKeys = payload.enemyKeys.length > 0 ? payload.enemyKeys : ["goblin"];
+    const enemyLayout = ENEMY_LAYOUT_BY_COUNT[enemyKeys.length] ?? ENEMY_LAYOUT_BY_COUNT[1];
+    this.enemySlots = enemyKeys.map((key, index) => {
+      const definition = ENEMIES[key] ?? ENEMIES.goblin;
+      return {
+        key,
+        definition,
+        hp: definition.maxHp,
+        x: enemyLayout.enemyX[index],
+        alive: true
+      };
+    });
     this.playerTurn = true;
     this.battleOver = false;
     this.turnOrder = [];
@@ -127,29 +150,34 @@ export class BattleScene extends Phaser.Scene {
     this.add.rectangle(400, 324, 660, 456, 0x101923, 0.98).setStrokeStyle(3, 0xd8bc72);
     this.add.rectangle(400, 134, 600, 2, 0xf0d98a, 0.75);
     this.add.text(116, 112, "ターンバトル", this.textStyle(24, "#f6e4a4")).setShadow(2, 2, "#000000", 3);
-    this.add.ellipse(560, 286, 106, 22, 0x05080b, 0.36);
     this.add.ellipse(this.playerX, 308, 80, 18, 0x05080b, 0.36);
-    this.enemySprite = this.add
-      .sprite(560, 218, this.enemy.texture, 0)
-      .setOrigin(0.5, getCharacterOriginY(this.enemy.texture))
-      .setScale(getCharacterBattleScale(this.enemy.texture, 3))
-      .setDepth(5);
     this.playerSprite = this.add
       .sprite(this.playerX, 258, "player", 0)
       .setOrigin(0.5, getCharacterOriginY("player"))
       .setScale(getCharacterBattleScale("player", 2.6))
       .setDepth(5);
-    this.playCharacterIdle(this.enemySprite, this.enemy.texture);
     this.playCharacterIdle(this.playerSprite, "player");
 
     this.playerHpText = this.add.text(116, 300, "", this.textStyle(17, "#f5f1dc"));
-    this.enemyHpText = this.add.text(448, 300, "", this.textStyle(18, "#f5f1dc"));
     this.add.rectangle(116, 322, 188, 10, 0x1c2732, 1).setOrigin(0, 0.5);
-    this.add.rectangle(448, 322, 188, 10, 0x1c2732, 1).setOrigin(0, 0.5);
     this.playerHpFill = this.add.rectangle(118, 322, 184, 6, 0xd95745, 1).setOrigin(0, 0.5);
-    this.enemyHpFill = this.add.rectangle(450, 322, 184, 6, 0xd95745, 1).setOrigin(0, 0.5);
     this.add.rectangle(116, 322, 188, 10).setStrokeStyle(1, 0xf1d585, 0.8).setOrigin(0, 0.5);
-    this.add.rectangle(448, 322, 188, 10).setStrokeStyle(1, 0xf1d585, 0.8).setOrigin(0, 0.5);
+
+    this.enemySlots.forEach((slot, index) => {
+      this.add.ellipse(slot.x, 286, 106, 22, 0x05080b, 0.36);
+      slot.sprite = this.add
+        .sprite(slot.x, 218, slot.definition.texture, 0)
+        .setOrigin(0.5, getCharacterOriginY(slot.definition.texture))
+        .setScale(getCharacterBattleScale(slot.definition.texture, 3))
+        .setDepth(5);
+      this.playCharacterIdle(slot.sprite, slot.definition.texture);
+
+      const rowY = enemyLayout.hpRowY[index];
+      slot.hpText = this.add.text(448, rowY, "", this.textStyle(18, "#f5f1dc"));
+      this.add.rectangle(448, rowY + 22, 188, 10, 0x1c2732, 1).setOrigin(0, 0.5);
+      slot.hpFill = this.add.rectangle(450, rowY + 22, 184, 6, 0xd95745, 1).setOrigin(0, 0.5);
+      this.add.rectangle(448, rowY + 22, 188, 10).setStrokeStyle(1, 0xf1d585, 0.8).setOrigin(0, 0.5);
+    });
 
     this.allies.forEach((ally, index) => {
       const definition = COMPANIONS[ally.id];
@@ -175,7 +203,7 @@ export class BattleScene extends Phaser.Scene {
     });
 
     this.refreshHud();
-    this.setLog(`${this.enemy.name}が行く手をふさいだ。`);
+    this.setLog(`${this.describeEnemyGroupNames()}が行く手をふさいだ。`);
     this.turnOrder = this.computeTurnOrder();
     this.turnIndex = 0;
     if (this.turnOrder[0] === "player") {
@@ -205,11 +233,19 @@ export class BattleScene extends Phaser.Scene {
     return this.allies.some((ally) => ally.id === id);
   }
 
-  private computeTurnOrder(): Array<CompanionId | "player" | "enemy"> {
-    const actors: Array<{ id: CompanionId | "player" | "enemy"; speed: number }> = [
-      { id: "player", speed: Math.max(1, getPlayerSpeed()) },
-      { id: "enemy", speed: Math.max(1, this.enemy.speed) }
+  private enemySlotIndexFromActor(actor: TurnActor): number | undefined {
+    return actor.startsWith("enemy-") ? Number(actor.slice("enemy-".length)) : undefined;
+  }
+
+  private computeTurnOrder(): TurnActor[] {
+    const actors: Array<{ id: TurnActor; speed: number }> = [
+      { id: "player", speed: Math.max(1, getPlayerSpeed()) }
     ];
+    this.enemySlots.forEach((slot, index) => {
+      if (slot.alive) {
+        actors.push({ id: `enemy-${index}`, speed: Math.max(1, slot.definition.speed) });
+      }
+    });
     this.allies.forEach((ally) => {
       if (getCompanionHp(ally.id) > 0) {
         actors.push({ id: ally.id, speed: Math.max(1, getCompanionSpeed(ally.id)) });
@@ -239,6 +275,13 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
+    const enemyIndex = this.enemySlotIndexFromActor(actor);
+    if (enemyIndex !== undefined && !this.enemySlots[enemyIndex]?.alive) {
+      this.turnIndex += 1;
+      this.resolveCurrentTurn(announce);
+      return;
+    }
+
     if (actor === "player") {
       this.playerTurn = true;
       this.renderMainActions();
@@ -251,8 +294,8 @@ export class BattleScene extends Phaser.Scene {
     this.playerTurn = false;
     if (isCompanionId(actor)) {
       this.runAllyTurn(actor);
-    } else {
-      this.runEnemyTurn();
+    } else if (enemyIndex !== undefined) {
+      this.runEnemyTurn(enemyIndex);
     }
   }
 
@@ -352,6 +395,48 @@ export class BattleScene extends Phaser.Scene {
     return options;
   }
 
+  private getAliveEnemyIndices(): number[] {
+    return this.enemySlots.reduce<number[]>((indices, slot, index) => {
+      if (slot.alive) {
+        indices.push(index);
+      }
+      return indices;
+    }, []);
+  }
+
+  /**
+   * With one enemy left standing there's nothing to choose, so the attack
+   * resolves immediately just like before groups existed. With more than
+   * one alive, show a target picker before resolving.
+   */
+  private chooseEnemyTargetForPlayer(run: (index: number) => void): void {
+    const alive = this.getAliveEnemyIndices();
+    if (alive.length === 0) {
+      return;
+    }
+    if (alive.length === 1) {
+      run(alive[0]);
+      return;
+    }
+
+    this.clearButtons();
+    this.setLog("どの敵を狙いますか?");
+    alive.forEach((enemyIndex, buttonIndex) => {
+      const slot = this.enemySlots[enemyIndex];
+      this.createBattleButton(
+        `${slot.definition.name}\nHP ${slot.hp}/${slot.definition.maxHp}`,
+        buttonIndex,
+        () => run(enemyIndex),
+        true,
+        true
+      );
+    });
+    this.createBattleButton("戻る", alive.length, () => {
+      this.renderMainActions();
+      this.setLog("あなたの番だ。");
+    }, true, true);
+  }
+
   private showSkillActions(): void {
     if (!this.playerTurn) {
       return;
@@ -437,25 +522,66 @@ export class BattleScene extends Phaser.Scene {
     return button;
   }
 
+  /**
+   * Applies damage to one enemy slot and reports back what happened, so
+   * every attacker (player attack, player skill, ally turn) can render its
+   * own flavor of log line around the same bookkeeping.
+   */
+  private dealDamageToEnemy(
+    index: number,
+    damage: number,
+    color: string
+  ): { justDefeated: boolean; allDefeated: boolean } {
+    const slot = this.enemySlots[index];
+    slot.hp = Math.max(0, slot.hp - damage);
+    let justDefeated = false;
+    if (slot.hp <= 0 && slot.alive) {
+      slot.alive = false;
+      justDefeated = true;
+      this.markEnemySlotDefeated(slot);
+    }
+
+    this.refreshHud();
+    this.flashTarget(slot.sprite);
+    this.showDamageNumber(damage, slot.x, 146, color);
+
+    return { justDefeated, allDefeated: this.enemySlots.every((other) => !other.alive) };
+  }
+
+  private markEnemySlotDefeated(slot: EnemySlot): void {
+    slot.sprite?.setTint(0x33363b);
+    slot.sprite?.setAlpha(0.35);
+  }
+
+  private describeEnemyGroupNames(): string {
+    const nameCounts = new Map<string, number>();
+    this.enemySlots.forEach((slot) => {
+      nameCounts.set(slot.definition.name, (nameCounts.get(slot.definition.name) ?? 0) + 1);
+    });
+    return Array.from(nameCounts.entries())
+      .map(([name, count]) => (count > 1 ? `${name}×${count}` : name))
+      .join("、");
+  }
+
   private attack(): void {
     if (!this.playerTurn) {
       return;
     }
 
-    const attack = getPlayerAttack();
-    const damage = Phaser.Math.Between(Math.max(2, attack - 2), attack + 3);
-    this.enemyHp = Math.max(0, this.enemyHp - damage);
-    this.refreshHud();
-    this.flashTarget(this.enemySprite);
-    this.showDamageNumber(damage, 560, 146, "#ffe08a");
+    this.chooseEnemyTargetForPlayer((index) => {
+      const attack = getPlayerAttack();
+      const damage = Phaser.Math.Between(Math.max(2, attack - 2), attack + 3);
+      const { justDefeated, allDefeated } = this.dealDamageToEnemy(index, damage, "#ffe08a");
 
-    if (this.enemyHp <= 0) {
-      this.winBattle(damage);
-      return;
-    }
+      if (allDefeated) {
+        this.winBattle(damage);
+        return;
+      }
 
-    this.setLog(`${damage}のダメージを与えた。`);
-    this.endPlayerTurn();
+      const defeatedNote = justDefeated ? `${this.enemySlots[index].definition.name}を倒した!` : "";
+      this.setLog(`${damage}のダメージを与えた。${defeatedNote}`);
+      this.endPlayerTurn();
+    });
   }
 
   private useBattleItem(itemId: ItemId, target: "self" | CompanionId = "self"): void {
@@ -563,19 +689,19 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    const damage = this.calculateSkillDamage(skill);
-    this.enemyHp = Math.max(0, this.enemyHp - damage);
-    this.refreshHud();
-    this.flashTarget(this.enemySprite);
-    this.showDamageNumber(damage, 560, 146, "#ffe08a");
+    this.chooseEnemyTargetForPlayer((index) => {
+      const damage = this.calculateSkillDamage(skill);
+      const { justDefeated, allDefeated } = this.dealDamageToEnemy(index, damage, "#ffe08a");
 
-    if (this.enemyHp <= 0) {
-      this.winBattle(damage);
-      return;
-    }
+      if (allDefeated) {
+        this.winBattle(damage);
+        return;
+      }
 
-    this.setLog(`${skill.name}！${damage}のダメージを与えた。`);
-    this.endPlayerTurn();
+      const defeatedNote = justDefeated ? `${this.enemySlots[index].definition.name}を倒した!` : "";
+      this.setLog(`${skill.name}！${damage}のダメージを与えた。${defeatedNote}`);
+      this.endPlayerTurn();
+    });
   }
 
   private flee(): void {
@@ -583,7 +709,7 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    if (this.enemy.boss) {
+    if (this.enemySlots.some((slot) => slot.definition.boss)) {
       this.setLog("守護者が退路を封じている。");
       this.endPlayerTurn();
       return;
@@ -643,25 +769,29 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
+    const targetIndex = this.getAliveEnemyIndices()[0];
+    if (targetIndex === undefined) {
+      this.advanceTurn(300);
+      return;
+    }
+
     const baseDamage = Math.round(getCompanionAttack(id) * action.skill.effect.multiplier);
     const damage = Phaser.Math.Between(Math.max(1, baseDamage - 2), baseDamage + 3);
-    this.enemyHp = Math.max(0, this.enemyHp - damage);
-    this.refreshHud();
-    this.flashTarget(this.enemySprite);
-    this.showDamageNumber(damage, 560, 146, definition.hpBarColorHex);
+    const { justDefeated, allDefeated } = this.dealDamageToEnemy(targetIndex, damage, definition.hpBarColorHex);
 
-    if (this.enemyHp <= 0) {
+    if (allDefeated) {
       this.winBattle(damage);
       return;
     }
 
-    this.setLog(`${definition.name}の${action.skill.name}！${damage}のダメージを与えた。`);
+    const defeatedNote = justDefeated ? `${this.enemySlots[targetIndex].definition.name}を倒した!` : "";
+    this.setLog(`${definition.name}の${action.skill.name}！${damage}のダメージを与えた。${defeatedNote}`);
     this.advanceTurn(700);
   }
 
-  private runEnemyTurn(): void {
+  private runEnemyTurn(index: number): void {
     try {
-      this.enemyTurn();
+      this.enemyTurn(index);
     } catch (error) {
       console.error(error);
       this.pendingAdvanceAt = undefined;
@@ -691,13 +821,14 @@ export class BattleScene extends Phaser.Scene {
     return activeAllies[index].id;
   }
 
-  private enemyTurn(): void {
-    const rawDamage = Phaser.Math.Between(Math.max(1, this.enemy.attack - 2), this.enemy.attack + 2);
+  private enemyTurn(index: number): void {
+    const definition = this.enemySlots[index].definition;
+    const rawDamage = Phaser.Math.Between(Math.max(1, definition.attack - 2), definition.attack + 2);
     const target = this.chooseEnemyTarget();
 
     if (isCompanionId(target)) {
       const ally = this.getAlly(target);
-      const definition = COMPANIONS[target];
+      const allyDefinition = COMPANIONS[target];
       const damage = Math.max(1, rawDamage - getCompanionDefense(target));
       damageCompanion(target, damage);
       const hpLeft = getCompanionHp(target);
@@ -706,8 +837,8 @@ export class BattleScene extends Phaser.Scene {
       this.showDamageNumber(damage, ally?.x ?? this.playerX, 164, "#ff9a7a");
       this.setLog(
         hpLeft <= 0
-          ? `${this.enemy.name}の攻撃。${definition.name}は倒れてしまった。`
-          : `${this.enemy.name}の攻撃。${definition.name}が${damage}のダメージを受けた。`
+          ? `${definition.name}の攻撃。${allyDefinition.name}は倒れてしまった。`
+          : `${definition.name}の攻撃。${allyDefinition.name}が${damage}のダメージを受けた。`
       );
       this.advanceTurn(700);
       return;
@@ -720,11 +851,11 @@ export class BattleScene extends Phaser.Scene {
     this.showDamageNumber(damage, this.playerX, 190, "#ff9a7a");
 
     if (getSave().hp <= 0) {
-      this.loseBattle(damage);
+      this.loseBattle(definition.name, damage);
       return;
     }
 
-    this.setLog(`${this.enemy.name}の攻撃。${damage}のダメージを受けた。`);
+    this.setLog(`${definition.name}の攻撃。${damage}のダメージを受けた。`);
     this.advanceTurn(700);
   }
 
@@ -732,14 +863,16 @@ export class BattleScene extends Phaser.Scene {
     this.battleOver = true;
     this.pendingAdvanceAt = undefined;
     markEnemyDefeated(this.enemyInstanceId);
-    const reward = grantReward(this.enemy.exp, this.enemy.gold);
+    const totalExp = this.enemySlots.reduce((sum, slot) => sum + slot.definition.exp, 0);
+    const totalGold = this.enemySlots.reduce((sum, slot) => sum + slot.definition.gold, 0);
+    const reward = grantReward(totalExp, totalGold);
     const learnedText =
       reward.learnedSkillIds.length > 0
         ? ` ${reward.learnedSkillIds.map((skillId) => SKILLS[skillId].name).join("、")}を覚えた！`
         : "";
     const levelText = reward.leveledUp ? ` レベルアップ！${learnedText}` : "";
     this.setLog(
-      `${lastDamage}のダメージを与えた。${this.enemy.name}を倒した。EXP +${this.enemy.exp}、G +${this.enemy.gold}。${levelText}`
+      `${lastDamage}のダメージを与えた。${this.describeEnemyGroupNames()}を倒した。EXP +${totalExp}、G +${totalGold}。${levelText}`
     );
     this.refreshHud();
     this.game.events.emit(GAME_EVENTS.stateChanged);
@@ -747,7 +880,7 @@ export class BattleScene extends Phaser.Scene {
     this.time.delayedCall(1200, () => this.closeBattle("勝利"));
   }
 
-  private loseBattle(lastDamage: number): void {
+  private loseBattle(attackerName: string, lastDamage: number): void {
     this.battleOver = true;
     this.pendingAdvanceAt = undefined;
     const save = getSave();
@@ -756,7 +889,7 @@ export class BattleScene extends Phaser.Scene {
     save.gold = Math.floor(save.gold * 0.8);
     persistSave();
     this.setLog(
-      `${this.enemy.name}の攻撃。${lastDamage}のダメージを受けた。気がつくとストーンブルック村に戻っていた。`
+      `${attackerName}の攻撃。${lastDamage}のダメージを受けた。気がつくとストーンブルック村に戻っていた。`
     );
     this.setButtonsEnabled(false);
     this.time.delayedCall(1400, () => {
@@ -784,12 +917,12 @@ export class BattleScene extends Phaser.Scene {
     this.playerHpText?.setText(
       `勇者 HP ${save.hp}/${maxHp}  MP ${save.mp}/${maxMp}  道具 ${getTotalItemCount()}`
     );
-    this.enemyHpText?.setText(`${this.enemy.name} HP ${this.enemyHp}/${this.enemy.maxHp}`);
     this.playerHpFill?.setDisplaySize(184 * Phaser.Math.Clamp(save.hp / maxHp, 0, 1), 6);
-    this.enemyHpFill?.setDisplaySize(
-      184 * Phaser.Math.Clamp(this.enemyHp / this.enemy.maxHp, 0, 1),
-      6
-    );
+
+    this.enemySlots.forEach((slot) => {
+      slot.hpText?.setText(`${slot.definition.name} HP ${Math.max(slot.hp, 0)}/${slot.definition.maxHp}`);
+      slot.hpFill?.setDisplaySize(184 * Phaser.Math.Clamp(slot.hp / slot.definition.maxHp, 0, 1), 6);
+    });
 
     this.allies.forEach((ally) => {
       const definition = COMPANIONS[ally.id];
