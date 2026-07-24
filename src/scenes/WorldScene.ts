@@ -709,6 +709,11 @@ export class WorldScene extends Phaser.Scene {
   private moveEnemy(enemyObject: EnemyVisual, tile: TilePosition): void {
     const direction = this.getDirectionBetween(enemyObject.tile, tile);
     enemyObject.tile = tile;
+    // Keep the underlying spawn record in sync so a same-map reload (e.g.
+    // opening a chest, or returning from battle) rebuilds enemies at their
+    // current patrol position instead of snapping them back to spawn.
+    enemyObject.enemy.x = tile.x;
+    enemyObject.enemy.y = tile.y;
     const texture = ENEMIES[enemyObject.enemy.enemyKey]?.texture ?? "enemy-goblin";
     if (direction) {
       this.playCharacterWalk(enemyObject.image, texture, direction);
