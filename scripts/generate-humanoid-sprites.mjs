@@ -37,7 +37,9 @@ const HAIR_PALETTES = {
 };
 
 // Layers are composited bottom-to-top in this order (matches the source
-// project's zPos ordering: body < feet < legs < torso < hair).
+// project's zPos ordering: cape(back) < body < head < feet < legs < torso
+// < shoulders < cape(front) < hair < hat). A character only needs to set
+// the slots it actually uses.
 const CHARACTERS = {
   player: {
     body: "body/bodies/male/walk.png",
@@ -81,6 +83,24 @@ const CHARACTERS = {
     torso: "dress/sash/female/walk/lavender.png",
     hair: "platinum",
     hairStyle: "long"
+  },
+  // Geist, the tier-4 armored ally: full plate + a horned greathelm (no face
+  // ever shows, fitting "a will left behind inside the armor") and a
+  // tattered cape (long dormant before the player wakes it). The plate armor
+  // doesn't cover the hands/forearms, so a warm bronze tint made that bare
+  // skin read as human flesh; this rust/oxidized-iron tint instead makes
+  // even the exposed hands look inert, keeping the "empty armor" read.
+  "companion-geist": {
+    body: "body/bodies/male/walk.png",
+    head: "head/heads/human/male/walk.png",
+    feet: "feet/armour/plate/male/walk.png",
+    legs: "legs/armour/plate/male/walk.png",
+    torso: "torso/armour/plate/male/walk.png",
+    shoulders: "shoulders/pauldrons/male/walk.png",
+    hat: "hat/helmet/horned/adult/walk.png",
+    capeBg: "cape/tattered/bg/walk.png",
+    capeFg: "cape/tattered/fg/walk.png",
+    tint: { r: 165, g: 85, b: 60 }
   }
 };
 
@@ -146,28 +166,39 @@ async function recolorHair(inputPath, targetVariant, tolerance = 6) {
 }
 
 async function buildCharacterSheet(key, config) {
-  const layerPaths = [];
+  // Bottom-to-top stacking order, matching the source project's zPos
+  // convention: cape(back) < body < head < feet < legs < torso < shoulders
+  // < cape(front) < hair < hat. Any slot a character doesn't use is skipped.
+  const stack = [];
 
-  for (const slot of ["body", "feet", "legs", "torso"]) {
+  if (config.capeBg) {
+    stack.push(await fetchToCache(config.capeBg));
+  }
+  stack.push(await fetchToCache(config.body));
+  stack.push(await fetchToCache(config.head));
+  for (const slot of ["feet", "legs", "torso", "shoulders"]) {
     if (config[slot]) {
-      layerPaths.push(await fetchToCache(config[slot]));
+      stack.push(await fetchToCache(config[slot]));
     }
   }
-  const headPath = await fetchToCache(config.head);
+  if (config.capeFg) {
+    stack.push(await fetchToCache(config.capeFg));
+  }
+  if (config.hair) {
+    const hairSourcePath = await fetchToCache(`hair/${config.hairStyle ?? "plain"}/adult/walk.png`);
+    stack.push(await recolorHair(hairSourcePath, config.hair));
+  }
+  if (config.hat) {
+    stack.push(await fetchToCache(config.hat));
+  }
 
-  const hairSourcePath = await fetchToCache(`hair/${config.hairStyle ?? "plain"}/adult/walk.png`);
-  const hairBuffer = await recolorHair(hairSourcePath, config.hair);
+  const composites = stack.slice(1).map((input) => ({ input, left: 0, top: 0 }));
 
-  const composites = [
-    { input: headPath, left: 0, top: 0 },
-    ...layerPaths.slice(1).map((p) => ({ input: p, left: 0, top: 0 })),
-    { input: hairBuffer, left: 0, top: 0 }
-  ];
-
-  const fullSheet = await sharp(layerPaths[0])
-    .composite(composites)
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+  let fullSheetImage = sharp(stack[0]).composite(composites);
+  if (config.tint) {
+    fullSheetImage = fullSheetImage.tint(config.tint);
+  }
+  const fullSheet = await fullSheetImage.raw().toBuffer({ resolveWithObject: true });
 
   const outputCanvas = sharp({
     create: {

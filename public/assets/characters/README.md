@@ -4,8 +4,8 @@ Phaserが読み込む固定グリッドPNGを配置するフォルダです。
 Asepriteで書き出したPNGは、下記の形式とファイル名を維持して差し替えてください。
 
 人型キャラクター(`player` / `npc-elder` / `npc-healer` / `npc-shopkeeper` / `npc-armorer` /
-`companion-luna`)と一部モンスター(`enemy-skeleton` / `enemy-goblin` / `enemy-mage`)は
-Universal LPC Spritesheet Character Generator の素材を合成して生成しています。
+`companion-luna` / `companion-geist`)と一部モンスター(`enemy-skeleton` / `enemy-goblin` /
+`enemy-mage`)は Universal LPC Spritesheet Character Generator の素材を合成して生成しています。
 `enemy-guardian` / `enemy-bat` / `enemy-slime` は OpenGameArt.org の単体モンスター素材を
 切り出して生成しています。残り(`enemy-wolf` / `enemy-mimic`)は方向別グリッドにきれいに
 収まる素材が見つかっていないため、プロシージャル生成のままです。
@@ -29,6 +29,7 @@ Universal LPC Spritesheet Character Generator の素材を合成して生成し�
 - `npc-shopkeeper.png`: 48x48
 - `npc-armorer.png`: 48x48
 - `companion-luna.png`: 48x48
+- `companion-geist.png`: 48x48
 - `enemy-slime.png`: 32x32
 - `enemy-goblin.png`: 32x32
 - `enemy-bat.png`: 32x32

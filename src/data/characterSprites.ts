@@ -162,8 +162,8 @@ export const CHARACTER_SPRITES: CharacterSpriteDefinition[] = [
     path: "assets/characters/companion-geist.png",
     frameWidth: 48,
     frameHeight: 48,
-    role: "creature",
-    battleScale: 2.15
+    role: "humanoid",
+    battleScale: 1.9
   }
 ];
 

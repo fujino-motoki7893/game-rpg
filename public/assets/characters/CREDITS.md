@@ -1,10 +1,11 @@
 # キャラクター素材クレジット
 
 `player.png` / `npc-elder.png` / `npc-healer.png` / `npc-shopkeeper.png` / `npc-armorer.png` /
-`companion-luna.png` および `enemy-skeleton.png` / `enemy-goblin.png` / `enemy-mage.png` は
+`companion-luna.png` / `companion-geist.png` および `enemy-skeleton.png` / `enemy-goblin.png` /
+`enemy-mage.png` は
 [Universal LPC Spritesheet Character Generator](https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator)
-が配布する素材(body/head/hair/torso/legs/feet/hatの各レイヤー)を `scripts/generate-humanoid-sprites.mjs` /
-`scripts/generate-monster-sprites.mjs` で合成して生成しています。
+が配布する素材(body/head/hair/torso/legs/feet/shoulders/hat/capeの各レイヤー)を
+`scripts/generate-humanoid-sprites.mjs` / `scripts/generate-monster-sprites.mjs` で合成して生成しています。
 
 `enemy-guardian.png` / `enemy-bat.png` / `enemy-slime.png` は、LPCコミュニティの作者による
 OpenGameArt.org上の単体モンスター素材(人型骨格に依らない独自シート)を
@@ -21,10 +22,11 @@ OpenGameArt.org上の単体モンスター素材(人型骨格に依らない独�
 つかなかったので、tier1はそのままゴーレム素材を使い、tier2〜4はこのプロジェクト独自の
 新規デザイン(氷の兜を被った守護者/角と翼を持つ魔獣/霧を纏う魔王)として描き分けました。
 
-`companion-geist.png`(tier4ダンジョンで仲間になる鎧の魔物ガイスト)も同じ
-`scripts/generate-character-sheets.mjs` によるプロシージャル生成です。ボス達と同じ
-鎧騎士型のシルエットを流用していますが、暖色のブロンズ配色と横一直線のバイザー、
-肩の灯りという意匠でボスとは違う「仲間」らしい見た目にしています。
+`companion-geist.png`(tier4ダンジョンで仲間になる鎧の魔物ガイスト)は、`player.png` /
+`companion-luna.png` と同じ `scripts/generate-humanoid-sprites.mjs` の LPC 合成パイプラインで
+生成しています(以前はプロシージャル生成でした)。プレート鎧(胴/脚/足)+ 肩当て +
+角付きフルヘルム + 使い古されたマントを合成し、`sharp` の `tint()` で赤茶色(酸化した鉄)に
+寄せています(暖色のブロンズにすると鎧で覆われない手/前腕が人肌のように見えてしまったため)。
 
 生成に使用した個別アセットは複数ライセンス(OGA-BY 3.0 / CC-BY-SA 3.0 / CC-BY 4.0 / GPL 2.0 / GPL 3.0 など)で
 提供されています。使用したすべてのアセットに共通して選択可能なのは **GPL 3.0** のみだったため、
@@ -53,6 +55,11 @@ OpenGameArt.org上の単体モンスター素材(人型骨格に依らない独�
 | legs: pants (male) | `legs/pants/male/walk.png` | bluecarrot16, JaidynReiman, ElizaWy, Matthew Krohn (makrohn), Johannes Sjölund (wulax), Stephen Challener (Redshrike) |
 | feet: shoes (male) | `feet/shoes/basic/male/walk.png` | JaidynReiman, bluecarrot16, Johannes Sjölund (wulax) |
 | hat: wizard hat | `hat/magic/wizard/base/adult/walk.png` | Michael Whitlock (bigbeargames), Tuomo Untinen (reemax), JaidynReiman |
+| legs: plate armour (male, companion-geist用) | `legs/armour/plate/male/walk.png` | bluecarrot16, JaidynReiman, Michael Whitlock (bigbeargames), Matthew Krohn (makrohn), Johannes Sjölund (wulax) |
+| feet: plate armour (male, companion-geist用) | `feet/armour/plate/male/walk.png` | Matthew Krohn (makrohn), Johannes Sjölund (wulax) |
+| shoulders: pauldrons (male, companion-geist用) | `shoulders/pauldrons/male/walk.png` | Matthew Krohn (makrohn), Johannes Sjölund (wulax), bluecarrot16, JaidynReiman |
+| hat: horned helmet (companion-geist用) | `hat/helmet/horned/adult/walk.png` | bluecarrot16, Shaun Williams, Matthew Krohn (makrohn), Johannes Sjölund (wulax), Sander Frenken (castelonia) |
+| cape: tattered (bg+fg, companion-geist用) | `cape/tattered/{bg,fg}/walk.png` | Nila122, JaidynReiman |
 
 ### OpenGameArt単体モンスター素材
 
@@ -72,6 +79,7 @@ OpenGameArt.org上の単体モンスター素材(人型骨格に依らない独�
 | npc-shopkeeper | male | light_brown | vest (tan) + pants + shoes |
 | npc-armorer | male | black | plate armour + pants + shoes |
 | companion-luna | female | platinum (long) | dress (lavender sash) |
+| companion-geist | male | (フルヘルムのため非表示) | plate armour + pauldrons + horned helmet + tattered cape、tint で赤茶色(酸化鉄調)に |
 | enemy-skeleton | skeleton body/head | - | (なし、骨のみ) |
 | enemy-goblin | muscular body(緑に再着色)/ goblin head | - | pants |
 | enemy-mage | female body/head | dark_brown | robe (purple) + wizard hat |
