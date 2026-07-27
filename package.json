@@ -11,6 +11,8 @@
     "assets:monsters:external": "node scripts/generate-monster-sprites-external.mjs",
     "assets:tiles": "node scripts/generate-terrain-tiles.mjs",
     "build": "tsc && vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "preview": "vite preview --host 127.0.0.1",
     "worker:dev": "npm run build && wrangler dev",
     "worker:deploy": "npm run build && wrangler deploy"
@@ -24,6 +26,7 @@
     "sharp": "^0.34.5",
     "typescript": "^6.0.3",
     "vite": "^8.0.15",
+    "vitest": "^4.1.10",
     "wrangler": "^4.95.0"
   }
 }
