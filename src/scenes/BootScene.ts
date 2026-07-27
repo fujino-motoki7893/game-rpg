@@ -70,6 +70,7 @@ export class BootScene extends Phaser.Scene {
     this.createCharacterAnimations();
     this.createChest("chest-closed", false);
     this.createChest("chest-open", true);
+    this.createCarriage("vehicle-carriage");
 
     this.scene.start("WorldScene");
   }
@@ -519,6 +520,70 @@ export class BootScene extends Phaser.Scene {
       ctx.fillStyle = "#f7e17d";
       ctx.fillRect(10, 9, 14, 4);
     }
+    texture.refresh();
+  }
+
+  // Cosmetic tier-4 boss reward (see hasCarriage/WorldScene's carriage
+  // follower) — a top-down horse-and-cart, static single frame, drawn on a
+  // transparent canvas like createObjectTile so it doesn't sit on a colored
+  // square while trailing the party.
+  private createCarriage(key: string): void {
+    const texture = this.textures.createCanvas(key, 32, 32);
+    if (!texture) {
+      return;
+    }
+
+    const ctx = texture.getContext();
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, 32, 32);
+
+    // Horse (front, facing down/south — the common idle-facing direction).
+    ctx.fillStyle = "#5a3a26";
+    ctx.fillRect(11, 3, 10, 9);
+    ctx.fillStyle = "#42291a";
+    ctx.fillRect(11, 3, 3, 5);
+    ctx.fillRect(18, 3, 3, 5);
+    ctx.fillStyle = "#2c1c11";
+    ctx.fillRect(12, 10, 3, 3);
+    ctx.fillRect(17, 10, 3, 3);
+
+    // Cart body (back).
+    ctx.fillStyle = "rgba(0, 0, 0, 0.28)";
+    ctx.beginPath();
+    ctx.ellipse(16, 28, 11, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#3a281c";
+    ctx.fillRect(6, 15, 20, 12);
+    ctx.fillStyle = "#7a4a2a";
+    ctx.fillRect(7, 16, 18, 10);
+    ctx.strokeStyle = "#5c3a22";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(7, 21);
+    ctx.lineTo(25, 21);
+    ctx.stroke();
+    ctx.fillStyle = "#d8a94f";
+    ctx.globalAlpha = 0.5;
+    ctx.fillRect(9, 17, 6, 2);
+    ctx.globalAlpha = 1;
+
+    // Wheels.
+    ctx.fillStyle = "#241811";
+    ctx.beginPath();
+    ctx.arc(9, 26, 3.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(23, 26, 3.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#4a3222";
+    ctx.beginPath();
+    ctx.arc(9, 26, 1.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(23, 26, 1.3, 0, Math.PI * 2);
+    ctx.fill();
+
     texture.refresh();
   }
 }

@@ -862,6 +862,13 @@ export function hasFlag(flag: string): boolean {
   return Boolean(save.flags[flag]);
 }
 
+// A cosmetic-only reward from the tier-4 boss: it trails the player around
+// the overworld (see WorldScene's carriage follower) but isn't a companion —
+// no stats, no battle participation, no menu tab.
+export function hasCarriage(): boolean {
+  return hasFlag("carriageObtained");
+}
+
 export function markEnemyDefeated(enemyId: string): void {
   if (!save.defeatedEnemies.includes(enemyId)) {
     save.defeatedEnemies.push(enemyId);

@@ -48,6 +48,7 @@ import {
   getPlayerMaxHp,
   getPlayerMaxMp,
   getSave,
+  hasCarriage,
   hasCompanion,
   hasFlag,
   healCompanion,
@@ -119,6 +120,13 @@ export class WorldScene extends Phaser.Scene {
     CompanionId,
     { sprite: Phaser.GameObjects.Sprite; shadow: Phaser.GameObjects.Ellipse; tile: TilePosition }
   >();
+  /** Trails at the back of the party line, behind every companion — a
+   * cosmetic tier-4 boss reward, not a battle companion (see hasCarriage). */
+  private carriageFollower?: {
+    sprite: Phaser.GameObjects.Sprite;
+    shadow: Phaser.GameObjects.Ellipse;
+    tile: TilePosition;
+  };
   private facing: Direction = "down";
   private moving = false;
   private dialogueLines: string[] = [];
@@ -235,6 +243,7 @@ export class WorldScene extends Phaser.Scene {
       this.alignCharacterSprite(this.player, "player").setDepth(20);
       this.playCharacterIdle(this.player, "player", this.facing);
       this.setupAllyFollowers(entryTile);
+      this.setupCarriageFollower(entryTile);
       this.createDialoguePanel();
       this.createTargetHintPanel();
       this.setupCamera();
@@ -316,6 +325,55 @@ export class WorldScene extends Phaser.Scene {
       targets: follower.shadow,
       x: this.toWorldX(target.x),
       y: this.toWorldY(target.y) + 13,
+      duration: 125,
+      ease: "Sine.easeInOut"
+    });
+  }
+
+  // A cart doesn't belong inside a cramped dungeon corridor, so it only
+  // shows up on the overworld maps.
+  private mapAllowsCarriage(mapId: MapId): boolean {
+    return mapId === "village" || mapId === "field" || mapId === "hiddenVillage";
+  }
+
+  private setupCarriageFollower(entryTile: TilePosition): void {
+    this.carriageFollower = undefined;
+    if (!hasCarriage() || !this.mapAllowsCarriage(this.currentMap.id)) {
+      return;
+    }
+
+    const depth = 18 - COMPANION_ORDER.length * 0.5;
+    const shadow = this.add
+      .ellipse(this.toWorldX(entryTile.x), this.toWorldY(entryTile.y) + 15, 30, 9, 0x05080b, 0.32)
+      .setDepth(depth);
+    const sprite = this.add.sprite(
+      this.toWorldX(entryTile.x),
+      this.toWorldY(entryTile.y),
+      "vehicle-carriage",
+      0
+    );
+    sprite.setOrigin(0.5, 0.62).setDepth(depth + 0.5);
+    this.carriageFollower = { sprite, shadow, tile: { ...entryTile } };
+  }
+
+  private moveCarriageFollower(target: TilePosition): void {
+    const follower = this.carriageFollower;
+    if (!follower || (follower.tile.x === target.x && follower.tile.y === target.y)) {
+      return;
+    }
+
+    follower.tile = target;
+    this.tweens.add({
+      targets: follower.sprite,
+      x: this.toWorldX(target.x),
+      y: this.toWorldY(target.y),
+      duration: 125,
+      ease: "Sine.easeInOut"
+    });
+    this.tweens.add({
+      targets: follower.shadow,
+      x: this.toWorldX(target.x),
+      y: this.toWorldY(target.y) + 15,
       duration: 125,
       ease: "Sine.easeInOut"
     });
@@ -498,12 +556,14 @@ export class WorldScene extends Phaser.Scene {
     }
 
     markFlag("mistSovereignDefeated");
+    markFlag("carriageObtained");
     this.game.events.emit(GAME_EVENTS.stateChanged);
     void this.loadMap("field", this.getFieldDungeonEntrance()).then(() => {
       this.showDialogue([
         "深霧の魔王は霧となって消え去った。",
         "ルナ: ここにも、まだ知られざる脅威が眠っていたのですね。",
-        "霧隠れの里の長老に、報告に行きましょう。"
+        "霧隠れの里の長老に、報告に行きましょう。",
+        "礼として馬車を借り受けた。これからは村や草原を歩くとき、馬車がついてくる。"
       ]);
     });
   }
@@ -601,6 +661,7 @@ export class WorldScene extends Phaser.Scene {
       this.moveAllyFollower(id, previousTile);
       previousTile = ownPreviousTile;
     });
+    this.moveCarriageFollower(previousTile);
     this.tweens.add({
       targets: this.player,
       x: this.toWorldX(target.x),
