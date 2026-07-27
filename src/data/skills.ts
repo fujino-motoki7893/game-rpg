@@ -1,3 +1,5 @@
+import type { StatusInflict } from "./statusEffects";
+
 export type SkillId = "flameSlash" | "heal" | "thunderThrust" | "greaterHeal";
 
 export type SkillEffect =
@@ -5,6 +7,8 @@ export type SkillEffect =
       type: "damage";
       multiplier: number;
       bonus: number;
+      /** Chance to also inflict a status effect on the target. */
+      status?: StatusInflict;
     }
   | {
       type: "heal";
@@ -29,8 +33,13 @@ export const SKILLS: Record<SkillId, SkillDefinition> = {
     name: "火炎切り",
     requiredLevel: 2,
     mpCost: 4,
-    description: "炎をまとった斬撃で大ダメージ",
-    effect: { type: "damage", multiplier: 1.35, bonus: 4 }
+    description: "炎をまとった斬撃で大ダメージ。時々火傷を負わせる",
+    effect: {
+      type: "damage",
+      multiplier: 1.35,
+      bonus: 4,
+      status: { type: "burn", chance: 0.5, duration: 3 }
+    }
   },
   heal: {
     id: "heal",
@@ -45,8 +54,13 @@ export const SKILLS: Record<SkillId, SkillDefinition> = {
     name: "雷鳴突き",
     requiredLevel: 4,
     mpCost: 7,
-    description: "雷をまとった突きで大ダメージ",
-    effect: { type: "damage", multiplier: 1.65, bonus: 6 }
+    description: "雷をまとった突きで大ダメージ。時々敵をしびれさせる",
+    effect: {
+      type: "damage",
+      multiplier: 1.65,
+      bonus: 6,
+      status: { type: "stun", chance: 0.35, duration: 1 }
+    }
   },
   greaterHeal: {
     id: "greaterHeal",

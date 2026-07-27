@@ -14,6 +14,13 @@ import {
   ITEMS
 } from "../data/items";
 import { SKILLS } from "../data/skills";
+import {
+  getStatusEffectIcon,
+  getStatusEffectName,
+  getStatusTickDamage,
+  isDamageTickStatus,
+  isStunStatus
+} from "../data/statusEffects";
 import { GAME_EVENTS } from "../game/constants";
 import {
   damageCompanion,
@@ -50,6 +57,7 @@ import {
 } from "../game/GameState";
 import type { CompanionId } from "../data/companions";
 import type { SkillDefinition } from "../data/skills";
+import type { ActiveStatusEffect, StatusEffectType, StatusInflict } from "../data/statusEffects";
 import type { BattlePayload, EnemyDefinition, ItemId } from "../game/types";
 
 interface AllySlot {
@@ -106,6 +114,9 @@ export class BattleScene extends Phaser.Scene {
   private allies: AllySlot[] = [];
   private turnOrder: TurnActor[] = [];
   private turnIndex = 0;
+  /** Battle-runtime only — never persisted, so effects never carry over
+   * between separate battles (a fresh scene instance = a fresh map). */
+  private statusEffects = new Map<TurnActor, ActiveStatusEffect[]>();
   private pendingAdvanceAt?: number;
   private playerX = 205;
   private logY = 390;
@@ -283,6 +294,10 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
+    if (this.tickStatusEffectsAndMaybeStun(actor)) {
+      return;
+    }
+
     if (actor === "player") {
       this.playerTurn = true;
       this.renderMainActions();
@@ -305,6 +320,178 @@ export class BattleScene extends Phaser.Scene {
     this.playerTurn = false;
     this.setButtonsEnabled(false);
     this.pendingAdvanceAt = this.time.now + delayMs;
+  }
+
+  private actorDisplayName(actor: TurnActor): string {
+    if (actor === "player") {
+      return "勇者";
+    }
+    if (isCompanionId(actor)) {
+      return COMPANIONS[actor].name;
+    }
+    const index = this.enemySlotIndexFromActor(actor);
+    return index !== undefined ? this.enemySlots[index]?.definition.name ?? "" : "";
+  }
+
+  private addStatusEffect(actor: TurnActor, type: StatusEffectType, duration: number): void {
+    // Reapplying a status refreshes its duration rather than stacking a
+    // second copy — simpler to reason about for the player than tracking
+    // multiple independent burn timers on one target.
+    const withoutSameType = this.getActorStatusEffects(actor).filter((effect) => effect.type !== type);
+    withoutSameType.push({ type, remainingTurns: duration });
+    this.statusEffects.set(actor, withoutSameType);
+  }
+
+  private getActorStatusEffects(actor: TurnActor): ActiveStatusEffect[] {
+    return this.statusEffects.get(actor) ?? [];
+  }
+
+  private clearActorStatusEffects(actor: TurnActor): void {
+    this.statusEffects.delete(actor);
+  }
+
+  private describeActorStatusSuffix(actor: TurnActor): string {
+    const effects = this.getActorStatusEffects(actor);
+    if (effects.length === 0) {
+      return "";
+    }
+    return ` ${effects.map((effect) => getStatusEffectIcon(effect.type)).join("")}`;
+  }
+
+  /** Rolls a skill's optional status-inflict chance against the target it
+   * just hit, applies it on success, and returns a log-message fragment (or
+   * an empty string on a miss) for the caller to append to its damage line. */
+  private maybeInflictStatus(actor: TurnActor, status: StatusInflict | undefined): string {
+    if (!status || Math.random() >= status.chance) {
+      return "";
+    }
+    this.addStatusEffect(actor, status.type, status.duration);
+    return `${this.actorDisplayName(actor)}は${getStatusEffectName(status.type)}状態になった。`;
+  }
+
+  /** Applies one damage-ticking status's per-turn damage to whichever kind
+   * of combatant `actor` is, reusing the same damage-application paths as a
+   * normal attack (dealDamageToEnemy / damagePlayer / damageCompanion) so
+   * HUD/defeat handling stays consistent. */
+  private applyStatusTickDamage(
+    actor: TurnActor,
+    type: StatusEffectType
+  ): { message?: string; battleEnded: boolean } {
+    const name = this.actorDisplayName(actor);
+    const label = getStatusEffectName(type);
+
+    const enemyIndex = this.enemySlotIndexFromActor(actor);
+    if (enemyIndex !== undefined) {
+      const slot = this.enemySlots[enemyIndex];
+      if (!slot?.alive) {
+        return { battleEnded: false };
+      }
+      const damage = getStatusTickDamage(slot.definition.maxHp);
+      const { justDefeated, allDefeated } = this.dealDamageToEnemy(enemyIndex, damage, "#c98cff");
+      if (allDefeated) {
+        this.winBattle(damage);
+        return { battleEnded: true };
+      }
+      return {
+        message: justDefeated
+          ? `${name}は${label}で${damage}のダメージを受けて倒れた!`
+          : `${name}は${label}で${damage}のダメージを受けた。`,
+        battleEnded: false
+      };
+    }
+
+    if (actor === "player") {
+      const damage = getStatusTickDamage(getPlayerMaxHp());
+      damagePlayer(damage);
+      this.showDamageNumber(damage, this.playerX, 190, "#c98cff");
+      if (getSave().hp <= 0) {
+        this.loseBattle(label, damage);
+        return { battleEnded: true };
+      }
+      return { message: `${name}は${label}で${damage}のダメージを受けた。`, battleEnded: false };
+    }
+
+    if (isCompanionId(actor)) {
+      const damage = getStatusTickDamage(getCompanionMaxHp(actor));
+      damageCompanion(actor, damage);
+      const ally = this.getAlly(actor);
+      this.showDamageNumber(damage, ally?.x ?? this.playerX, 164, "#c98cff");
+      const message =
+        getCompanionHp(actor) <= 0
+          ? `${name}は${label}で倒れてしまった。`
+          : `${name}は${label}で${damage}のダメージを受けた。`;
+      return { message, battleEnded: false };
+    }
+
+    return { battleEnded: false };
+  }
+
+  /**
+   * Ticks every active status on `actor` at the start of its turn: applies
+   * damage-ticking effects (burn/poison), decrements durations, and — if a
+   * stun is active — skips the actor's action entirely. Returns true when
+   * the caller (resolveCurrentTurn) should stop, either because the actor
+   * was stunned or because a tick ended the battle or defeated the actor.
+   */
+  private tickStatusEffectsAndMaybeStun(actor: TurnActor): boolean {
+    const effects = this.getActorStatusEffects(actor);
+    if (effects.length === 0) {
+      return false;
+    }
+
+    const messages: string[] = [];
+    let stunned = false;
+    const remaining: ActiveStatusEffect[] = [];
+
+    for (const effect of effects) {
+      if (isDamageTickStatus(effect.type)) {
+        const applied = this.applyStatusTickDamage(actor, effect.type);
+        if (applied.battleEnded) {
+          return true;
+        }
+        if (applied.message) {
+          messages.push(applied.message);
+        }
+      } else if (isStunStatus(effect.type)) {
+        stunned = true;
+        messages.push(`${this.actorDisplayName(actor)}は${getStatusEffectName(effect.type)}で動けない。`);
+      }
+
+      const remainingTurns = effect.remainingTurns - 1;
+      if (remainingTurns > 0) {
+        remaining.push({ type: effect.type, remainingTurns });
+      }
+    }
+
+    if (remaining.length > 0) {
+      this.statusEffects.set(actor, remaining);
+    } else {
+      this.statusEffects.delete(actor);
+    }
+
+    this.refreshHud();
+    if (messages.length > 0) {
+      this.setLog(messages.join(" "));
+    }
+
+    if (stunned) {
+      this.advanceTurn(700);
+      return true;
+    }
+
+    // A damage tick may have defeated this actor without ending the whole
+    // battle (e.g. burn kills one enemy in a group). Skip straight to the
+    // next turn instead of letting a dead actor act.
+    const enemyIndex = this.enemySlotIndexFromActor(actor);
+    const actorNowDead =
+      (enemyIndex !== undefined && !this.enemySlots[enemyIndex]?.alive) ||
+      (isCompanionId(actor) && getCompanionHp(actor) <= 0);
+    if (actorNowDead) {
+      this.advanceTurn(300);
+      return true;
+    }
+
+    return false;
   }
 
   private renderMainActions(): void {
@@ -534,6 +721,7 @@ export class BattleScene extends Phaser.Scene {
       slot.alive = false;
       justDefeated = true;
       this.markEnemySlotDefeated(slot);
+      this.clearActorStatusEffects(`enemy-${index}`);
     }
 
     this.refreshHud();
@@ -694,7 +882,10 @@ export class BattleScene extends Phaser.Scene {
       }
 
       const defeatedNote = justDefeated ? `${this.enemySlots[index].definition.name}を倒した!` : "";
-      this.setLog(`${skill.name}！${damage}のダメージを与えた。${defeatedNote}`);
+      const statusNote = justDefeated
+        ? ""
+        : this.maybeInflictStatus(`enemy-${index}`, skill.effect.type === "damage" ? skill.effect.status : undefined);
+      this.setLog(`${skill.name}！${damage}のダメージを与えた。${defeatedNote}${statusNote}`);
       this.endPlayerTurn();
     });
   }
@@ -780,7 +971,10 @@ export class BattleScene extends Phaser.Scene {
     }
 
     const defeatedNote = justDefeated ? `${this.enemySlots[targetIndex].definition.name}を倒した!` : "";
-    this.setLog(`${definition.name}の${action.skill.name}！${damage}のダメージを与えた。${defeatedNote}`);
+    const statusNote = justDefeated
+      ? ""
+      : this.maybeInflictStatus(`enemy-${targetIndex}`, action.skill.effect.status);
+    this.setLog(`${definition.name}の${action.skill.name}！${damage}のダメージを与えた。${defeatedNote}${statusNote}`);
     this.advanceTurn(700);
   }
 
@@ -921,12 +1115,13 @@ export class BattleScene extends Phaser.Scene {
     const maxHp = getPlayerMaxHp();
     const maxMp = getPlayerMaxMp();
     this.playerHpText?.setText(
-      `勇者 HP ${save.hp}/${maxHp}  MP ${save.mp}/${maxMp}  道具 ${getTotalItemCount()}`
+      `勇者 HP ${save.hp}/${maxHp}  MP ${save.mp}/${maxMp}  道具 ${getTotalItemCount()}${this.describeActorStatusSuffix("player")}`
     );
     this.playerHpFill?.setDisplaySize(184 * Phaser.Math.Clamp(save.hp / maxHp, 0, 1), 6);
 
-    this.enemySlots.forEach((slot) => {
-      slot.hpText?.setText(slot.definition.name).setColor(this.getEnemyHpColor(slot));
+    this.enemySlots.forEach((slot, index) => {
+      const suffix = this.describeActorStatusSuffix(`enemy-${index}`);
+      slot.hpText?.setText(`${slot.definition.name}${suffix}`).setColor(this.getEnemyHpColor(slot));
     });
 
     this.allies.forEach((ally) => {
@@ -935,7 +1130,8 @@ export class BattleScene extends Phaser.Scene {
       const allyMaxMp = getCompanionMaxMp(ally.id);
       const allyHp = getCompanionHp(ally.id);
       const allyMp = getCompanionMp(ally.id);
-      ally.hpText?.setText(`${definition.name} HP ${allyHp}/${allyMaxHp}  MP ${allyMp}/${allyMaxMp}`);
+      const suffix = this.describeActorStatusSuffix(ally.id);
+      ally.hpText?.setText(`${definition.name} HP ${allyHp}/${allyMaxHp}  MP ${allyMp}/${allyMaxMp}${suffix}`);
       ally.hpFill?.setDisplaySize(184 * Phaser.Math.Clamp(allyHp / allyMaxHp, 0, 1), 6);
     });
   }

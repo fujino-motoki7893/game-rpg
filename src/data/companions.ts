@@ -1,5 +1,6 @@
 import { COMPANION_SKILL_ORDER, COMPANION_SKILLS, getCompanionSkillsForLevel } from "./companionSkills";
 import { COMPANION2_SKILL_ORDER, COMPANION2_SKILLS, getCompanion2SkillsForLevel } from "./companion2Skills";
+import type { StatusInflict } from "./statusEffects";
 
 /**
  * Adding a new companion means: add its id here, add one entry to
@@ -19,7 +20,7 @@ export function isCompanionId(value: unknown): value is CompanionId {
 
 export type CompanionSkillEffect =
   | { type: "heal"; healRatio: number; triggerRatio: number }
-  | { type: "attack"; multiplier: number };
+  | { type: "attack"; multiplier: number; status?: StatusInflict };
 
 export interface CompanionSkillDefinition {
   id: string;

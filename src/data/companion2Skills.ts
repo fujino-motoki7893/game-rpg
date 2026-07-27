@@ -35,8 +35,12 @@ export const COMPANION2_SKILLS: Record<Companion2SkillId, Companion2SkillDefinit
     name: "粉砕撃",
     requiredLevel: 5,
     mpCost: 6,
-    description: "MPを消費してさらに強力な一撃を放つ",
-    effect: { type: "attack", multiplier: 2.2 }
+    description: "MPを消費してさらに強力な一撃を放つ。時々敵をしびれさせる",
+    effect: {
+      type: "attack",
+      multiplier: 2.2,
+      status: { type: "stun", chance: 0.3, duration: 1 }
+    }
   }
 };
 
