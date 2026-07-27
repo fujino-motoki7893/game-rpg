@@ -10,7 +10,13 @@ import {
   getEquipmentStatSummary,
   getEquipmentUpgradeLabel
 } from "../data/equipment";
-import { fetchLunaLine, getCurrentLunaStage, getLunaLine, getNextStaticLunaLine } from "../data/dialogues";
+import {
+  fetchLunaLine,
+  getCurrentLunaStage,
+  getJournalEntries,
+  getLunaLine,
+  getNextStaticLunaLine
+} from "../data/dialogues";
 import {
   canItemEscapeDungeon,
   canItemHealHp,
@@ -58,15 +64,16 @@ import {
 import type { CompanionId } from "../data/companions";
 import type { EquipmentId, ItemId } from "../game/types";
 
-type MenuTab = "items" | "skills" | "equipment" | "status";
+type MenuTab = "items" | "skills" | "equipment" | "status" | "journal";
 type CharacterKey = "hero" | CompanionId;
 
-const BASE_TABS: MenuTab[] = ["items", "skills", "equipment", "status"];
+const BASE_TABS: MenuTab[] = ["items", "skills", "equipment", "status", "journal"];
 const BASE_TAB_LABELS: Record<MenuTab, string> = {
   items: "持ち物",
   skills: "スキル",
   equipment: "装備",
-  status: "強さ"
+  status: "強さ",
+  journal: "日誌"
 };
 const GEIST_LINES = [
   "ガイスト: ……(鎧が小さく震える)",
@@ -217,6 +224,8 @@ export class MenuScene extends Phaser.Scene {
       this.renderEquipment();
     } else if (this.activeTab === "status") {
       this.renderStatus();
+    } else if (this.activeTab === "journal") {
+      this.renderJournal();
     }
 
     this.finalizeContentScroll();
@@ -290,9 +299,14 @@ export class MenuScene extends Phaser.Scene {
       );
     });
 
+    // Positioned relative to the item list's actual length (not a fixed
+    // constant) so this footer never overlaps the rows above it — it used
+    // to be hardcoded assuming 5 items, which broke once cure items grew
+    // ITEM_ORDER to 9.
+    const listBottom = 216 + ITEM_ORDER.length * 40;
     this.addContent(
       this.add
-        .text(154, 416, `現在HP ${save.hp}/${maxHp}  MP ${save.mp}/${maxMp}`, this.textStyle(18, "#f4df7e"))
+        .text(154, listBottom, `現在HP ${save.hp}/${maxHp}  MP ${save.mp}/${maxMp}`, this.textStyle(18, "#f4df7e"))
         .setDepth(102)
     );
 
@@ -308,7 +322,7 @@ export class MenuScene extends Phaser.Scene {
           (canItemRestoreMp(selectedItem) && mp < maxAllyMp));
       const canUseSelf = canUseOn(save.hp, maxHp, save.mp, maxMp);
 
-      let allyLineY = 440;
+      let allyLineY = listBottom + 24;
       activeAllies.forEach((id) => {
         const definition = COMPANIONS[id];
         this.addContent(
@@ -328,18 +342,20 @@ export class MenuScene extends Phaser.Scene {
       );
 
       this.renderAllyTargetButtons(
-        412,
+        listBottom - 4,
         canUseSelf,
         (id) => canUseOn(getCompanionHp(id), getCompanionMaxHp(id), getCompanionMp(id), getCompanionMaxMp(id)),
         (target) => this.useSelectedItem(target)
       );
     } else {
       this.addContent(
-        this.add.text(154, 440, `所持ゴールド ${save.gold}G`, this.textStyle(15, "#d9e5ef")).setDepth(102)
+        this.add
+          .text(154, listBottom + 24, `所持ゴールド ${save.gold}G`, this.textStyle(15, "#d9e5ef"))
+          .setDepth(102)
       );
 
       const useButton = this.add
-        .text(530, 412, "使う", {
+        .text(530, listBottom - 4, "使う", {
           ...this.textStyle(18, canUseSelected ? "#101820" : "#2a3036"),
           backgroundColor: canUseSelected ? "#f2d27a" : "#66707a",
           padding: { x: 18, y: 10 },
@@ -783,6 +799,28 @@ export class MenuScene extends Phaser.Scene {
   }
 
   /**
+   * A read-only history of completed quest milestones (derived entirely
+   * from save flags via getJournalEntries — no separate journal state),
+   * with the current objective highlighted at the end.
+   */
+  private renderJournal(): void {
+    const entries = getJournalEntries();
+    let y = 226;
+    entries.forEach((entry) => {
+      const color = entry.current ? "#f4df7e" : "#9fb4c6";
+      const marker = entry.current ? "▶" : "・";
+      const text = this.add
+        .text(154, y, `${marker} ${entry.text}`, {
+          ...this.textStyle(15, color),
+          wordWrap: { width: 480, useAdvancedWrap: true }
+        })
+        .setDepth(102);
+      this.addContent(text);
+      y += text.height + 10;
+    });
+  }
+
+  /**
    * A companion's "ひとこと" (one-liner chat) lives right below its stats in
    * the same 強さ tab, rather than in its own separate tab — selecting the
    * companion via the toggle above is enough to reach both.
@@ -1091,7 +1129,7 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
-    const scrollableTab = this.activeTab === "status";
+    const scrollableTab = this.activeTab === "status" || this.activeTab === "journal";
     if (scrollableTab && event.code === "ArrowUp") {
       this.scrollContentBy(-40);
       return;

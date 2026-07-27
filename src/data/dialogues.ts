@@ -194,6 +194,41 @@ export async function fetchLunaLine(stage: LunaQuestStage): Promise<string> {
   return line.trim();
 }
 
+export interface JournalEntry {
+  text: string;
+  /** The single active step, shown distinctly from completed history. */
+  current: boolean;
+}
+
+// Chronological order matches getObjective()'s flag ladder below (each
+// completed step there becomes a past-tense record here) — purely derived
+// from flags already set elsewhere, no separate journal state to maintain.
+const JOURNAL_MILESTONES: { flag: string; text: string }[] = [
+  { flag: "questAccepted", text: "村長ローアンから、太陽石を取り戻してほしいと頼まれた。" },
+  { flag: "treasureFound", text: "エンバーフォール洞窟で太陽石を取り戻した。" },
+  { flag: "questComplete", text: "太陽石を村長ローアンに届けた。" },
+  { flag: "secondQuestAccepted", text: "黒曜の深層洞窟で月影石を探すことになった。" },
+  { flag: "secondTreasureFound", text: "月影石を取り戻した。" },
+  { flag: "secondQuestComplete", text: "月影石を届け、村の結界がさらに強まった。" },
+  { flag: "thirdQuestAccepted", text: "草原の奥に現れた月蝕の魔獣の討伐を引き受けた。" },
+  { flag: "finalBeastDefeated", text: "月蝕の魔獣を討ち果たした。" },
+  { flag: "thirdQuestComplete", text: "村長ローアンに討伐を報告し、谷に静けさが戻った。" },
+  { flag: "fourthQuestAccepted", text: "霧隠れの里で深霧の魔王の討伐を引き受けた。" },
+  { flag: "mistSovereignDefeated", text: "深霧の魔王を討ち果たした。" },
+  { flag: "carriageObtained", text: "礼として馬車を借り受けた。" },
+  { flag: "fourthQuestComplete", text: "隠れ里の長老に討伐を報告し、里に平穏が戻った。" }
+];
+
+/** A read-only history of completed milestones (derived from the same
+ * flags getObjective() reads) plus the current objective at the end. */
+export function getJournalEntries(): JournalEntry[] {
+  const entries: JournalEntry[] = JOURNAL_MILESTONES.filter((milestone) => hasFlag(milestone.flag)).map(
+    (milestone) => ({ text: milestone.text, current: false })
+  );
+  entries.push({ text: getObjective(), current: true });
+  return entries;
+}
+
 export function getObjective(): string {
   if (hasFlag("fourthQuestComplete")) {
     return "霧隠れの里に戻った静けさを見守る";
