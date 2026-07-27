@@ -124,6 +124,20 @@ export function overworldTileFrame(rows: string[], x: number, y: number): number
   return pickBlendFrame(GROUND_GROUPS, GROUND_PAIRS, self, tl, tr, bl);
 }
 
+/** Ground-layer frame to draw underneath a non-ground object tile
+ * (house/tree/rock), so the object's sprite sits on blended grass instead
+ * of hiding a plain rectangle. Object cells have no ground type of their
+ * own, so this always blends as if the cell were grass — every current
+ * map only places objects on grass, so this stays accurate; a map with
+ * objects on path/water would need a per-cell ground hint instead. */
+export function overworldGroundUnderObjectFrame(rows: string[], x: number, y: number): number {
+  const self: GroundGroup = "grass";
+  const tl = neighborGroup(rows, x - 1, y - 1, overworldGroundGroup, self);
+  const tr = neighborGroup(rows, x, y - 1, overworldGroundGroup, self);
+  const bl = neighborGroup(rows, x - 1, y, overworldGroundGroup, self);
+  return pickBlendFrame(GROUND_GROUPS, GROUND_PAIRS, self, tl, tr, bl);
+}
+
 type DungeonGroup = "wall" | "floor" | "water";
 
 function dungeonGroundGroup(tile: string): DungeonGroup {

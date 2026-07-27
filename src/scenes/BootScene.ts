@@ -47,8 +47,8 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     this.createTile("tile-house", "#86533d", "#5e382c", "house");
-    this.createTile("tile-tree", "#1f5e38", "#153f2a", "tree");
-    this.createTile("tile-rock", "#58606b", "#3c424a", "rock");
+    this.createObjectTile("tile-tree", "#1f5e38", "#153f2a", "tree");
+    this.createObjectTile("tile-rock", "#58606b", "#3c424a", "rock");
     this.createTile("tile-portal", "#614c9a", "#d9cfff", "portal");
     this.createTile("tile-stairs-up", "#6a5d48", "#423b31", "stairsUp");
     this.createTile("tile-stairs-down", "#6a5d48", "#423b31", "stairsDown");
@@ -78,7 +78,7 @@ export class BootScene extends Phaser.Scene {
     key: string,
     baseColor: string,
     shadeColor: string,
-    pattern: "house" | "tree" | "rock" | "portal" | "stairsUp" | "stairsDown" | "chest"
+    pattern: "house" | "portal" | "stairsUp" | "stairsDown" | "chest"
   ): void {
     const texture = this.textures.createCanvas(key, 32, 32);
     if (!texture) {
@@ -100,12 +100,6 @@ export class BootScene extends Phaser.Scene {
     switch (pattern) {
       case "house":
         this.drawPlanks(ctx, shadeColor, "#9f674c");
-        break;
-      case "tree":
-        this.drawLeaves(ctx, shadeColor, "#2e7a49");
-        break;
-      case "rock":
-        this.drawRock(ctx, shadeColor, "#727b86");
         break;
       case "portal":
         this.drawPortal(ctx, shadeColor);
@@ -141,30 +135,107 @@ export class BootScene extends Phaser.Scene {
     ctx.globalAlpha = 1;
   }
 
-  private drawLeaves(ctx: CanvasRenderingContext2D, shadeColor: string, highlightColor: string): void {
+  // Unlike createTile's house/portal/stairs/chest, an object tile doesn't
+  // cover its full cell — it leaves the canvas transparent outside the
+  // tree/rock silhouette so the blended ground autotile drawn underneath
+  // (see WorldScene.drawMap) shows through around it instead of being
+  // hidden behind a flat colored square.
+  private createObjectTile(
+    key: string,
+    baseColor: string,
+    shadeColor: string,
+    shape: "tree" | "rock"
+  ): void {
+    const texture = this.textures.createCanvas(key, 32, 32);
+    if (!texture) {
+      return;
+    }
+    const ctx = texture.getContext();
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, 32, 32);
+
+    if (shape === "tree") {
+      this.drawTreeCanopy(ctx, baseColor, shadeColor, "#2e7a49");
+    } else {
+      this.drawRockShape(ctx, baseColor, shadeColor, "#727b86");
+    }
+
+    texture.refresh();
+  }
+
+  private drawTreeCanopy(
+    ctx: CanvasRenderingContext2D,
+    baseColor: string,
+    shadeColor: string,
+    highlightColor: string
+  ): void {
+    ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
+    ctx.beginPath();
+    ctx.ellipse(16, 27, 9, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
     ctx.fillStyle = shadeColor;
-    ctx.fillRect(4, 18, 8, 7);
-    ctx.fillRect(19, 6, 8, 8);
+    ctx.beginPath();
+    ctx.arc(16, 15, 13, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = baseColor;
+    ctx.beginPath();
+    ctx.arc(14, 12, 11, 0, Math.PI * 2);
+    ctx.fill();
+
     ctx.fillStyle = highlightColor;
-    ctx.globalAlpha = 0.55;
-    ctx.fillRect(7, 7, 9, 5);
-    ctx.fillRect(15, 18, 8, 4);
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath();
+    ctx.arc(10, 8, 6, 0, Math.PI * 2);
+    ctx.fill();
     ctx.globalAlpha = 1;
   }
 
-  private drawRock(ctx: CanvasRenderingContext2D, shadeColor: string, highlightColor: string): void {
-    ctx.strokeStyle = shadeColor;
-    ctx.lineWidth = 2;
+  private drawRockShape(
+    ctx: CanvasRenderingContext2D,
+    baseColor: string,
+    shadeColor: string,
+    highlightColor: string
+  ): void {
+    ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
     ctx.beginPath();
-    ctx.moveTo(6, 24);
-    ctx.lineTo(13, 15);
-    ctx.lineTo(20, 19);
-    ctx.lineTo(27, 9);
-    ctx.stroke();
+    ctx.ellipse(16, 27, 10, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = shadeColor;
+    ctx.beginPath();
+    ctx.moveTo(6, 25);
+    ctx.lineTo(5, 15);
+    ctx.lineTo(12, 7);
+    ctx.lineTo(22, 6);
+    ctx.lineTo(28, 14);
+    ctx.lineTo(27, 24);
+    ctx.lineTo(18, 27);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = baseColor;
+    ctx.beginPath();
+    ctx.moveTo(8, 23);
+    ctx.lineTo(8, 16);
+    ctx.lineTo(13, 10);
+    ctx.lineTo(21, 9);
+    ctx.lineTo(25, 15);
+    ctx.lineTo(24, 22);
+    ctx.lineTo(17, 25);
+    ctx.closePath();
+    ctx.fill();
+
     ctx.fillStyle = highlightColor;
-    ctx.globalAlpha = 0.28;
-    ctx.fillRect(6, 6, 10, 3);
-    ctx.fillRect(17, 22, 8, 2);
+    ctx.globalAlpha = 0.3;
+    ctx.beginPath();
+    ctx.moveTo(11, 15);
+    ctx.lineTo(15, 11);
+    ctx.lineTo(20, 12);
+    ctx.lineTo(16, 17);
+    ctx.closePath();
+    ctx.fill();
     ctx.globalAlpha = 1;
   }
 

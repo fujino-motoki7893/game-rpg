@@ -17,7 +17,12 @@ import {
   getGuardianIdForTier
 } from "../data/dungeonGenerator";
 import { createDungeon } from "../data/dungeonService";
-import { dungeonTileFrame, overworldTileFrame, TERRAIN_OVERWORLD_KEY } from "../game/autotile";
+import {
+  dungeonTileFrame,
+  overworldGroundUnderObjectFrame,
+  overworldTileFrame,
+  TERRAIN_OVERWORLD_KEY
+} from "../game/autotile";
 import { ENEMIES } from "../data/enemies";
 import { EQUIPMENT, MASTERWORK_EQUIPMENT_ORDER } from "../data/equipment";
 import { ITEMS } from "../data/items";
@@ -367,11 +372,13 @@ export class WorldScene extends Phaser.Scene {
     for (let y = 0; y < this.currentMap.rows.length; y += 1) {
       for (let x = 0; x < this.currentMap.rows[y].length; x += 1) {
         const tile = this.currentMap.rows[y][x];
-        const { key, frame } = this.getTileTexture(tile, x, y);
-        this.add
-          .image(MAP_OFFSET_X + x * TILE_SIZE, MAP_OFFSET_Y + y * TILE_SIZE, key, frame)
-          .setOrigin(0)
-          .setDepth(0);
+        const worldX = MAP_OFFSET_X + x * TILE_SIZE;
+        const worldY = MAP_OFFSET_Y + y * TILE_SIZE;
+        const { ground, object } = this.getTileLayers(tile, x, y);
+        this.add.image(worldX, worldY, ground.key, ground.frame).setOrigin(0).setDepth(0);
+        if (object) {
+          this.add.image(worldX, worldY, object.key, object.frame).setOrigin(0).setDepth(1);
+        }
       }
     }
   }
@@ -1505,7 +1512,11 @@ export class WorldScene extends Phaser.Scene {
     return "入口\n移動";
   }
 
-  private getTileTexture(tile: string, x: number, y: number): { key: string; frame: number } {
+  private getTileLayers(
+    tile: string,
+    x: number,
+    y: number
+  ): { ground: { key: string; frame: number }; object?: { key: string; frame: number } } {
     const isDungeon = this.currentMap.id === "dungeon";
 
     if (isDungeon) {
@@ -1513,25 +1524,33 @@ export class WorldScene extends Phaser.Scene {
       // (house/tree/rock) never appear here, so every other char blends as
       // wall/floor/water ground.
       if (tile === "H" || tile === "^" || tile === "C") {
-        return { key: "tile-rock", frame: 0 };
+        return { ground: { key: "tile-rock", frame: 0 } };
       }
       const dungeonTier = this.currentMap.tier ?? 1;
-      return dungeonTileFrame(this.currentMap.rows, x, y, dungeonTier);
+      return { ground: dungeonTileFrame(this.currentMap.rows, x, y, dungeonTier) };
     }
 
+    // Trees/rocks are drawn as a small silhouette over a real blended-grass
+    // ground tile (see BootScene.createObjectTile), so the map doesn't read
+    // as a solid colored square wherever an object sits. Houses stay a
+    // single opaque tile — a building legitimately fills its whole footprint.
     switch (tile) {
       case "H":
-        return { key: "tile-house", frame: 0 };
+        return { ground: { key: "tile-house", frame: 0 } };
       case "#":
-        return { key: "tile-tree", frame: 0 };
+        return {
+          ground: { key: TERRAIN_OVERWORLD_KEY, frame: overworldGroundUnderObjectFrame(this.currentMap.rows, x, y) },
+          object: { key: "tile-tree", frame: 0 }
+        };
       case "^":
       case "C":
-        return { key: "tile-rock", frame: 0 };
+        return {
+          ground: { key: TERRAIN_OVERWORLD_KEY, frame: overworldGroundUnderObjectFrame(this.currentMap.rows, x, y) },
+          object: { key: "tile-rock", frame: 0 }
+        };
       default: {
         const frame = overworldTileFrame(this.currentMap.rows, x, y);
-        return frame === null
-          ? { key: TERRAIN_OVERWORLD_KEY, frame: 0 }
-          : { key: TERRAIN_OVERWORLD_KEY, frame };
+        return { ground: { key: TERRAIN_OVERWORLD_KEY, frame: frame ?? 0 } };
       }
     }
   }
