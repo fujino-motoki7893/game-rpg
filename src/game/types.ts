@@ -18,6 +18,9 @@ export interface EnemyDefinition {
   gold: number;
   texture: string;
   boss?: boolean;
+  /** MP pool for enemy skills (see data/enemySkills.ts) — 0/undefined means
+   * this enemy only ever uses its free basic attack. */
+  maxMp?: number;
 }
 
 export interface EnemySpawn extends TilePosition {

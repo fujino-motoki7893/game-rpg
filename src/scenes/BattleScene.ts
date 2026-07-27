@@ -6,6 +6,7 @@ import {
 } from "../data/characterSprites";
 import { COMPANION_ORDER, COMPANIONS, decideCompanionAction, isCompanionId } from "../data/companions";
 import { ENEMIES } from "../data/enemies";
+import { getEnemySkills } from "../data/enemySkills";
 import {
   canItemCureStatus,
   canItemHealHp,
@@ -75,6 +76,9 @@ interface EnemySlot {
   key: string;
   definition: EnemyDefinition;
   hp: number;
+  /** Enemy skill MP — never restored mid-battle, so a boss's signature
+   * skill naturally tapers off into basic attacks over a long fight. */
+  mp: number;
   x: number;
   alive: boolean;
   sprite?: Phaser.GameObjects.Sprite;
@@ -85,13 +89,6 @@ interface EnemySlot {
 const ENEMY_HP_COLOR_HEALTHY = "#ffffff";
 const ENEMY_HP_COLOR_HURT = "#ffe066";
 const ENEMY_HP_COLOR_CRITICAL = "#ff9a3c";
-
-// Every enemy's basic attack gets a small flat chance to also inflict a
-// random status effect — the counterpart to flameSlash/thunderThrust/
-// crushingSlam doing the same to enemies, so the cure items introduced
-// alongside status effects actually have something to cure.
-const ENEMY_ATTACK_STATUS_CHANCE = 0.12;
-const ENEMY_ATTACK_STATUS_POOL: StatusEffectType[] = ["burn", "poison", "stun"];
 
 type TurnActor = CompanionId | "player" | `enemy-${number}`;
 
@@ -155,6 +152,7 @@ export class BattleScene extends Phaser.Scene {
         key,
         definition,
         hp: definition.maxHp,
+        mp: definition.maxMp ?? 0,
         x: enemyLayout.enemyX[index],
         alive: true
       };
@@ -377,18 +375,6 @@ export class BattleScene extends Phaser.Scene {
     }
     this.addStatusEffect(actor, status.type, status.duration);
     return `${this.actorDisplayName(actor)}は${getStatusEffectName(status.type)}状態になった。`;
-  }
-
-  /** The enemy-side counterpart to maybeInflictStatus: every basic attack
-   * gets a small flat chance to inflict a random status on whoever it hit. */
-  private maybeEnemyInflictStatus(actor: TurnActor): string {
-    if (Math.random() >= ENEMY_ATTACK_STATUS_CHANCE) {
-      return "";
-    }
-    const type = ENEMY_ATTACK_STATUS_POOL[Math.floor(Math.random() * ENEMY_ATTACK_STATUS_POOL.length)];
-    const duration = isStunStatus(type) ? 1 : 3;
-    this.addStatusEffect(actor, type, duration);
-    return `${this.actorDisplayName(actor)}は${getStatusEffectName(type)}状態になった。`;
   }
 
   /** Applies one damage-ticking status's per-turn damage to whichever kind
@@ -1081,9 +1067,34 @@ export class BattleScene extends Phaser.Scene {
     return activeAllies[index].id;
   }
 
+  /**
+   * Shared AI for every enemy, reusing the exact same priority search as
+   * companions (decideCompanionAction): try skills strongest-first, use the
+   * strongest one whose MP cost fits the enemy's remaining pool. Most
+   * enemies only ever have the free basic attack; bosses and a few elite
+   * dungeon enemies (see data/enemySkills.ts) also have a signature move
+   * that can inflict a status effect, so they read as an actual opponent
+   * rather than a bigger stat block. Enemy MP never regenerates mid-battle,
+   * so a boss's special naturally tapers off into basic attacks over a long
+   * fight instead of being spammable forever.
+   */
   private enemyTurn(index: number): void {
-    const definition = this.enemySlots[index].definition;
-    const rawDamage = Phaser.Math.Between(Math.max(1, definition.attack - 2), definition.attack + 2);
+    const slot = this.enemySlots[index];
+    const definition = slot.definition;
+    const action = decideCompanionAction(getEnemySkills(definition.key), slot.mp, {
+      playerHp: getSave().hp,
+      playerMaxHp: getPlayerMaxHp()
+    });
+    slot.mp = Math.max(0, slot.mp - action.skill.mpCost);
+
+    const multiplier = action.skill.effect.type === "attack" ? action.skill.effect.multiplier : 1;
+    const status = action.skill.effect.type === "attack" ? action.skill.effect.status : undefined;
+    const baseDamage = Math.round(definition.attack * multiplier);
+    const rawDamage = Phaser.Math.Between(Math.max(1, baseDamage - 2), baseDamage + 2);
+    const attackPrefix =
+      action.skill.id === "basicAttack"
+        ? `${definition.name}の攻撃。`
+        : `${definition.name}の${action.skill.name}！`;
     const target = this.chooseEnemyTarget();
 
     if (isCompanionId(target)) {
@@ -1092,14 +1103,14 @@ export class BattleScene extends Phaser.Scene {
       const damage = Math.max(1, rawDamage - getCompanionDefense(target));
       damageCompanion(target, damage);
       const hpLeft = getCompanionHp(target);
-      const statusNote = hpLeft > 0 ? this.maybeEnemyInflictStatus(target) : "";
+      const statusNote = hpLeft > 0 ? this.maybeInflictStatus(target, status) : "";
       this.refreshHud();
       this.flashTarget(ally?.sprite);
       this.showDamageNumber(damage, ally?.x ?? this.playerX, 164, "#ff9a7a");
       this.setLog(
         hpLeft <= 0
-          ? `${definition.name}の攻撃。${allyDefinition.name}は倒れてしまった。`
-          : `${definition.name}の攻撃。${allyDefinition.name}が${damage}のダメージを受けた。${statusNote}`
+          ? `${attackPrefix}${allyDefinition.name}は倒れてしまった。`
+          : `${attackPrefix}${allyDefinition.name}が${damage}のダメージを受けた。${statusNote}`
       );
       this.advanceTurn(700);
       return;
@@ -1116,9 +1127,9 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    const statusNote = this.maybeEnemyInflictStatus("player");
+    const statusNote = this.maybeInflictStatus("player", status);
     this.refreshHud();
-    this.setLog(`${definition.name}の攻撃。${damage}のダメージを受けた。${statusNote}`);
+    this.setLog(`${attackPrefix}${damage}のダメージを受けた。${statusNote}`);
     this.advanceTurn(700);
   }
 

@@ -98,7 +98,8 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     speed: 6,
     exp: 14,
     gold: 10,
-    texture: "enemy-goblin"
+    texture: "enemy-goblin",
+    maxMp: 9
   },
   direWolf: {
     key: "direWolf",
@@ -108,7 +109,8 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     speed: 13,
     exp: 15,
     gold: 11,
-    texture: "enemy-wolf"
+    texture: "enemy-wolf",
+    maxMp: 9
   },
   darkMage: {
     key: "darkMage",
@@ -118,7 +120,8 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     speed: 7,
     exp: 17,
     gold: 14,
-    texture: "enemy-mage"
+    texture: "enemy-mage",
+    maxMp: 11
   },
   stoneGolem: {
     key: "stoneGolem",
@@ -128,7 +131,8 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     speed: 3,
     exp: 18,
     gold: 15,
-    texture: "enemy-guardian"
+    texture: "enemy-guardian",
+    maxMp: 11
   },
   guardian: {
     key: "guardian",
@@ -139,7 +143,8 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     exp: 17,
     gold: 19,
     texture: "enemy-guardian",
-    boss: true
+    boss: true,
+    maxMp: 14
   },
   deepGuardian: {
     key: "deepGuardian",
@@ -150,7 +155,8 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     exp: 34,
     gold: 38,
     texture: "enemy-deep-guardian",
-    boss: true
+    boss: true,
+    maxMp: 16
   },
   eclipseBeast: {
     key: "eclipseBeast",
@@ -161,7 +167,8 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     exp: 54,
     gold: 72,
     texture: "enemy-eclipse-beast",
-    boss: true
+    boss: true,
+    maxMp: 18
   },
   mistSovereign: {
     key: "mistSovereign",
@@ -172,6 +179,7 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     exp: 78,
     gold: 105,
     texture: "enemy-mist-sovereign",
-    boss: true
+    boss: true,
+    maxMp: 22
   }
 };

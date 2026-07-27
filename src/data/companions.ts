@@ -108,24 +108,35 @@ export interface CompanionActionContext {
   playerMaxHp: number;
 }
 
-export type CompanionAction =
-  | { kind: "heal"; skill: CompanionSkillDefinition }
-  | { kind: "attack"; skill: CompanionSkillDefinition };
+/** The minimal shape decideCompanionAction's search actually needs — kept
+ * separate from CompanionSkillDefinition so enemies can reuse the same AI
+ * with their own skill definition type (see data/enemySkills.ts) without
+ * having to fake companion-specific fields like requiredLevel. */
+export interface BattleSkillLike {
+  mpCost: number;
+  effect: CompanionSkillEffect;
+}
+
+export type CompanionAction<T extends BattleSkillLike = CompanionSkillDefinition> =
+  | { kind: "heal"; skill: T }
+  | { kind: "attack"; skill: T };
 
 /**
- * Shared battle AI for every companion: try skills strongest-first. A heal
+ * Shared battle AI for every companion (and, via the same function, every
+ * enemy — see BattleScene's enemyTurn): try skills strongest-first. A heal
  * fires once its MP cost is affordable and its trigger condition is met;
  * otherwise fall through to the strongest affordable attack skill. This
- * covers both Luna ("heal unless the player doesn't need it") and Geist
- * ("always attack, favor the strongest affordable hit") as one priority
- * search, since the difference is entirely in which effect types a
- * companion's skill table contains.
+ * covers Luna ("heal unless the player doesn't need it"), Geist ("always
+ * attack, favor the strongest affordable hit"), and enemies ("always
+ * attack, favor the strongest affordable hit") as one priority search,
+ * since the difference is entirely in which effect types a skill table
+ * contains.
  */
-export function decideCompanionAction(
-  skillsWeakestFirst: CompanionSkillDefinition[],
+export function decideCompanionAction<T extends BattleSkillLike>(
+  skillsWeakestFirst: T[],
   currentMp: number,
   context: CompanionActionContext
-): CompanionAction {
+): CompanionAction<T> {
   const skillsStrongestFirst = [...skillsWeakestFirst].reverse();
   for (const skill of skillsStrongestFirst) {
     if (skill.effect.type === "heal") {
