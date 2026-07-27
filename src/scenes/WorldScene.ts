@@ -17,6 +17,7 @@ import {
   getGuardianIdForTier
 } from "../data/dungeonGenerator";
 import { createDungeon } from "../data/dungeonService";
+import { dungeonTileFrame, overworldTileFrame, TERRAIN_OVERWORLD_KEY } from "../game/autotile";
 import { ENEMIES } from "../data/enemies";
 import { EQUIPMENT, MASTERWORK_EQUIPMENT_ORDER } from "../data/equipment";
 import { ITEMS } from "../data/items";
@@ -366,9 +367,9 @@ export class WorldScene extends Phaser.Scene {
     for (let y = 0; y < this.currentMap.rows.length; y += 1) {
       for (let x = 0; x < this.currentMap.rows[y].length; x += 1) {
         const tile = this.currentMap.rows[y][x];
-        const texture = this.getTileTexture(tile);
+        const { key, frame } = this.getTileTexture(tile, x, y);
         this.add
-          .image(MAP_OFFSET_X + x * TILE_SIZE, MAP_OFFSET_Y + y * TILE_SIZE, texture)
+          .image(MAP_OFFSET_X + x * TILE_SIZE, MAP_OFFSET_Y + y * TILE_SIZE, key, frame)
           .setOrigin(0)
           .setDepth(0);
       }
@@ -1504,35 +1505,34 @@ export class WorldScene extends Phaser.Scene {
     return "入口\n移動";
   }
 
-  private getTileTexture(tile: string): string {
+  private getTileTexture(tile: string, x: number, y: number): { key: string; frame: number } {
     const isDungeon = this.currentMap.id === "dungeon";
-    const dungeonTier = this.currentMap.tier ?? 1;
+
+    if (isDungeon) {
+      // '#' is a genuine wall in dungeons, but overworld-only object tiles
+      // (house/tree/rock) never appear here, so every other char blends as
+      // wall/floor/water ground.
+      if (tile === "H" || tile === "^" || tile === "C") {
+        return { key: "tile-rock", frame: 0 };
+      }
+      const dungeonTier = this.currentMap.tier ?? 1;
+      return dungeonTileFrame(this.currentMap.rows, x, y, dungeonTier);
+    }
+
     switch (tile) {
-      case ",":
-      case "S":
-      case "G":
-        return "tile-tall-grass";
-      case "=":
-        return "tile-path";
-      case "~":
-        return "tile-water";
       case "H":
-        return "tile-house";
+        return { key: "tile-house", frame: 0 };
       case "#":
-        return isDungeon ? `tile-cave-t${dungeonTier}` : "tile-tree";
+        return { key: "tile-tree", frame: 0 };
       case "^":
       case "C":
-        return "tile-rock";
-      case "O":
-        return "tile-path";
-      case "B":
-      case "D":
-      case "T":
-      case "U":
-      case "V":
-        return isDungeon ? `tile-floor-t${dungeonTier}` : "tile-grass";
-      default:
-        return isDungeon ? `tile-floor-t${dungeonTier}` : "tile-grass";
+        return { key: "tile-rock", frame: 0 };
+      default: {
+        const frame = overworldTileFrame(this.currentMap.rows, x, y);
+        return frame === null
+          ? { key: TERRAIN_OVERWORLD_KEY, frame: 0 }
+          : { key: TERRAIN_OVERWORLD_KEY, frame };
+      }
     }
   }
 

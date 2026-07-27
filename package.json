@@ -9,6 +9,7 @@
     "assets:humanoids": "node scripts/generate-humanoid-sprites.mjs",
     "assets:monsters": "node scripts/generate-monster-sprites.mjs",
     "assets:monsters:external": "node scripts/generate-monster-sprites-external.mjs",
+    "assets:tiles": "node scripts/generate-terrain-tiles.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "worker:dev": "npm run build && wrangler dev",

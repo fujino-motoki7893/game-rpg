@@ -6,3 +6,4 @@ dist/
 .dev.vars*
 scripts/.lpc-cache/
 scripts/.oga-cache/
+scripts/.terrain-cache/
