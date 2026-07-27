@@ -7,8 +7,10 @@ import {
 import { COMPANION_ORDER, COMPANIONS, decideCompanionAction, isCompanionId } from "../data/companions";
 import { ENEMIES } from "../data/enemies";
 import {
+  canItemCureStatus,
   canItemHealHp,
   canItemRestoreMp,
+  getItemCuresStatus,
   getItemRarityLabel,
   ITEM_ORDER,
   ITEMS
@@ -50,6 +52,7 @@ import {
   setPlayerPosition,
   spendCompanionMp,
   spendMp,
+  consumeItem,
   useItem,
   useItemOnCompanion,
   useHealingSkill,
@@ -82,6 +85,13 @@ interface EnemySlot {
 const ENEMY_HP_COLOR_HEALTHY = "#ffffff";
 const ENEMY_HP_COLOR_HURT = "#ffe066";
 const ENEMY_HP_COLOR_CRITICAL = "#ff9a3c";
+
+// Every enemy's basic attack gets a small flat chance to also inflict a
+// random status effect — the counterpart to flameSlash/thunderThrust/
+// crushingSlam doing the same to enemies, so the cure items introduced
+// alongside status effects actually have something to cure.
+const ENEMY_ATTACK_STATUS_CHANCE = 0.12;
+const ENEMY_ATTACK_STATUS_POOL: StatusEffectType[] = ["burn", "poison", "stun"];
 
 type TurnActor = CompanionId | "player" | `enemy-${number}`;
 
@@ -369,6 +379,18 @@ export class BattleScene extends Phaser.Scene {
     return `${this.actorDisplayName(actor)}は${getStatusEffectName(status.type)}状態になった。`;
   }
 
+  /** The enemy-side counterpart to maybeInflictStatus: every basic attack
+   * gets a small flat chance to inflict a random status on whoever it hit. */
+  private maybeEnemyInflictStatus(actor: TurnActor): string {
+    if (Math.random() >= ENEMY_ATTACK_STATUS_CHANCE) {
+      return "";
+    }
+    const type = ENEMY_ATTACK_STATUS_POOL[Math.floor(Math.random() * ENEMY_ATTACK_STATUS_POOL.length)];
+    const duration = isStunStatus(type) ? 1 : 3;
+    this.addStatusEffect(actor, type, duration);
+    return `${this.actorDisplayName(actor)}は${getStatusEffectName(type)}状態になった。`;
+  }
+
   /** Applies one damage-ticking status's per-turn damage to whichever kind
    * of combatant `actor` is, reusing the same damage-application paths as a
    * normal attack (dealDamageToEnemy / damagePlayer / damageCompanion) so
@@ -523,7 +545,10 @@ export class BattleScene extends Phaser.Scene {
         `${item.name} ${getItemRarityLabel(itemId)}\nx${count}`,
         index,
         () => {
-          if (this.allies.length > 0 && (canItemHealHp(itemId) || canItemRestoreMp(itemId))) {
+          if (
+            this.allies.length > 0 &&
+            (canItemHealHp(itemId) || canItemRestoreMp(itemId) || canItemCureStatus(itemId))
+          ) {
             this.showItemTargetActions(itemId);
             return;
           }
@@ -773,6 +798,11 @@ export class BattleScene extends Phaser.Scene {
     }
 
     const item = ITEMS[itemId];
+    const curedTypes = getItemCuresStatus(itemId);
+    if (curedTypes.length > 0) {
+      this.useCureItem(itemId, curedTypes, target);
+      return;
+    }
 
     if (isCompanionId(target)) {
       const result = useItemOnCompanion(target, itemId);
@@ -813,6 +843,47 @@ export class BattleScene extends Phaser.Scene {
       this.showDamageNumber(result.restoredMp, this.playerX, 190, "#8fc6ff", "+");
     }
     this.setLog(this.getItemUseMessage(item.name, result.healed, result.restoredMp));
+    this.endPlayerTurn();
+  }
+
+  private itemCuresActorStatus(itemId: ItemId, actor: TurnActor): boolean {
+    const curedTypes = getItemCuresStatus(itemId);
+    if (curedTypes.length === 0) {
+      return false;
+    }
+    return this.getActorStatusEffects(actor).some((effect) => curedTypes.includes(effect.type));
+  }
+
+  private useCureItem(itemId: ItemId, curedTypes: StatusEffectType[], target: "self" | CompanionId): void {
+    const item = ITEMS[itemId];
+    const actor: TurnActor = isCompanionId(target) ? target : "player";
+    const before = this.getActorStatusEffects(actor);
+    const cured = before.filter((effect) => curedTypes.includes(effect.type));
+
+    if (cured.length === 0) {
+      this.setLog(`${item.name}を使ったが、治す状態異常がなかった。`);
+      return;
+    }
+
+    if (!consumeItem(itemId)) {
+      this.setLog(this.getItemFailureMessage(item.name, "no-item"));
+      return;
+    }
+
+    const remaining = before.filter((effect) => !curedTypes.includes(effect.type));
+    if (remaining.length > 0) {
+      this.statusEffects.set(actor, remaining);
+    } else {
+      this.statusEffects.delete(actor);
+    }
+
+    this.refreshHud();
+    const curedNames = cured.map((effect) => getStatusEffectName(effect.type)).join("、");
+    this.setLog(
+      isCompanionId(target)
+        ? `${item.name}を${this.actorDisplayName(actor)}に使った。${curedNames}が治った。`
+        : `${item.name}を使った。${curedNames}が治った。`
+    );
     this.endPlayerTurn();
   }
 
@@ -1021,13 +1092,14 @@ export class BattleScene extends Phaser.Scene {
       const damage = Math.max(1, rawDamage - getCompanionDefense(target));
       damageCompanion(target, damage);
       const hpLeft = getCompanionHp(target);
+      const statusNote = hpLeft > 0 ? this.maybeEnemyInflictStatus(target) : "";
       this.refreshHud();
       this.flashTarget(ally?.sprite);
       this.showDamageNumber(damage, ally?.x ?? this.playerX, 164, "#ff9a7a");
       this.setLog(
         hpLeft <= 0
           ? `${definition.name}の攻撃。${allyDefinition.name}は倒れてしまった。`
-          : `${definition.name}の攻撃。${allyDefinition.name}が${damage}のダメージを受けた。`
+          : `${definition.name}の攻撃。${allyDefinition.name}が${damage}のダメージを受けた。${statusNote}`
       );
       this.advanceTurn(700);
       return;
@@ -1035,16 +1107,18 @@ export class BattleScene extends Phaser.Scene {
 
     const damage = Math.max(1, rawDamage - getPlayerDefense());
     damagePlayer(damage);
-    this.refreshHud();
     this.flashTarget(this.playerSprite);
     this.showDamageNumber(damage, this.playerX, 190, "#ff9a7a");
 
     if (getSave().hp <= 0) {
+      this.refreshHud();
       this.loseBattle(definition.name, damage);
       return;
     }
 
-    this.setLog(`${definition.name}の攻撃。${damage}のダメージを受けた。`);
+    const statusNote = this.maybeEnemyInflictStatus("player");
+    this.refreshHud();
+    this.setLog(`${definition.name}の攻撃。${damage}のダメージを受けた。${statusNote}`);
     this.advanceTurn(700);
   }
 
@@ -1181,14 +1255,16 @@ export class BattleScene extends Phaser.Scene {
     const save = getSave();
     return (
       (canItemHealHp(itemId) && save.hp < getPlayerMaxHp()) ||
-      (canItemRestoreMp(itemId) && save.mp < getPlayerMaxMp())
+      (canItemRestoreMp(itemId) && save.mp < getPlayerMaxMp()) ||
+      this.itemCuresActorStatus(itemId, "player")
     );
   }
 
   private companionBenefitsFromItem(id: CompanionId, itemId: ItemId): boolean {
     return (
       (canItemHealHp(itemId) && getCompanionHp(id) < getCompanionMaxHp(id)) ||
-      (canItemRestoreMp(itemId) && getCompanionMp(id) < getCompanionMaxMp(id))
+      (canItemRestoreMp(itemId) && getCompanionMp(id) < getCompanionMaxMp(id)) ||
+      this.itemCuresActorStatus(itemId, id)
     );
   }
 

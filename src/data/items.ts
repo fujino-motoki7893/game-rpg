@@ -1,3 +1,4 @@
+import type { StatusEffectType } from "./statusEffects";
 import type { ItemId } from "../game/types";
 
 export type ItemRarity = 1 | 2 | 3 | 4 | 5;
@@ -14,6 +15,9 @@ export interface ItemDefinition {
   mpRestoreAmount?: number;
   mpRestoreRatio?: number;
   escapesDungeon?: boolean;
+  /** Status effect types this cures when used in battle — battle-only,
+   * since status effects themselves only ever exist mid-battle. */
+  curesStatus?: StatusEffectType[];
 }
 
 export const ITEM_ORDER: ItemId[] = [
@@ -21,10 +25,24 @@ export const ITEM_ORDER: ItemId[] = [
   "strongHerb",
   "magicWater",
   "manaWater",
-  "returnFeather"
+  "returnFeather",
+  "burnCure",
+  "poisonCure",
+  "stunCure",
+  "panacea"
 ];
 
-export const SHOP_BUY_ITEM_ORDER: ItemId[] = ["herb", "strongHerb", "magicWater", "manaWater"];
+// Panacea is deliberately excluded — it's a dungeon-chest-only find (see
+// dungeonGenerator.ts's pickSupplyChestReward), not something to buy.
+export const SHOP_BUY_ITEM_ORDER: ItemId[] = [
+  "herb",
+  "strongHerb",
+  "magicWater",
+  "manaWater",
+  "burnCure",
+  "poisonCure",
+  "stunCure"
+];
 
 export const ITEMS: Record<ItemId, ItemDefinition> = {
   herb: {
@@ -66,6 +84,38 @@ export const ITEMS: Record<ItemId, ItemDefinition> = {
     rarity: 2,
     sellPrice: 45,
     escapesDungeon: true
+  },
+  burnCure: {
+    id: "burnCure",
+    name: "やけど薬",
+    description: "戦闘中、火傷を治す",
+    rarity: 2,
+    buyPrice: 20,
+    curesStatus: ["burn"]
+  },
+  poisonCure: {
+    id: "poisonCure",
+    name: "毒消し草",
+    description: "戦闘中、毒を治す",
+    rarity: 2,
+    buyPrice: 20,
+    curesStatus: ["poison"]
+  },
+  stunCure: {
+    id: "stunCure",
+    name: "しびれ止め",
+    description: "戦闘中、しびれを治す",
+    rarity: 2,
+    buyPrice: 20,
+    curesStatus: ["stun"]
+  },
+  panacea: {
+    id: "panacea",
+    name: "万能薬",
+    description: "戦闘中、あらゆる状態異常を治す",
+    rarity: 4,
+    sellPrice: 60,
+    curesStatus: ["burn", "poison", "stun"]
   }
 };
 
@@ -101,6 +151,14 @@ export function canItemRestoreMp(itemId: ItemId): boolean {
 
 export function canItemEscapeDungeon(itemId: ItemId): boolean {
   return ITEMS[itemId].escapesDungeon === true;
+}
+
+export function getItemCuresStatus(itemId: ItemId): StatusEffectType[] {
+  return ITEMS[itemId].curesStatus ?? [];
+}
+
+export function canItemCureStatus(itemId: ItemId): boolean {
+  return getItemCuresStatus(itemId).length > 0;
 }
 
 export function isItemBuyable(itemId: ItemId): boolean {

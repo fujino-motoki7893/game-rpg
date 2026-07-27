@@ -4,6 +4,7 @@ import type {
   ChestReward,
   EnemySpawn,
   EquipmentId,
+  ItemId,
   MapDefinition,
   NpcDefinition,
   PortalDefinition,
@@ -25,6 +26,20 @@ const CAVE_SMOOTHING_ITERATIONS = 4;
 const CAVE_CONNECTIVITY_ATTEMPTS = 5;
 const SECTOR_BASE_COLS = 3;
 const SECTOR_ROWS = 2;
+// Any depth's supply chest has this flat chance to give a status-cure item
+// instead of its usual depth-scaled loot (see pickSupplyChestReward) —
+// panacea is deliberately rare within that slice since it's the only way to
+// get one at all (it's never shop-buyable, unlike the three single cures).
+const STATUS_CURE_ITEM_CHANCE = 0.12;
+const STATUS_CURE_ITEM_WEIGHTS: ItemId[] = [
+  "poisonCure",
+  "poisonCure",
+  "burnCure",
+  "burnCure",
+  "stunCure",
+  "stunCure",
+  "panacea"
+];
 const MIN_SUPPLY_CHESTS = 1;
 const MAX_SUPPLY_CHESTS = 3;
 const MAX_SUPPLY_CHESTS_WITH_DEPTH_BONUS = 6;
@@ -684,6 +699,11 @@ function addChestAccessRequirement(
 }
 
 function pickSupplyChestReward(floor: number, floorCount: number, tier: number, rng: Rng): ChestReward {
+  if (rng() < STATUS_CURE_ITEM_CHANCE) {
+    const itemId = STATUS_CURE_ITEM_WEIGHTS[randomInt(rng, 0, STATUS_CURE_ITEM_WEIGHTS.length - 1)];
+    return { type: "item", itemId, quantity: 1 };
+  }
+
   const depth = floor / floorCount;
   if (depth < 0.34) {
     const roll = rng();

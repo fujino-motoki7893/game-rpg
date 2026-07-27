@@ -215,4 +215,24 @@ describe("generateDungeon", () => {
       expect(chest.reward).toBeDefined();
     }
   });
+
+  it("can drop both single-status cure items and the all-cure panacea from chests", () => {
+    const CURE_ITEM_IDS = ["burnCure", "poisonCure", "stunCure", "panacea"];
+    const foundItemIds = new Set<string>();
+    for (const tier of TIERS) {
+      for (let seed = 0; seed < 40; seed += 1) {
+        const map = generateDungeon({ seed: seed * 101 + tier, floor: 3, floorCount: 8, tier });
+        map.chests.forEach((chest) => {
+          if (chest.reward?.type === "item" && CURE_ITEM_IDS.includes(chest.reward.itemId)) {
+            foundItemIds.add(chest.reward.itemId);
+          }
+        });
+      }
+    }
+    // Every cure item — including the shop-unavailable panacea — should
+    // show up somewhere across a large enough sample of chests.
+    for (const itemId of CURE_ITEM_IDS) {
+      expect(foundItemIds.has(itemId)).toBe(true);
+    }
+  });
 });
