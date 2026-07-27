@@ -71,7 +71,43 @@ export function getNpcDialogue(npcId: string): string[] {
   }
 
   if (npcId === "shopkeeper") {
+    if (hasFlag("carriageObtained")) {
+      return ["道具屋ニコ: 馬車を借り受けたんだって？さすがだね。旅の荷物なら任せておくれ。"];
+    }
+
+    if (hasFlag("thirdQuestComplete")) {
+      return ["道具屋ニコ: 谷に静けさが戻ったなあ。おかげでこっちも仕入れに集中できるよ。"];
+    }
+
+    if (hasFlag("treasureFound")) {
+      return ["道具屋ニコ: 太陽石を取り戻したんだって？大したもんだ。"];
+    }
+
+    if (hasFlag("questAccepted")) {
+      return ["道具屋ニコ: 洞窟に行くなら、薬草くらいは持っていきな。"];
+    }
+
     return ["道具屋ニコ: 旅の準備なら、うちに任せて。"];
+  }
+
+  if (npcId === "equipmentShopkeeper") {
+    if (hasFlag("fourthQuestComplete")) {
+      return ["装備屋ガロ: 深霧の魔王まで倒したのか。お前の装備、もううちの店じゃ物足りないんじゃないか？"];
+    }
+
+    if (hasFlag("finalBeastDefeated")) {
+      return ["装備屋ガロ: 月蝕の魔獣を討ったって聞いたぜ。いい面構えになったじゃないか。"];
+    }
+
+    if (hasFlag("secondTreasureFound")) {
+      return ["装備屋ガロ: 月影石まで持ち帰るとはな。装備も見直していくか？"];
+    }
+
+    if (hasFlag("questAccepted")) {
+      return ["装備屋ガロ: 洞窟に潜るなら、防具は妥協するな。"];
+    }
+
+    return ["装備屋ガロ: いい防具を揃えてるぜ、見ていきな。"];
   }
 
   if (npcId === "hiddenElder") {

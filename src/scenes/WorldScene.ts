@@ -876,12 +876,12 @@ export class WorldScene extends Phaser.Scene {
 
   private async handleNpc(npc: NpcDefinition): Promise<void> {
     if (npc.id === "shopkeeper") {
-      this.openShop("item");
+      this.showDialogue(getNpcDialogue(npc.id), () => this.openShop("item"));
       return;
     }
 
     if (npc.id === "equipmentShopkeeper") {
-      this.openShop("equipment");
+      this.showDialogue(getNpcDialogue(npc.id), () => this.openShop("equipment"));
       return;
     }
 
