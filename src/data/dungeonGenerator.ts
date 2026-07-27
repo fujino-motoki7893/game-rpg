@@ -1,3 +1,4 @@
+import { Map as RotMap, RNG as RotRng } from "rot-js";
 import { DUNGEON_ENEMY_KEYS, type DungeonEnemyKey } from "./enemies";
 import type {
   ChestReward,
@@ -16,6 +17,14 @@ const BASE_HEIGHT = 30;
 export const DEEP_FLOOR_THRESHOLD = 5;
 const DEEP_WIDTH_STEP = 4;
 const DEEP_HEIGHT_STEP = 3;
+// Cellular-automaton cave shape (see generateCaveGrid). This is the classic
+// "B5678/S45678" cave rule: dense enough after a few smoothing passes to read
+// as natural rock chambers rather than a maze of 1-wide tunnels.
+const CAVE_FILL_PROBABILITY = 0.5;
+const CAVE_SMOOTHING_ITERATIONS = 4;
+const CAVE_CONNECTIVITY_ATTEMPTS = 5;
+const SECTOR_BASE_COLS = 3;
+const SECTOR_ROWS = 2;
 const MIN_SUPPLY_CHESTS = 1;
 const MAX_SUPPLY_CHESTS = 3;
 const MAX_SUPPLY_CHESTS_WITH_DEPTH_BONUS = 6;
@@ -213,70 +222,13 @@ export function generateDungeon(
   const rng = createRng(seed);
   const { width, height } = getDungeonDimensions(floor);
   const extraDepth = Math.max(0, floor - DEEP_FLOOR_THRESHOLD);
-  const grid = createFilledGrid("#", width, height);
+  // The start/end rooms stay explicit rectangles — they anchor the spawn,
+  // stairs, relic and guardian placements below, and read fine as small
+  // carved chambers even inside an otherwise organic cave. Everything
+  // between them is a cellular-automaton cave (generateCaveGrid) instead of
+  // the old grid of rectangular rooms + straight corridors, so the bulk of
+  // the dungeon no longer reads as placed blocks.
   const startRoom: Room = { x: 1, y: 1, w: 8, h: 6 };
-  const midRooms = [
-    clampRoom(
-      {
-        x: randomInt(rng, 12, 16),
-        y: randomInt(rng, 2, 5),
-        w: randomInt(rng, 6, 8),
-        h: randomInt(rng, 4, 6)
-      },
-      BASE_WIDTH,
-      BASE_HEIGHT
-    ),
-    clampRoom(
-      {
-        x: randomInt(rng, 24, 29),
-        y: randomInt(rng, 2, 6),
-        w: randomInt(rng, 6, 8),
-        h: randomInt(rng, 4, 5)
-      },
-      BASE_WIDTH,
-      BASE_HEIGHT
-    ),
-    clampRoom(
-      {
-        x: randomInt(rng, 3, 7),
-        y: randomInt(rng, 12, 16),
-        w: randomInt(rng, 6, 8),
-        h: randomInt(rng, 4, 6)
-      },
-      BASE_WIDTH,
-      BASE_HEIGHT
-    ),
-    clampRoom(
-      {
-        x: randomInt(rng, 16, 20),
-        y: randomInt(rng, 12, 16),
-        w: randomInt(rng, 6, 9),
-        h: randomInt(rng, 5, 7)
-      },
-      BASE_WIDTH,
-      BASE_HEIGHT
-    ),
-    clampRoom(
-      {
-        x: randomInt(rng, 28, 32),
-        y: randomInt(rng, 12, 16),
-        w: randomInt(rng, 6, 8),
-        h: randomInt(rng, 4, 6)
-      },
-      BASE_WIDTH,
-      BASE_HEIGHT
-    ),
-    clampRoom(
-      {
-        x: randomInt(rng, 6, 10),
-        y: randomInt(rng, 20, 23),
-        w: randomInt(rng, 6, 8),
-        h: randomInt(rng, 4, 6)
-      },
-      BASE_WIDTH,
-      BASE_HEIGHT
-    )
-  ];
   const endRoom = clampRoom(
     {
       x: randomInt(rng, 26, 29),
@@ -287,33 +239,15 @@ export function generateDungeon(
     BASE_WIDTH,
     BASE_HEIGHT
   );
-  // Deep floors (beyond DEEP_FLOOR_THRESHOLD) get extra rooms chained off the
-  // end room, spreading progressively into the newly available width/height
-  // so the map actually grows into a bigger explorable space instead of just
-  // padding the border with unused walls.
-  const deepRooms: Room[] = [];
-  for (let index = 0; index < extraDepth; index += 1) {
-    const spreadX = BASE_WIDTH - 6 + index * DEEP_WIDTH_STEP;
-    const spreadY = BASE_HEIGHT - 10 + index * DEEP_HEIGHT_STEP;
-    deepRooms.push(
-      clampRoom(
-        {
-          x: randomInt(rng, spreadX, spreadX + 4),
-          y: randomInt(rng, spreadY, spreadY + 6),
-          w: randomInt(rng, 6, 9),
-          h: randomInt(rng, 5, 7)
-        },
-        width,
-        height
-      )
-    );
-  }
-  const rooms = [startRoom, ...midRooms, endRoom, ...deepRooms];
+  const grid = buildConnectedCaveGrid(width, height, seed, startRoom, endRoom, rng);
 
-  rooms.forEach((room) => carveRoom(grid, room));
-  for (let index = 1; index < rooms.length; index += 1) {
-    connectRooms(grid, roomCenter(rooms[index - 1]), roomCenter(rooms[index]), rng);
-  }
+  // Enemies/chests/water pools used to be scattered one-per-rectangular-room;
+  // the cave has no natural "rooms" to anchor on, so instead divide its
+  // bounding box into evenly sized sectors and sample a random open floor
+  // tile within each (findOpenFloorNear already handles a sector center
+  // landing on a wall cell). This reproduces the same "spread across the
+  // map, not clustered" distribution the room-based pool used to give.
+  const sectors = buildSectors(width, height, extraDepth);
 
   const spawn = { x: 1, y: 1 };
   const fieldEntrance = getFieldDungeonEntranceForTier(tier);
@@ -378,7 +312,7 @@ export function generateDungeon(
     });
   }
 
-  const regularEnemyPositions = shuffled(midRooms, rng)
+  const regularEnemyPositions = shuffled(sectors, rng)
     .slice(0, REGULAR_ENEMY_COUNT)
     .map((room, index) => {
       const preferred = {
@@ -407,11 +341,10 @@ export function generateDungeon(
     });
   }
 
-  const chestRoomPool = deepRooms.length > 0 ? [...midRooms, ...deepRooms] : midRooms;
   const supplyChestCount = getSupplyChestCount(floor, rng());
   const supplyChests: TilePosition[] = [];
   for (let index = 0; index < supplyChestCount; index += 1) {
-    const room = chestRoomPool[(floor - 1 + index) % chestRoomPool.length];
+    const room = sectors[(floor - 1 + index) % sectors.length];
     const supplyChest = findOpenFloorNear(grid, roomCenter(room), reserved);
     placeMarker(grid, supplyChest, "B");
     reserved.add(positionKey(supplyChest));
@@ -423,7 +356,7 @@ export function generateDungeon(
     addChestAccessRequirement(grid, relicChest, reserved, requiredTiles);
   }
 
-  addWaterPools(grid, rng, chestRoomPool, reserved, requiredTiles);
+  addWaterPools(grid, rng, sectors, reserved, requiredTiles);
   placeMarker(grid, spawn, "U");
 
   // Geist, the armored ally, waits on tier 4's first floor — always emitted
@@ -432,7 +365,7 @@ export function generateDungeon(
   // static field NPC is hidden after she joins.
   const npcs: NpcDefinition[] = [];
   if (tier === 4 && floor === 1) {
-    const geistPosition = findOpenFloorNear(grid, roomCenter(midRooms[3]), reserved);
+    const geistPosition = findOpenFloorNear(grid, roomCenter(sectors[3]), reserved);
     reserved.add(positionKey(geistPosition));
     npcs.push({
       id: "geist",
@@ -564,6 +497,85 @@ function createRng(seed: number): Rng {
 
 function createFilledGrid(tile: string, width: number, height: number): Grid {
   return Array.from({ length: height }, () => Array.from({ length: width }, () => tile));
+}
+
+// Classic B5678/S45678 cave automaton: randomize ~half the grid as wall,
+// smooth it a few times so it clumps into rock masses instead of static, then
+// let rot-js's connect() stitch any disconnected pockets together so the
+// whole cave is one reachable region. rot-js drives this off its own global
+// RNG (separate from this module's seeded `rng`), so it's reseeded here to
+// keep generation reproducible for a given seed.
+function generateCaveGrid(width: number, height: number, seed: number): Grid {
+  RotRng.setSeed(seed);
+  const cellular = new RotMap.Cellular(width, height, { born: [5, 6, 7, 8], survive: [4, 5, 6, 7, 8] });
+  cellular.randomize(CAVE_FILL_PROBABILITY);
+  for (let i = 0; i < CAVE_SMOOTHING_ITERATIONS; i += 1) {
+    cellular.create();
+  }
+  const grid = createFilledGrid("#", width, height);
+  cellular.connect((x, y, value) => {
+    grid[y][x] = value ? "#" : ".";
+  }, 0);
+  return grid;
+}
+
+// Carves the start/end rooms into a freshly generated cave and links them
+// with a straight corridor, then verifies the result is actually traversable
+// end to end. rot-js's connect() already guarantees the cave itself is one
+// connected blob, and the corridor is virtually certain to cross it (it spans
+// most of the map), so this should pass on the first attempt in practice —
+// the retry with a perturbed seed is a defensive fallback for a boss/stairs
+// room that's unreachable, not a normal code path.
+function buildConnectedCaveGrid(
+  width: number,
+  height: number,
+  seed: number,
+  startRoom: Room,
+  endRoom: Room,
+  rng: Rng
+): Grid {
+  const startCenter = roomCenter(startRoom);
+  const endCenter = roomCenter(endRoom);
+  let grid: Grid = createFilledGrid("#", width, height);
+  for (let attempt = 0; attempt < CAVE_CONNECTIVITY_ATTEMPTS; attempt += 1) {
+    grid = generateCaveGrid(width, height, (seed + attempt * 0x9e3779b1) >>> 0);
+    carveRoom(grid, startRoom);
+    carveRoom(grid, endRoom);
+    connectRooms(grid, startCenter, endCenter, rng);
+    if (canReachAll(grid, startCenter, [endCenter])) {
+      return grid;
+    }
+  }
+  return grid;
+}
+
+// Replaces the old per-rectangular-room content pool: the cave has no
+// natural "rooms", so this just tiles its bounding box into evenly sized
+// sectors. Deep floors get extra columns as the map widens, mirroring how
+// the old generator chained extra rooms onto deeper floors.
+function buildSectors(width: number, height: number, extraDepth: number): Room[] {
+  const cols = SECTOR_BASE_COLS + extraDepth;
+  const rows = SECTOR_ROWS;
+  const sectorWidth = Math.floor(width / cols);
+  const sectorHeight = Math.floor(height / rows);
+  const sectors: Room[] = [];
+  for (let sectorY = 0; sectorY < rows; sectorY += 1) {
+    for (let sectorX = 0; sectorX < cols; sectorX += 1) {
+      sectors.push(
+        clampRoom(
+          {
+            x: sectorX * sectorWidth + 1,
+            y: sectorY * sectorHeight + 1,
+            w: sectorWidth - 2,
+            h: sectorHeight - 2
+          },
+          width,
+          height
+        )
+      );
+    }
+  }
+  return sectors;
 }
 
 function clampRoom(room: Room, width: number, height: number): Room {
