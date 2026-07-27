@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import { getJournalEntries, getObjective } from "./dialogues";
-import { markFlag, resetSave } from "../game/GameState";
+import { getCompanionChatStage, getJournalEntries, getNextStaticCompanionLine, getObjective } from "./dialogues";
+import { hasFlag, markFlag, resetSave } from "../game/GameState";
 
 describe("getJournalEntries", () => {
   beforeEach(() => {
@@ -34,5 +34,70 @@ describe("getJournalEntries", () => {
     const entries = getJournalEntries();
     entries.slice(0, -1).forEach((entry) => expect(entry.current).toBe(false));
     expect(entries[entries.length - 1].current).toBe(true);
+  });
+});
+
+describe("getCompanionChatStage", () => {
+  beforeEach(() => {
+    resetSave();
+  });
+
+  it("defaults both companions to their casual stage", () => {
+    expect(getCompanionChatStage("luna")).toBe("casual");
+    expect(getCompanionChatStage("geist")).toBe("casual");
+  });
+
+  it("advances geist's stage using his own shorter stage ladder", () => {
+    markFlag("questAccepted");
+    markFlag("treasureFound");
+    markFlag("questComplete");
+    expect(getCompanionChatStage("geist")).toBe("casual");
+    expect(getCompanionChatStage("luna")).not.toBe("casual");
+
+    markFlag("mistSovereignDefeated");
+    expect(getCompanionChatStage("geist")).toBe("mist-sovereign-defeated");
+  });
+});
+
+describe("getNextStaticCompanionLine", () => {
+  beforeEach(() => {
+    resetSave();
+  });
+
+  it("marks luna's seen-line flag using the pre-existing luna-line-seen: prefix for backward compatibility", () => {
+    const line = getNextStaticCompanionLine("luna", "casual");
+    expect(line).toBeDefined();
+
+    let matched = false;
+    for (let i = 0; i < 20; i += 1) {
+      if (hasFlag(`luna-line-seen:casual-${i}`)) {
+        matched = true;
+        break;
+      }
+    }
+    expect(matched).toBe(true);
+  });
+
+  it("gives geist his own geist-line-seen: namespace, separate from luna's", () => {
+    getNextStaticCompanionLine("geist", "casual");
+
+    let matched = false;
+    for (let i = 0; i < 20; i += 1) {
+      if (hasFlag(`geist-line-seen:casual-${i}`)) {
+        matched = true;
+        break;
+      }
+    }
+    expect(matched).toBe(true);
+  });
+
+  it("returns undefined once every static line for a stage has been seen", () => {
+    for (let i = 0; i < 20; i += 1) {
+      const line = getNextStaticCompanionLine("geist", "mist-sovereign-defeated");
+      if (line === undefined) {
+        break;
+      }
+    }
+    expect(getNextStaticCompanionLine("geist", "mist-sovereign-defeated")).toBeUndefined();
   });
 });

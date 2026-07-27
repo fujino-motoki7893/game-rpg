@@ -5,10 +5,10 @@ import {
   getCharacterWalkAnimationKey
 } from "../data/characterSprites";
 import {
-  fetchLunaLine,
-  getCurrentLunaStage,
-  getLunaLine,
-  getNextStaticLunaLine,
+  fetchCompanionLine,
+  getCompanionChatStage,
+  getCompanionLine,
+  getNextStaticCompanionLine,
   getNpcDialogue
 } from "../data/dialogues";
 import {
@@ -135,7 +135,7 @@ export class WorldScene extends Phaser.Scene {
   private dialogueBox?: Phaser.GameObjects.Rectangle;
   private dialogueAccent?: Phaser.GameObjects.Rectangle;
   private dialogueText?: Phaser.GameObjects.Text;
-  private lunaFieldRequestToken = 0;
+  private companionFieldRequestToken = 0;
   private targetHintBox?: Phaser.GameObjects.Rectangle;
   private targetHintText?: Phaser.GameObjects.Text;
   private objectGroup?: Phaser.GameObjects.Group;
@@ -846,25 +846,27 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
 
-    if (!hasCompanion("luna")) {
+    const presentCompanions = COMPANION_ORDER.filter((id) => hasCompanion(id));
+    if (presentCompanions.length === 0) {
       return;
     }
+    const id = presentCompanions[Math.floor(Math.random() * presentCompanions.length)];
 
-    const stage = getCurrentLunaStage();
-    const staticLine = getNextStaticLunaLine(stage);
+    const stage = getCompanionChatStage(id);
+    const staticLine = getNextStaticCompanionLine(id, stage);
     if (staticLine) {
       this.showDialogue([staticLine]);
       return;
     }
 
-    const placeholder = "ルナ: ……";
-    const requestToken = ++this.lunaFieldRequestToken;
+    const placeholder = `${COMPANIONS[id].name}: ……`;
+    const requestToken = ++this.companionFieldRequestToken;
     this.showDialogue([placeholder]);
 
-    fetchLunaLine(stage)
-      .catch(() => getLunaLine())
+    fetchCompanionLine(id, stage)
+      .catch(() => getCompanionLine(id))
       .then((line) => {
-        if (requestToken !== this.lunaFieldRequestToken) {
+        if (requestToken !== this.companionFieldRequestToken) {
           return;
         }
         if (this.dialogueLines.length === 1 && this.dialogueLines[0] === placeholder) {

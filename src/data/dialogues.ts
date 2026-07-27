@@ -1,8 +1,16 @@
 import { hasFlag, markFlag } from "../game/GameState";
+import { getGeistLineForStage, getGeistChatStage, getGeistStaticLinePool } from "./geistLines";
+import type { GeistChatStage, GeistStaticLine } from "./geistLines";
 import { getLunaLineForStage, getLunaQuestStage, getLunaStaticLinePool } from "./lunaLines";
-import type { LunaQuestStage } from "./lunaLines";
+import type { LunaQuestStage, LunaStaticLine } from "./lunaLines";
+import type { CompanionId } from "./companions";
 
-const LUNA_SEEN_FLAG_PREFIX = "luna-line-seen:";
+// Kept as "luna-line-seen:"/"geist-line-seen:" (not a single shared prefix)
+// so existing saves' already-seen Luna lines stay recognized after this
+// generalization — each companion's own name-prefixed key is unchanged.
+function seenLineFlag(id: CompanionId, lineId: string): string {
+  return `${id}-line-seen:${lineId}`;
+}
 
 export function getNpcDialogue(npcId: string): string[] {
   if (npcId === "elder") {
@@ -135,7 +143,7 @@ export function getNpcDialogue(npcId: string): string[] {
   return ["返事はない。"];
 }
 
-export function getCurrentLunaStage(): LunaQuestStage {
+function getCurrentLunaStage(): LunaQuestStage {
   return getLunaQuestStage({
     fourthQuestComplete: hasFlag("fourthQuestComplete"),
     mistSovereignDefeated: hasFlag("mistSovereignDefeated"),
@@ -150,45 +158,69 @@ export function getCurrentLunaStage(): LunaQuestStage {
   });
 }
 
-export function getLunaLine(): string {
-  return getLunaLineForStage(getCurrentLunaStage());
+function getCurrentGeistStage(): GeistChatStage {
+  return getGeistChatStage({
+    fourthQuestComplete: hasFlag("fourthQuestComplete"),
+    mistSovereignDefeated: hasFlag("mistSovereignDefeated")
+  });
+}
+
+/** The companion's current conversation stage, as an opaque string — its
+ * meaning (and validity) is entirely up to that companion's own line data
+ * (lunaLines.ts / geistLines.ts), which both the client and the Worker's
+ * AI line generator read back via the same string. */
+export function getCompanionChatStage(id: CompanionId): string {
+  return id === "geist" ? getCurrentGeistStage() : getCurrentLunaStage();
+}
+
+function getStaticLinePool(id: CompanionId, stage: string): (LunaStaticLine | GeistStaticLine)[] {
+  return id === "geist"
+    ? getGeistStaticLinePool(stage as GeistChatStage)
+    : getLunaStaticLinePool(stage as LunaQuestStage);
+}
+
+/** Always-succeeds fallback line for a companion's current stage — used
+ * when the AI request fails or is skipped entirely. */
+export function getCompanionLine(id: CompanionId): string {
+  const stage = getCompanionChatStage(id);
+  return id === "geist"
+    ? getGeistLineForStage(stage as GeistChatStage)
+    : getLunaLineForStage(stage as LunaQuestStage);
 }
 
 /**
- * Returns the next not-yet-seen static line for the given stage, marking it
- * seen as a side effect. Returns undefined once every static line for this
- * stage has already been shown at least once (across the whole save), which
- * signals the caller to fall back to AI generation instead.
+ * Returns the next not-yet-seen static line for the given companion/stage,
+ * marking it seen as a side effect. Returns undefined once every static
+ * line for this stage has already been shown at least once (across the
+ * whole save), which signals the caller to fall back to AI generation.
  */
-export function getNextStaticLunaLine(stage: LunaQuestStage): string | undefined {
-  const unseen = getLunaStaticLinePool(stage).filter(
-    (line) => !hasFlag(`${LUNA_SEEN_FLAG_PREFIX}${line.id}`)
-  );
+export function getNextStaticCompanionLine(id: CompanionId, stage: string): string | undefined {
+  const unseen = getStaticLinePool(id, stage).filter((line) => !hasFlag(seenLineFlag(id, line.id)));
   if (unseen.length === 0) {
     return undefined;
   }
 
   const chosen = unseen[Math.floor(Math.random() * unseen.length)];
-  markFlag(`${LUNA_SEEN_FLAG_PREFIX}${chosen.id}`);
+  markFlag(seenLineFlag(id, chosen.id));
   return chosen.text;
 }
 
-export async function fetchLunaLine(stage: LunaQuestStage): Promise<string> {
-  const response = await fetch("/api/luna-line", {
+export async function fetchCompanionLine(id: CompanionId, stage: string): Promise<string> {
+  const response = await fetch("/api/companion-line", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ stage }),
+    body: JSON.stringify({ companion: id, stage }),
     signal: AbortSignal.timeout(6000)
   });
 
   if (!response.ok) {
-    throw new Error(`Luna line API returned ${response.status}`);
+    throw new Error(`Companion line API returned ${response.status}`);
   }
 
   const payload = (await response.json()) as { line?: unknown };
   const line = payload.line;
   if (typeof line !== "string" || !line.trim() || line.length > 160) {
-    throw new Error("Luna line API returned an invalid line");
+    throw new Error("Companion line API returned an invalid line");
   }
 
   return line.trim();

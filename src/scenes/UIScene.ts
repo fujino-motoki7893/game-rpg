@@ -112,11 +112,10 @@ export class UIScene extends Phaser.Scene {
         text?.setText("");
       }
     });
-    // Only Luna has a field chat (L key) — Geist's dialogue lives in the
-    // menu tab only, so the hint stays specific to her rather than looping.
+    const hasAnyCompanion = COMPANION_ORDER.some((id) => hasCompanion(id));
     this.controlsText?.setText(
-      hasCompanion("luna")
-        ? "操作: 移動 矢印/WASD  決定 Space/Enter  メニュー M/Esc  ルナと話す L  リセット R"
+      hasAnyCompanion
+        ? "操作: 移動 矢印/WASD  決定 Space/Enter  メニュー M/Esc  仲間と話す L  リセット R"
         : "操作: 移動 矢印/WASD  決定 Space/Enter  メニュー M/Esc  リセット R"
     );
     this.objectiveText?.setText(getObjective());

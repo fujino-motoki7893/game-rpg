@@ -11,11 +11,11 @@ import {
   getEquipmentUpgradeLabel
 } from "../data/equipment";
 import {
-  fetchLunaLine,
-  getCurrentLunaStage,
+  fetchCompanionLine,
+  getCompanionChatStage,
+  getCompanionLine,
   getJournalEntries,
-  getLunaLine,
-  getNextStaticLunaLine
+  getNextStaticCompanionLine
 } from "../data/dialogues";
 import {
   canItemEscapeDungeon,
@@ -75,12 +75,6 @@ const BASE_TAB_LABELS: Record<MenuTab, string> = {
   status: "強さ",
   journal: "日誌"
 };
-const GEIST_LINES = [
-  "ガイスト: ……(鎧が小さく震える)",
-  "ガイスト: この身に意志が戻ったのは、貴殿のおかげだ。",
-  "ガイスト: 深霧の魔王には、油断するな。",
-  "ガイスト: 我が拳と鎧、貴殿の盾となろう。"
-];
 
 export class MenuScene extends Phaser.Scene {
   private activeTab: MenuTab = "items";
@@ -98,10 +92,9 @@ export class MenuScene extends Phaser.Scene {
   private contentMaxScroll = 0;
   private readonly contentViewport = { x: 130, y: 200, width: 540, height: 280 };
   private messageText?: Phaser.GameObjects.Text;
-  private lunaLine = "";
-  private lunaLoading = false;
-  private lunaRequestToken = 0;
-  private geistLine = "";
+  private companionLines = new Map<CompanionId, string>();
+  private companionLoading = new Set<CompanionId>();
+  private companionRequestTokens = new Map<CompanionId, number>();
 
   constructor() {
     super("MenuScene");
@@ -117,10 +110,9 @@ export class MenuScene extends Phaser.Scene {
     this.statusCharacter = "hero";
     this.contentObjects = [];
     this.tabButtons = {};
-    this.lunaLine = "";
-    this.lunaLoading = false;
-    this.lunaRequestToken = 0;
-    this.geistLine = "";
+    this.companionLines = new Map();
+    this.companionLoading = new Set();
+    this.companionRequestTokens = new Map();
     this.contentScrollY = 0;
     this.contentMaxScroll = 0;
 
@@ -826,8 +818,8 @@ export class MenuScene extends Phaser.Scene {
    * companion via the toggle above is enough to reach both.
    */
   private renderCompanionTalk(id: CompanionId, y: number): void {
-    const line = id === "luna" ? this.lunaLine : this.geistLine;
-    const loading = id === "luna" && this.lunaLoading;
+    const line = this.companionLines.get(id) ?? "";
+    const loading = this.companionLoading.has(id);
 
     if (!line && !loading) {
       this.talkToCompanion(id);
@@ -873,60 +865,43 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private talkToCompanion(id: CompanionId): void {
-    if (id === "luna") {
-      this.talkToLuna();
-    } else if (id === "geist") {
-      this.talkToGeist();
-    }
-  }
-
-  private talkToLuna(): void {
-    if (this.lunaLoading) {
+    if (this.companionLoading.has(id)) {
       return;
     }
 
-    const stage = getCurrentLunaStage();
+    const stage = getCompanionChatStage(id);
 
     // Static lines (first casual chats, and the one-off comment after each
-    // elder milestone) always come first; only once every static line for
+    // story milestone) always come first; only once every static line for
     // the current stage has been seen do we reach for AI generation.
-    const staticLine = getNextStaticLunaLine(stage);
+    const staticLine = getNextStaticCompanionLine(id, stage);
     if (staticLine) {
-      this.lunaLine = staticLine;
+      this.companionLines.set(id, staticLine);
       this.setMessage("");
       this.renderContent();
       return;
     }
 
-    this.lunaLoading = true;
+    this.companionLoading.add(id);
     this.setMessage("");
     this.renderContent();
 
-    const requestToken = ++this.lunaRequestToken;
+    const requestToken = (this.companionRequestTokens.get(id) ?? 0) + 1;
+    this.companionRequestTokens.set(id, requestToken);
 
-    fetchLunaLine(stage)
-      .catch(() => getLunaLine())
+    fetchCompanionLine(id, stage)
+      .catch(() => getCompanionLine(id))
       .then((line) => {
-        if (requestToken !== this.lunaRequestToken || !this.scene.isActive()) {
+        if (this.companionRequestTokens.get(id) !== requestToken || !this.scene.isActive()) {
           return;
         }
 
-        this.lunaLine = line;
-        this.lunaLoading = false;
-        if (this.activeTab === "status" && this.statusCharacter === "luna") {
+        this.companionLines.set(id, line);
+        this.companionLoading.delete(id);
+        if (this.activeTab === "status" && this.statusCharacter === id) {
           this.renderContent();
         }
       });
-  }
-
-  private talkToGeist(): void {
-    // Geist joins for the final stretch of the story rather than carrying
-    // his own multi-chapter arc, so he gets a small static flavor pool
-    // instead of Luna's stage-aware AI chat.
-    const nextLine = Phaser.Utils.Array.GetRandom(GEIST_LINES.filter((line) => line !== this.geistLine));
-    this.geistLine = nextLine ?? GEIST_LINES[0];
-    this.setMessage("");
-    this.renderContent();
   }
 
   private selectItem(index: number): void {

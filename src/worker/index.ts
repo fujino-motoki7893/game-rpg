@@ -13,12 +13,21 @@ import {
 } from "../data/dungeonGenerator";
 import { isDungeonEnemyKey, type DungeonEnemyKey } from "../data/enemies";
 import {
+  describeGeistStage,
+  getGeistLineForStage,
+  isGeistChatStage,
+  GEIST_CASUAL_LINES
+} from "../data/geistLines";
+import type { GeistChatStage } from "../data/geistLines";
+import {
   describeLunaStage,
   getLunaLineForStage,
   isLunaQuestStage,
   LUNA_CASUAL_LINES
 } from "../data/lunaLines";
 import type { LunaQuestStage } from "../data/lunaLines";
+
+type CompanionChatStage = LunaQuestStage | GeistChatStage;
 import type {
   ChestReward,
   EnemySpawn,
@@ -47,7 +56,7 @@ interface GroqChatCompletion {
 const WIDTH = 40;
 const HEIGHT = 30;
 const DEFAULT_MODEL = "llama-3.1-8b-instant";
-const LUNA_MODEL = "llama-3.3-70b-versatile";
+const COMPANION_LINE_MODEL = "llama-3.3-70b-versatile";
 const REGULAR_ENEMY_COUNT = 5;
 
 interface DungeonRequest {
@@ -84,11 +93,11 @@ export default {
       return createDungeonResponse(request, env);
     }
 
-    if (url.pathname === "/api/luna-line") {
+    if (url.pathname === "/api/companion-line") {
       if (request.method !== "POST") {
         return jsonResponse({ error: "Method not allowed" }, 405);
       }
-      return createLunaLineResponse(request, env);
+      return createCompanionLineResponse(request, env);
     }
 
     if (url.pathname.startsWith("/api/")) {
@@ -261,27 +270,30 @@ async function generateGroqDungeon(env: Env, context: DungeonRequest): Promise<M
   return map ?? generateDungeon({ ...context, seed: readSeed(parsed) ?? hashString(content) });
 }
 
-async function createLunaLineResponse(request: Request, env: Env): Promise<Response> {
-  const stage = await readLunaLineRequest(request);
-  const fallbackLine = getLunaLineForStage(stage);
+async function createCompanionLineResponse(request: Request, env: Env): Promise<Response> {
+  const { companion, stage } = await readCompanionLineRequest(request);
+  const fallbackLine =
+    companion === "geist" ? getGeistLineForStage(stage as GeistChatStage) : getLunaLineForStage(stage as LunaQuestStage);
 
   if (!env.GROQ_API_KEY) {
     return jsonResponse({ line: fallbackLine, source: "worker-local" });
   }
 
   try {
-    const line = await generateGroqLunaLine(env, stage);
+    const line = await generateGroqCompanionLine(env, companion, stage);
     return jsonResponse({ line, source: "groq" });
   } catch (error) {
     console.warn(
-      "Groq Luna line generation failed",
+      `Groq ${companion} line generation failed`,
       error instanceof Error ? error.message : "unknown error"
     );
     return jsonResponse({ line: fallbackLine, source: "worker-local", warning: "groq-unavailable" });
   }
 }
 
-async function readLunaLineRequest(request: Request): Promise<LunaQuestStage> {
+async function readCompanionLineRequest(
+  request: Request
+): Promise<{ companion: "luna" | "geist"; stage: CompanionChatStage }> {
   let raw: unknown = {};
   try {
     raw = await request.json();
@@ -289,13 +301,48 @@ async function readLunaLineRequest(request: Request): Promise<LunaQuestStage> {
     raw = {};
   }
 
-  const body = raw && typeof raw === "object" ? (raw as { stage?: unknown }) : {};
-  return isLunaQuestStage(body.stage) ? body.stage : "casual";
+  const body = raw && typeof raw === "object" ? (raw as { companion?: unknown; stage?: unknown }) : {};
+  const companion = body.companion === "geist" ? "geist" : "luna";
+  if (companion === "geist") {
+    return { companion, stage: isGeistChatStage(body.stage) ? body.stage : "casual" };
+  }
+  return { companion, stage: isLunaQuestStage(body.stage) ? body.stage : "casual" };
 }
 
-async function generateGroqLunaLine(env: Env, stage: LunaQuestStage): Promise<string> {
-  const situation = describeLunaStage(stage);
-  const voiceExamples = LUNA_CASUAL_LINES.slice(0, 4).map((line) => line.text);
+async function generateGroqCompanionLine(
+  env: Env,
+  companion: "luna" | "geist",
+  stage: CompanionChatStage
+): Promise<string> {
+  const situation =
+    companion === "geist" ? describeGeistStage(stage as GeistChatStage) : describeLunaStage(stage as LunaQuestStage);
+  const voiceExamples = (companion === "geist" ? GEIST_CASUAL_LINES : LUNA_CASUAL_LINES)
+    .slice(0, 4)
+    .map((line) => line.text);
+  const speakerName = companion === "geist" ? "ガイスト" : "ルナ";
+  const systemPrompt =
+    companion === "geist"
+      ? [
+          "あなたは日本語の小さなブラウザRPGに登場する仲間キャラクター「ガイスト」のセリフを1行だけ書きます。",
+          "ガイストは古い鎧に意志が宿った戦士です。寡黙で古風、実直な性格で、旅の道中ずっと勇者(プレイヤー)に付き従っています。",
+          "一人称は「我」。プレイヤーのことは「貴殿」と呼びます。口調は古風で簡潔、ときには「……」だけの間も自然です。若者言葉、くだけた表現、絵文字は使いません。",
+          "HPやMP、レベルなど、ゲームのシステム用語には言及しないでください。",
+          "紋切り型の掛け声は避け、具体的で自然な一言にしてください。",
+          "以下はガイストの話し方の実例です。この雰囲気・文の長さに合わせてください(内容をそのまま繰り返す必要はありません):",
+          ...voiceExamples.map((line) => `- ${line}`),
+          "出力は「ガイスト: 」から始まる1文のみ。40字以内。説明や地の文、鉤括弧は付けないでください。"
+        ].join("\n")
+      : [
+          "あなたは日本語の小さなブラウザRPGに登場する仲間キャラクター「ルナ」のセリフを1行だけ書きます。",
+          "ルナは物腰が柔らかく上品な、支援型の魔法使いです。旅の道中、ずっと勇者(プレイヤー)に寄り添っています。",
+          "一人称は「私」。口調は丁寧な「です・ます調」で、少し古風で落ち着いた話し方です。若者言葉、くだけた表現、絵文字は使いません。",
+          "HPやMP、レベルなど、ゲームのシステム用語には言及しないでください。",
+          "「頑張りましょう」「油断は禁物です」のような紋切り型の掛け声も避け、具体的で自然な一言にしてください。",
+          "以下はルナの話し方の実例です。この雰囲気・文の長さに合わせてください(内容をそのまま繰り返す必要はありません):",
+          ...voiceExamples.map((line) => `- ${line}`),
+          "出力は「ルナ: 」から始まる1文のみ。40字以内。説明や地の文、鉤括弧は付けないでください。"
+        ].join("\n");
+
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -303,26 +350,14 @@ async function generateGroqLunaLine(env: Env, stage: LunaQuestStage): Promise<st
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: LUNA_MODEL,
+      model: COMPANION_LINE_MODEL,
       temperature: 0.65,
       max_completion_tokens: 120,
       messages: [
-        {
-          role: "system",
-          content: [
-            "あなたは日本語の小さなブラウザRPGに登場する仲間キャラクター「ルナ」のセリフを1行だけ書きます。",
-            "ルナは物腰が柔らかく上品な、支援型の魔法使いです。旅の道中、ずっと勇者(プレイヤー)に寄り添っています。",
-            "一人称は「私」。口調は丁寧な「です・ます調」で、少し古風で落ち着いた話し方です。若者言葉、くだけた表現、絵文字は使いません。",
-            "HPやMP、レベルなど、ゲームのシステム用語には言及しないでください。",
-            "「頑張りましょう」「油断は禁物です」のような紋切り型の掛け声も避け、具体的で自然な一言にしてください。",
-            "以下はルナの話し方の実例です。この雰囲気・文の長さに合わせてください(内容をそのまま繰り返す必要はありません):",
-            ...voiceExamples.map((line) => `- ${line}`),
-            "出力は「ルナ: 」から始まる1文のみ。40字以内。説明や地の文、鉤括弧は付けないでください。"
-          ].join("\n")
-        },
+        { role: "system", content: systemPrompt },
         {
           role: "user",
-          content: `今の状況: ${situation}\nこの状況でルナが勇者にかけそうな一言を、上の話し方に忠実に1つ書いてください。`
+          content: `今の状況: ${situation}\nこの状況で${speakerName}が勇者にかけそうな一言を、上の話し方に忠実に1つ書いてください。`
         }
       ]
     })
@@ -338,20 +373,20 @@ async function generateGroqLunaLine(env: Env, stage: LunaQuestStage): Promise<st
     throw new Error("Groq returned no content");
   }
 
-  const line = sanitizeLunaLine(content);
+  const line = sanitizeCompanionLine(content, speakerName);
   if (!line) {
     throw new Error("Groq returned an unusable line");
   }
   return line;
 }
 
-function sanitizeLunaLine(content: string): string | undefined {
+function sanitizeCompanionLine(content: string, speakerName: string): string | undefined {
   const trimmed = content.trim().replace(/^["「]+|["」]+$/g, "");
   const firstLine = trimmed.split("\n")[0].trim();
   if (!firstLine || firstLine.length > 80) {
     return undefined;
   }
-  return firstLine.startsWith("ルナ") ? firstLine : `ルナ: ${firstLine}`;
+  return firstLine.startsWith(speakerName) ? firstLine : `${speakerName}: ${firstLine}`;
 }
 
 function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinition | undefined {
