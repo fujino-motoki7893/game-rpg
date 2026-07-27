@@ -180,6 +180,10 @@ export interface GameSave {
   items: Inventory;
   equipmentInventory: EquipmentInventory;
   equipment: EquipmentLoadout;
+  /** Upgrade level (0-MAX_EQUIPMENT_UPGRADE_LEVEL) per equipment id — global
+   * to the id, not per owned copy, so upgrading "ironSword" once upgrades
+   * every iron sword the player owns or will ever find. */
+  equipmentUpgrades?: Partial<Record<EquipmentId, number>>;
   flags: Record<string, boolean>;
   /** Each recruited companion's vitals/loadout, keyed by id — add a new CompanionId (data/companions.ts) to give it a slot here. */
   companions?: Partial<Record<CompanionId, CompanionSaveState>>;

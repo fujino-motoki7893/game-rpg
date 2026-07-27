@@ -16,8 +16,11 @@ import {
   EQUIPMENT_ORDER,
   getEquipmentBuyPrice,
   getEquipmentSellPrice,
+  getEquipmentUpgradeCost,
+  getUpgradedEquipmentStats,
   isEquipmentBuyable,
-  isEquipmentId
+  isEquipmentId,
+  MAX_EQUIPMENT_UPGRADE_LEVEL
 } from "../data/equipment";
 import {
   getSkillHealAmount,
@@ -85,6 +88,7 @@ export const initialSave = (): GameSave => ({
   items: { herb: 2 },
   equipmentInventory: {},
   equipment: {},
+  equipmentUpgrades: {},
   flags: {},
   defeatedEnemies: []
 });
@@ -114,15 +118,16 @@ function loadSave(): GameSave {
     const items = normalizeInventory(parsed.items, parsed.potions);
     const equipmentInventory = normalizeEquipmentInventory(parsed.equipmentInventory);
     const equipment = normalizeEquipmentLoadout(parsed.equipment);
+    const equipmentUpgrades = normalizeEquipmentUpgrades(parsed.equipmentUpgrades);
     const level = normalizePositiveInteger(parsed.level, base.level);
     const maxHp = normalizePositiveInteger(parsed.maxHp, base.maxHp);
     const maxMp = normalizeMaxMp(parsed.maxMp, level);
     const attack = normalizePositiveInteger(parsed.attack, base.attack);
     const speed = normalizePositiveInteger(parsed.speed, base.speed);
-    const equipmentStats = calculateEquipmentStats(equipment);
+    const equipmentStats = calculateEquipmentStats(equipment, equipmentUpgrades);
     const hp = normalizeHp(parsed.hp, maxHp + equipmentStats.maxHpBonus);
     const mp = normalizeMp(parsed.mp, maxMp + equipmentStats.maxMpBonus);
-    const companions = normalizeCompanions(rawParsed, level);
+    const companions = normalizeCompanions(rawParsed, level, equipmentUpgrades);
 
     return {
       ...base,
@@ -137,6 +142,7 @@ function loadSave(): GameSave {
       items,
       equipmentInventory,
       equipment,
+      equipmentUpgrades,
       companions,
       potions: items.herb ?? 0,
       flags: parsed.flags ?? {},
@@ -321,6 +327,13 @@ export interface EquipEquipmentResult {
   slot?: EquipmentSlot;
   previousEquipmentId?: EquipmentId;
   reason?: "no-equipment" | "unknown-equipment" | "incompatible-slot";
+}
+
+export interface UpgradeEquipmentResult {
+  upgraded: boolean;
+  level: number;
+  cost: number;
+  reason?: "unknown-equipment" | "not-owned" | "max-level" | "not-enough-gold";
 }
 
 export interface UseSkillResult {
@@ -702,6 +715,53 @@ export function unequipEquipment(slot: EquipmentSlot): EquipEquipmentResult {
   return { equipped: true, slot, previousEquipmentId };
 }
 
+export function getEquipmentUpgradeLevel(equipmentId: EquipmentId): number {
+  ensureEquipment();
+  return save.equipmentUpgrades?.[equipmentId] ?? 0;
+}
+
+// Upgrades are per equipment id (see GameSave.equipmentUpgrades), so
+// "owning" it for upgrade purposes means owning any copy anywhere —
+// unequipped inventory, the hero's loadout, or a companion's loadout.
+export function isEquipmentOwnedAnywhere(equipmentId: EquipmentId): boolean {
+  ensureEquipment();
+  if ((save.equipmentInventory[equipmentId] ?? 0) > 0) {
+    return true;
+  }
+  if (Object.values(save.equipment).includes(equipmentId)) {
+    return true;
+  }
+  return COMPANION_ORDER.some((id) =>
+    Object.values(ensureCompanionSlot(id).equipment ?? {}).includes(equipmentId)
+  );
+}
+
+export function upgradeEquipment(equipmentId: EquipmentId): UpgradeEquipmentResult {
+  if (!isEquipmentId(equipmentId)) {
+    return { upgraded: false, level: 0, cost: 0, reason: "unknown-equipment" };
+  }
+
+  ensureEquipment();
+  const currentLevel = getEquipmentUpgradeLevel(equipmentId);
+  if (!isEquipmentOwnedAnywhere(equipmentId)) {
+    return { upgraded: false, level: currentLevel, cost: 0, reason: "not-owned" };
+  }
+
+  if (currentLevel >= MAX_EQUIPMENT_UPGRADE_LEVEL) {
+    return { upgraded: false, level: currentLevel, cost: 0, reason: "max-level" };
+  }
+
+  const cost = getEquipmentUpgradeCost(equipmentId, currentLevel);
+  if (save.gold < cost) {
+    return { upgraded: false, level: currentLevel, cost, reason: "not-enough-gold" };
+  }
+
+  save.gold -= cost;
+  save.equipmentUpgrades![equipmentId] = currentLevel + 1;
+  persistSave();
+  return { upgraded: true, level: currentLevel + 1, cost };
+}
+
 export function buyItem(itemId: ItemId): BuyItemResult {
   if (!isItemId(itemId)) {
     return { bought: false, price: 0, reason: "unknown-item" };
@@ -958,6 +1018,9 @@ function ensureEquipment(): void {
   if (!save.equipment) {
     save.equipment = normalizeEquipmentLoadout(undefined);
   }
+  if (!save.equipmentUpgrades) {
+    save.equipmentUpgrades = {};
+  }
 }
 
 function ensureCompanionSlot(id: CompanionId): CompanionSaveState {
@@ -1052,6 +1115,20 @@ function normalizeEquipmentInventory(equipmentInventory: unknown): EquipmentInve
   return inventory;
 }
 
+function normalizeEquipmentUpgrades(equipmentUpgrades: unknown): Partial<Record<EquipmentId, number>> {
+  const upgrades: Partial<Record<EquipmentId, number>> = {};
+  if (equipmentUpgrades && typeof equipmentUpgrades === "object") {
+    const rawUpgrades = equipmentUpgrades as Record<string, unknown>;
+    EQUIPMENT_ORDER.forEach((equipmentId) => {
+      const level = rawUpgrades[equipmentId];
+      if (typeof level === "number" && Number.isFinite(level) && level > 0) {
+        upgrades[equipmentId] = Math.min(MAX_EQUIPMENT_UPGRADE_LEVEL, Math.floor(level));
+      }
+    });
+  }
+  return upgrades;
+}
+
 function normalizeEquipmentLoadout(equipment: unknown): EquipmentLoadout {
   const loadout: EquipmentLoadout = {};
   if (!equipment || typeof equipment !== "object") {
@@ -1070,14 +1147,15 @@ function normalizeEquipmentLoadout(equipment: unknown): EquipmentLoadout {
 
 function normalizeCompanions(
   parsed: Partial<GameSave> & LegacyCompanionFields,
-  level: number
+  level: number,
+  equipmentUpgrades: Partial<Record<EquipmentId, number>>
 ): Partial<Record<CompanionId, CompanionSaveState>> {
   if (parsed.companions) {
     const normalized: Partial<Record<CompanionId, CompanionSaveState>> = {};
     COMPANION_ORDER.forEach((id) => {
       const state = parsed.companions?.[id];
       if (state) {
-        normalized[id] = normalizeCompanionState(id, state, level);
+        normalized[id] = normalizeCompanionState(id, state, level, equipmentUpgrades);
       }
     });
     return normalized;
@@ -1093,7 +1171,8 @@ function normalizeCompanions(
     migrated.luna = normalizeCompanionState(
       "luna",
       { hp: parsed.companionHp, mp: parsed.companionMp, equipment: parsed.companionEquipment },
-      level
+      level,
+      equipmentUpgrades
     );
   }
   if (
@@ -1104,15 +1183,21 @@ function normalizeCompanions(
     migrated.geist = normalizeCompanionState(
       "geist",
       { hp: parsed.companion2Hp, mp: parsed.companion2Mp, equipment: parsed.companion2Equipment },
-      level
+      level,
+      equipmentUpgrades
     );
   }
   return migrated;
 }
 
-function normalizeCompanionState(id: CompanionId, state: CompanionSaveState, level: number): CompanionSaveState {
+function normalizeCompanionState(
+  id: CompanionId,
+  state: CompanionSaveState,
+  level: number,
+  equipmentUpgrades: Partial<Record<EquipmentId, number>>
+): CompanionSaveState {
   const equipment = normalizeEquipmentLoadout(state.equipment);
-  const stats = calculateEquipmentStats(equipment);
+  const stats = calculateEquipmentStats(equipment, equipmentUpgrades);
   const formulas = COMPANIONS[id].formulas;
   return {
     equipment,
@@ -1121,19 +1206,22 @@ function normalizeCompanionState(id: CompanionId, state: CompanionSaveState, lev
   };
 }
 
-function calculateEquipmentStats(equipment: EquipmentLoadout): EquipmentStats {
+function calculateEquipmentStats(
+  equipment: EquipmentLoadout,
+  upgrades: Partial<Record<EquipmentId, number>> = save.equipmentUpgrades ?? {}
+): EquipmentStats {
   const stats = createEmptyEquipmentStats();
   Object.values(equipment).forEach((equipmentId) => {
     if (!equipmentId || !isEquipmentId(equipmentId)) {
       return;
     }
 
-    const definition = EQUIPMENT[equipmentId];
-    stats.attackBonus += definition.attackBonus ?? 0;
-    stats.defenseBonus += definition.defenseBonus ?? 0;
-    stats.maxHpBonus += definition.maxHpBonus ?? 0;
-    stats.maxMpBonus += definition.maxMpBonus ?? 0;
-    stats.speedBonus += definition.speedBonus ?? 0;
+    const bonus = getUpgradedEquipmentStats(equipmentId, upgrades[equipmentId] ?? 0);
+    stats.attackBonus += bonus.attackBonus;
+    stats.defenseBonus += bonus.defenseBonus;
+    stats.maxHpBonus += bonus.maxHpBonus;
+    stats.maxMpBonus += bonus.maxMpBonus;
+    stats.speedBonus += bonus.speedBonus;
   });
   return stats;
 }

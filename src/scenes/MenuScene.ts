@@ -7,7 +7,8 @@ import {
   EQUIPMENT_SLOTS,
   EQUIPMENT_SLOT_LABELS,
   getEquipmentRarityLabel,
-  getEquipmentStatSummary
+  getEquipmentStatSummary,
+  getEquipmentUpgradeLabel
 } from "../data/equipment";
 import { fetchLunaLine, getCurrentLunaStage, getLunaLine, getNextStaticLunaLine } from "../data/dialogues";
 import {
@@ -35,6 +36,7 @@ import {
   getCurrentDungeonFloor,
   getDungeonFloorCount,
   getEquipmentCount,
+  getEquipmentUpgradeLevel,
   getEquippedEquipment,
   getItemCount,
   getPlayerAttack,
@@ -609,6 +611,14 @@ export class MenuScene extends Phaser.Scene {
     }
   }
 
+  // Upgrade level is global to the equipment id (see GameState's
+  // equipmentUpgrades), so the "+N" suffix belongs wherever the id's name
+  // is shown, not just a dedicated upgrade screen.
+  private getEquipmentDisplayName(equipmentId: EquipmentId): string {
+    const label = getEquipmentUpgradeLabel(getEquipmentUpgradeLevel(equipmentId));
+    return label ? `${EQUIPMENT[equipmentId].name} ${label}` : EQUIPMENT[equipmentId].name;
+  }
+
   private renderEquipment(): void {
     const save = getSave();
     const ownedEquipment = this.getOwnedEquipmentIds();
@@ -636,7 +646,7 @@ export class MenuScene extends Phaser.Scene {
     EQUIPMENT_SLOTS.forEach((slot, index) => {
       const y = 282 + index * 20;
       const equipmentId = showingId ? getCompanionEquippedEquipment(showingId, slot) : getEquippedEquipment(slot);
-      const name = equipmentId ? EQUIPMENT[equipmentId].name : "-";
+      const name = equipmentId ? this.getEquipmentDisplayName(equipmentId) : "-";
       this.addContent(
         this.add.text(154, y, EQUIPMENT_SLOT_LABELS[slot], this.textStyle(13, "#9fb4c6")).setDepth(102)
       );
@@ -657,7 +667,6 @@ export class MenuScene extends Phaser.Scene {
       const { start, visible } = this.getVisibleOwnedEquipment(ownedEquipment);
       visible.forEach((equipmentId, visibleIndex) => {
         const index = start + visibleIndex;
-        const equipment = EQUIPMENT[equipmentId];
         const selected = index === this.selectedEquipmentIndex;
         const y = 282 + visibleIndex * 34;
         const row = this.add
@@ -671,7 +680,7 @@ export class MenuScene extends Phaser.Scene {
           this.add.text(404, y, selected ? ">" : "", this.textStyle(14, "#f6e4a4")).setDepth(102)
         );
         this.addContent(
-          this.add.text(424, y, equipment.name, this.textStyle(13, "#fff4cf")).setDepth(102)
+          this.add.text(424, y, this.getEquipmentDisplayName(equipmentId), this.textStyle(13, "#fff4cf")).setDepth(102)
         );
         this.addContent(
           this.add.text(548, y, getEquipmentRarityLabel(equipmentId), this.textStyle(12, "#f4df7e")).setDepth(102)
@@ -680,7 +689,9 @@ export class MenuScene extends Phaser.Scene {
           this.add.text(594, y, `x${getEquipmentCount(equipmentId)}`, this.textStyle(12, "#d9e5ef")).setDepth(102)
         );
         this.addContent(
-          this.add.text(424, y + 14, getEquipmentStatSummary(equipmentId), this.textStyle(11, "#9fb4c6")).setDepth(102)
+          this.add
+            .text(424, y + 14, getEquipmentStatSummary(equipmentId, getEquipmentUpgradeLevel(equipmentId)), this.textStyle(11, "#9fb4c6"))
+            .setDepth(102)
         );
       });
     }

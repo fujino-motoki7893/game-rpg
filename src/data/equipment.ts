@@ -368,40 +368,39 @@ export function getEquipmentRarityLabel(equipmentId: EquipmentId): string {
   return `☆${EQUIPMENT[equipmentId].rarity}`;
 }
 
-export function getEquipmentStatSummary(equipmentId: EquipmentId): string {
-  const equipment = EQUIPMENT[equipmentId];
+export function getEquipmentStatSummary(equipmentId: EquipmentId, level = 0): string {
+  const stats = getUpgradedEquipmentStats(equipmentId, level);
   const parts: string[] = [];
-  if (equipment.attackBonus) {
-    parts.push(`攻+${equipment.attackBonus}`);
+  if (stats.attackBonus) {
+    parts.push(`攻+${stats.attackBonus}`);
   }
-  if (equipment.defenseBonus) {
-    parts.push(`防+${equipment.defenseBonus}`);
+  if (stats.defenseBonus) {
+    parts.push(`防+${stats.defenseBonus}`);
   }
-  if (equipment.maxHpBonus) {
-    parts.push(`HP+${equipment.maxHpBonus}`);
+  if (stats.maxHpBonus) {
+    parts.push(`HP+${stats.maxHpBonus}`);
   }
-  if (equipment.maxMpBonus) {
-    parts.push(`MP+${equipment.maxMpBonus}`);
+  if (stats.maxMpBonus) {
+    parts.push(`MP+${stats.maxMpBonus}`);
   }
-  if (equipment.speedBonus) {
-    parts.push(`速+${equipment.speedBonus}`);
+  if (stats.speedBonus) {
+    parts.push(`速+${stats.speedBonus}`);
   }
   return parts.join(" ") || "能力なし";
 }
 
 export function getEquipmentStatDelta(
   currentId: EquipmentId | undefined,
-  candidateId: EquipmentId
+  candidateId: EquipmentId,
+  currentLevel = 0,
+  candidateLevel = 0
 ): string {
-  const current = currentId ? EQUIPMENT[currentId] : undefined;
-  const candidate = EQUIPMENT[candidateId];
+  const current = currentId ? getUpgradedEquipmentStats(currentId, currentLevel) : createEmptyEquipmentStats();
+  const candidate = getUpgradedEquipmentStats(candidateId, candidateLevel);
   const parts: string[] = [];
 
-  const pushDelta = (
-    key: "attackBonus" | "defenseBonus" | "maxHpBonus" | "maxMpBonus" | "speedBonus",
-    label: string
-  ) => {
-    const delta = (candidate[key] ?? 0) - (current?.[key] ?? 0);
+  const pushDelta = (key: keyof EquipmentStats, label: string) => {
+    const delta = candidate[key] - current[key];
     if (delta !== 0) {
       parts.push(`${label}${delta > 0 ? "+" : ""}${delta}`);
     }
@@ -423,5 +422,35 @@ export function createEmptyEquipmentStats(): EquipmentStats {
     maxHpBonus: 0,
     maxMpBonus: 0,
     speedBonus: 0
+  };
+}
+
+// A repeatable gold sink for gear you already own: each level adds a flat
+// +1 to every stat the piece already grants (not a percentage — a flat
+// bump stays meaningful whether the base bonus is +1 like a starter cap or
+// +11 like a masterwork greatsword, where a percentage would round away to
+// nothing on the small end). Upgrade levels are per equipment id, not per
+// owned copy — see GameState.ts's equipmentUpgrades for why.
+export const MAX_EQUIPMENT_UPGRADE_LEVEL = 2;
+
+export function getEquipmentUpgradeLabel(level: number): string {
+  return level > 0 ? `+${level}` : "";
+}
+
+export function getEquipmentUpgradeCost(equipmentId: EquipmentId, currentLevel: number): number {
+  const equipment = EQUIPMENT[equipmentId];
+  const base = equipment.buyPrice ?? (equipment.sellPrice ? equipment.sellPrice * 2 : 20);
+  return Math.max(10, Math.round(base * (currentLevel + 1) * 0.5));
+}
+
+export function getUpgradedEquipmentStats(equipmentId: EquipmentId, level: number): EquipmentStats {
+  const equipment = EQUIPMENT[equipmentId];
+  const bump = (value?: number) => (value ? value + level : 0);
+  return {
+    attackBonus: bump(equipment.attackBonus),
+    defenseBonus: bump(equipment.defenseBonus),
+    maxHpBonus: bump(equipment.maxHpBonus),
+    maxMpBonus: bump(equipment.maxMpBonus),
+    speedBonus: bump(equipment.speedBonus)
   };
 }

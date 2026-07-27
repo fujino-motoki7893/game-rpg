@@ -9,7 +9,10 @@ import {
   getEquipmentSellPrice,
   getEquipmentStatDelta,
   getEquipmentStatSummary,
-  isEquipmentBuyable
+  getEquipmentUpgradeCost,
+  getEquipmentUpgradeLabel,
+  isEquipmentBuyable,
+  MAX_EQUIPMENT_UPGRADE_LEVEL
 } from "../data/equipment";
 import {
   getItemBuyPrice,
@@ -27,17 +30,20 @@ import {
   buyItem,
   getCompanionEquippedEquipment,
   getEquipmentCount,
+  getEquipmentUpgradeLevel,
   getEquippedEquipment,
   getItemCount,
   getSave,
   hasCompanion,
+  isEquipmentOwnedAnywhere,
   previewEquipmentSlot,
   sellEquipment,
-  sellItem
+  sellItem,
+  upgradeEquipment
 } from "../game/GameState";
 import type { EquipmentId, ItemId } from "../game/types";
 
-type ShopTab = "buy" | "sell";
+type ShopTab = "buy" | "sell" | "upgrade";
 type ShopKind = "item" | "equipment";
 type TradeEntry = { kind: "item"; id: ItemId } | { kind: "equipment"; id: EquipmentId };
 interface ShopPayload {
@@ -45,10 +51,12 @@ interface ShopPayload {
   buyableEquipmentIds?: EquipmentId[];
 }
 
-const TABS: ShopTab[] = ["buy", "sell"];
+// The item shop has nothing to upgrade, so it only ever gets buy/sell.
+const ALL_TABS: ShopTab[] = ["buy", "sell", "upgrade"];
 const TAB_LABELS: Record<ShopTab, string> = {
   buy: "買う",
-  sell: "売る"
+  sell: "売る",
+  upgrade: "強化"
 };
 
 export class ShopScene extends Phaser.Scene {
@@ -83,10 +91,13 @@ export class ShopScene extends Phaser.Scene {
       .text(154, 120, this.shopKind === "equipment" ? "装備屋" : "道具屋", this.textStyle(25, "#f6e4a4"))
       .setDepth(102);
 
-    this.createTabButton("buy", 154, 176);
-    this.createTabButton("sell", 276, 176);
+    this.getTabs().forEach((tab, index) => {
+      this.createTabButton(tab, 154 + index * 122, 176);
+    });
     this.createCloseButton();
-    this.goldText = this.add.text(426, 182, "", this.textStyle(18, "#f4df7e")).setDepth(102);
+    // Room for a 3rd ("upgrade") tab pushed this out of the tab row (where
+    // it used to collide with a wide tab strip) and up next to the title.
+    this.goldText = this.add.text(420, 124, "", this.textStyle(18, "#f4df7e")).setDepth(102);
     this.messageText = this.add.text(154, 492, "", this.textStyle(16, "#f6e4a4")).setDepth(102);
 
     this.input.keyboard?.on("keydown", this.handleKeyDown, this);
@@ -145,7 +156,6 @@ export class ShopScene extends Phaser.Scene {
     visible.forEach((entry, visibleIndex) => {
       const index = start + visibleIndex;
       const selected = index === this.selectedItemIndex;
-      const count = this.getTradeCount(entry);
       const price = this.getTradePrice(entry);
       const canTrade = this.canTradeSelected(index);
       const y = 214 + visibleIndex * 34;
@@ -169,7 +179,7 @@ export class ShopScene extends Phaser.Scene {
         this.add.text(340, y, `${price}G`, this.textStyle(16, canTrade ? "#f4df7e" : "#748393")).setDepth(102)
       );
       this.addContent(
-        this.add.text(410, y, `所持 x${count}`, this.textStyle(15, "#9fb4c6")).setDepth(102)
+        this.add.text(410, y, this.getTradeCountLabel(entry), this.textStyle(15, "#9fb4c6")).setDepth(102)
       );
       this.addContent(
         this.add.text(492, y, this.getTradeDescription(entry), this.textStyle(12, "#9fb4c6")).setDepth(102)
@@ -178,8 +188,7 @@ export class ShopScene extends Phaser.Scene {
 
     const selectedEntry = tradeEntries[this.selectedItemIndex];
     const selectedCanTrade = this.canTradeSelected(this.selectedItemIndex);
-    const actionLabel = this.activeTab === "buy" ? "買う" : "売る";
-    const selectedBuyPrice = this.getTradeBuyPriceLabel(selectedEntry);
+    const actionLabel = this.activeTab === "buy" ? "買う" : this.activeTab === "upgrade" ? "強化する" : "売る";
     const actionButton = this.add
       .text(530, 412, actionLabel, {
         ...this.textStyle(18, selectedCanTrade ? "#101820" : "#2a3036"),
@@ -197,24 +206,43 @@ export class ShopScene extends Phaser.Scene {
     this.addContent(actionButton);
     this.addContent(
       this.add
-        .text(
-          154,
-          416,
-          `${this.getTradeName(selectedEntry)} ${this.getTradeRarityLabel(selectedEntry)}  買値 ${selectedBuyPrice}  売値 ${this.getTradeSellPrice(selectedEntry)}G`,
-          this.textStyle(15, "#f4df7e")
-        )
+        .text(154, 416, this.getSelectedInfoLine(selectedEntry), this.textStyle(15, "#f4df7e"))
         .setDepth(102)
     );
 
-    this.getEquipmentUpgradeLines(selectedEntry).forEach((line, index) => {
+    this.getComparisonLines(selectedEntry).forEach((line, index) => {
       this.addContent(
         this.add.text(154, 440 + index * 18, line, this.textStyle(14, "#9fb4c6")).setDepth(102)
       );
     });
   }
 
-  private getEquipmentUpgradeLines(entry: TradeEntry): string[] {
-    if (entry.kind !== "equipment" || this.activeTab !== "buy") {
+  private getSelectedInfoLine(entry: TradeEntry): string {
+    const name = this.getTradeName(entry);
+    const rarity = this.getTradeRarityLabel(entry);
+    if (this.activeTab === "upgrade" && entry.kind === "equipment") {
+      const level = getEquipmentUpgradeLevel(entry.id);
+      const atMax = level >= MAX_EQUIPMENT_UPGRADE_LEVEL;
+      return `${name} ${rarity}  現在Lv${level}/${MAX_EQUIPMENT_UPGRADE_LEVEL}  次の強化 ${atMax ? "-" : `${getEquipmentUpgradeCost(entry.id, level)}G`}`;
+    }
+    return `${name} ${rarity}  買値 ${this.getTradeBuyPriceLabel(entry)}  売値 ${this.getTradeSellPrice(entry)}G`;
+  }
+
+  private getComparisonLines(entry: TradeEntry): string[] {
+    if (entry.kind !== "equipment") {
+      return [];
+    }
+
+    if (this.activeTab === "upgrade") {
+      const level = getEquipmentUpgradeLevel(entry.id);
+      if (level >= MAX_EQUIPMENT_UPGRADE_LEVEL) {
+        return ["これ以上は強化できない。"];
+      }
+      const delta = getEquipmentStatDelta(entry.id, entry.id, level, level + 1);
+      return [`次の強化(+${level + 1})での変化: ${delta}`];
+    }
+
+    if (this.activeTab !== "buy") {
       return [];
     }
 
@@ -238,7 +266,12 @@ export class ShopScene extends Phaser.Scene {
     candidateId: EquipmentId
   ): string {
     const currentName = currentId ? EQUIPMENT[currentId].name : "なし";
-    const delta = getEquipmentStatDelta(currentId, candidateId);
+    const delta = getEquipmentStatDelta(
+      currentId,
+      candidateId,
+      currentId ? getEquipmentUpgradeLevel(currentId) : 0,
+      getEquipmentUpgradeLevel(candidateId)
+    );
     return `${owner}: 装備中(${currentName})と比較 ${delta}`;
   }
 
@@ -251,6 +284,21 @@ export class ShopScene extends Phaser.Scene {
   private tradeSelectedItem(): void {
     const entry = this.getTradeEntries()[this.selectedItemIndex];
     const name = this.getTradeName(entry);
+
+    if (this.activeTab === "upgrade") {
+      if (entry.kind !== "equipment") {
+        return;
+      }
+      const result = upgradeEquipment(entry.id);
+      if (!result.upgraded) {
+        this.setMessage(this.getUpgradeFailureMessage(result.reason));
+        return;
+      }
+      this.setMessage(`${EQUIPMENT[entry.id].name}を+${result.level}に強化した。(${result.cost}G)`);
+      this.game.events.emit(GAME_EVENTS.stateChanged);
+      this.renderContent();
+      return;
+    }
 
     if (this.activeTab === "buy") {
       const result = entry.kind === "item" ? buyItem(entry.id) : buyEquipment(entry.id);
@@ -274,8 +322,32 @@ export class ShopScene extends Phaser.Scene {
     this.renderContent();
   }
 
+  private getUpgradeFailureMessage(reason?: string): string {
+    if (reason === "not-owned") {
+      return "所持していない装備は強化できない。";
+    }
+    if (reason === "max-level") {
+      return "これ以上は強化できない。";
+    }
+    if (reason === "not-enough-gold") {
+      return "ゴールドが足りない。";
+    }
+    return "強化できなかった。";
+  }
+
   private canTradeSelected(index: number): boolean {
     const entry = this.getTradeEntries()[index];
+    if (this.activeTab === "upgrade") {
+      if (entry.kind !== "equipment") {
+        return false;
+      }
+      const level = getEquipmentUpgradeLevel(entry.id);
+      return (
+        level < MAX_EQUIPMENT_UPGRADE_LEVEL &&
+        isEquipmentOwnedAnywhere(entry.id) &&
+        getSave().gold >= getEquipmentUpgradeCost(entry.id, level)
+      );
+    }
     if (this.activeTab === "buy") {
       return this.isTradeBuyable(entry) && getSave().gold >= this.getTradePrice(entry);
     }
@@ -313,10 +385,15 @@ export class ShopScene extends Phaser.Scene {
     }
   }
 
+  private getTabs(): ShopTab[] {
+    return this.shopKind === "equipment" ? ALL_TABS : ALL_TABS.filter((tab) => tab !== "upgrade");
+  }
+
   private moveTab(direction: number): void {
-    const currentIndex = TABS.indexOf(this.activeTab);
-    const nextIndex = Phaser.Math.Wrap(currentIndex + direction, 0, TABS.length);
-    this.selectTab(TABS[nextIndex]);
+    const tabs = this.getTabs();
+    const currentIndex = tabs.indexOf(this.activeTab);
+    const nextIndex = Phaser.Math.Wrap(currentIndex + direction, 0, tabs.length);
+    this.selectTab(tabs[nextIndex]);
   }
 
   private moveSelectedItem(direction: number): void {
@@ -340,6 +417,13 @@ export class ShopScene extends Phaser.Scene {
     return itemIds.map((id) => ({ kind: "item", id }));
   }
 
+  private getTradeCountLabel(entry: TradeEntry): string {
+    if (this.activeTab === "upgrade" && entry.kind === "equipment") {
+      return `Lv${getEquipmentUpgradeLevel(entry.id)}/${MAX_EQUIPMENT_UPGRADE_LEVEL}`;
+    }
+    return `所持 x${this.getTradeCount(entry)}`;
+  }
+
   private getVisibleTradeEntries(tradeEntries: TradeEntry[]): {
     start: number;
     visible: TradeEntry[];
@@ -357,7 +441,14 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private getTradeName(entry: TradeEntry): string {
-    return entry.kind === "item" ? ITEMS[entry.id].name : EQUIPMENT[entry.id].name;
+    if (entry.kind === "item") {
+      return ITEMS[entry.id].name;
+    }
+    // The upgrade level is global to the equipment id (see GameState's
+    // equipmentUpgrades), so the "+N" suffix applies everywhere this id is
+    // listed — buy/sell included — not just on the upgrade tab.
+    const label = getEquipmentUpgradeLabel(getEquipmentUpgradeLevel(entry.id));
+    return label ? `${EQUIPMENT[entry.id].name} ${label}` : EQUIPMENT[entry.id].name;
   }
 
   private getTradeRarityLabel(entry: TradeEntry): string {
@@ -369,7 +460,9 @@ export class ShopScene extends Phaser.Scene {
       return ITEMS[entry.id].description;
     }
 
-    return `${EQUIPMENT_CATEGORY_LABELS[EQUIPMENT[entry.id].category]} ${getEquipmentStatSummary(entry.id)}`;
+    const category = EQUIPMENT_CATEGORY_LABELS[EQUIPMENT[entry.id].category];
+    const summary = getEquipmentStatSummary(entry.id, getEquipmentUpgradeLevel(entry.id));
+    return `${category} ${summary}`;
   }
 
   private getTradeCount(entry: TradeEntry): number {
@@ -377,6 +470,9 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private getTradePrice(entry: TradeEntry): number {
+    if (this.activeTab === "upgrade") {
+      return entry.kind === "equipment" ? getEquipmentUpgradeCost(entry.id, getEquipmentUpgradeLevel(entry.id)) : 0;
+    }
     if (this.activeTab === "buy") {
       return entry.kind === "item" ? getItemBuyPrice(entry.id) : getEquipmentBuyPrice(entry.id);
     }
@@ -409,7 +505,7 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private updateTabs(): void {
-    TABS.forEach((tab) => {
+    this.getTabs().forEach((tab) => {
       const selected = this.activeTab === tab;
       this.tabButtons[tab]?.setStyle({
         color: selected ? "#101820" : "#f4f0db",
