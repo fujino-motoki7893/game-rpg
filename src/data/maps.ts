@@ -145,6 +145,7 @@ export const MAPS: Record<MapId, MapDefinition> = {
   hiddenVillage: {
     id: "hiddenVillage",
     name: "霧隠れの里",
+    groundTheme: "snow",
     spawn: { x: 12, y: 15 },
     rows: [
       "########################",
