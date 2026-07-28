@@ -68,6 +68,7 @@ import {
   setGeneratedDungeonFloor,
   setPlayerPosition
 } from "../game/GameState";
+import { launchLazyScene } from "../game/lazyScenes";
 import { COMPANION_ORDER, COMPANIONS } from "../data/companions";
 import type { CompanionId } from "../data/companions";
 import type {
@@ -146,6 +147,7 @@ export class WorldScene extends Phaser.Scene {
   private resetKey?: Phaser.Input.Keyboard.Key;
   private loadingMap = false;
   private menuOpen = false;
+  private battleLaunching = false;
 
   constructor() {
     super("WorldScene");
@@ -569,8 +571,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private launchEnding(): void {
-    this.scene.launch("EndingScene");
-    this.scene.pause();
+    void launchLazyScene(this.scene, "EndingScene").then(() => this.scene.pause());
   }
 
   private handleKeyDown(event: KeyboardEvent): void {
@@ -1106,15 +1107,23 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private startBattle(enemy: EnemySpawn): void {
-    if (this.menuOpen) {
+    if (this.menuOpen || this.battleLaunching) {
       return;
     }
 
-    this.scene.launch("BattleScene", {
+    // BattleScene's chunk may still be downloading (first battle of the
+    // session only; cached after that), so guard re-entrancy separately
+    // from menuOpen — update() keeps running until scene.pause() actually
+    // lands, and a second collision check in that window shouldn't queue a
+    // duplicate launch.
+    this.battleLaunching = true;
+    void launchLazyScene(this.scene, "BattleScene", {
       enemyInstanceId: enemy.id,
       enemyKeys: this.buildEncounterGroup(enemy)
+    }).then(() => {
+      this.battleLaunching = false;
+      this.scene.pause();
     });
-    this.scene.pause();
   }
 
   /**
@@ -1140,13 +1149,13 @@ export class WorldScene extends Phaser.Scene {
   private openMenu(): void {
     this.menuOpen = true;
     this.hideTargetHint();
-    this.scene.launch("MenuScene");
+    void launchLazyScene(this.scene, "MenuScene");
   }
 
   private openShop(shopKind: ShopKind, buyableEquipmentIds?: EquipmentId[]): void {
     this.menuOpen = true;
     this.hideTargetHint();
-    this.scene.launch("ShopScene", { shopKind, buyableEquipmentIds });
+    void launchLazyScene(this.scene, "ShopScene", { shopKind, buyableEquipmentIds });
   }
 
   private handleMenuClosed(): void {
