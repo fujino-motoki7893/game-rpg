@@ -87,7 +87,7 @@ export class MenuScene extends Phaser.Scene {
   private tabButtons: Partial<Record<MenuTab, Phaser.GameObjects.Text>> = {};
   private contentObjects: Phaser.GameObjects.GameObject[] = [];
   private contentContainer!: Phaser.GameObjects.Container;
-  private contentMaskGraphics?: Phaser.GameObjects.Graphics;
+  private contentMaskShape?: Phaser.GameObjects.Rectangle;
   private contentScrollY = 0;
   private contentMaxScroll = 0;
   private readonly contentViewport = { x: 130, y: 200, width: 540, height: 280 };
@@ -133,15 +133,23 @@ export class MenuScene extends Phaser.Scene {
     this.createCloseButton();
 
     this.contentContainer = this.add.container(0, 0).setDepth(101);
-    this.contentMaskGraphics = this.make.graphics({ x: 0, y: 0 }, false);
-    this.contentMaskGraphics.fillStyle(0xffffff);
-    this.contentMaskGraphics.fillRect(
-      this.contentViewport.x,
-      this.contentViewport.y,
-      this.contentViewport.width,
-      this.contentViewport.height
-    );
-    this.contentContainer.setMask(this.contentMaskGraphics.createGeometryMask());
+    // Phaser 4 dropped WebGL support for GeometryMask/setMask (silently
+    // no-ops with a console warning) in favor of the Filters system, so
+    // clipping the scrollable content to the panel needs an external Mask
+    // filter instead: an invisible rectangle GameObject whose screen-space
+    // bounds (unaffected by the container's own scroll transform) define
+    // what's visible.
+    this.contentMaskShape = this.add
+      .rectangle(
+        this.contentViewport.x + this.contentViewport.width / 2,
+        this.contentViewport.y + this.contentViewport.height / 2,
+        this.contentViewport.width,
+        this.contentViewport.height,
+        0xffffff
+      )
+      .setVisible(false);
+    this.contentContainer.enableFilters();
+    this.contentContainer.filters!.external.addMask(this.contentMaskShape);
 
     this.messageText = this.add
       .text(154, 492, "", this.textStyle(16, "#f6e4a4"))
@@ -1309,7 +1317,7 @@ export class MenuScene extends Phaser.Scene {
     this.input.keyboard?.off("keydown", this.handleKeyDown, this);
     this.input.off("wheel", this.handleContentWheel, this);
     this.clearContent();
-    this.contentMaskGraphics?.destroy();
+    this.contentMaskShape?.destroy();
   }
 
   private textStyle(size: number, color: string): Phaser.Types.GameObjects.Text.TextStyle {
