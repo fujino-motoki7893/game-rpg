@@ -164,6 +164,9 @@ export interface DungeonTierProgress {
 }
 
 export interface GameSave {
+  /** Save schema generation, bumped whenever a migration changes the save's
+   * shape. Absent on saves written before this field existed (treated as 0). */
+  saveVersion?: number;
   mapId: MapId;
   x: number;
   y: number;

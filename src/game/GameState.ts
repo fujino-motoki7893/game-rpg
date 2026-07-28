@@ -57,21 +57,53 @@ const DUNGEON_FLOOR_RANGES: Record<number, { min: number; max: number }> = {
 const FIELD_ENEMY_ID_PREFIX = "field-";
 const DUNGEON_ENEMY_ID_PREFIX = "dungeon-";
 
+// ---------------------------------------------------------------------------
+// Save migrations — each entry moves a raw (loosely-typed) save from the
+// shape at `fromVersion` to the shape at `fromVersion + 1`. loadSave() runs
+// them in a loop, so a save can be arbitrarily old and still catch up one
+// step at a time. Only shape/meaning changes need a migration; a new
+// optional field is a non-breaking change and doesn't need one (??
+// defaulting in loadSave/normalizers already covers that case).
+// ---------------------------------------------------------------------------
+
+export const CURRENT_SAVE_VERSION = 1;
+
 /**
- * Saves before the multi-companion refactor stored Luna and Geist as flat
- * companionHp/companion2Hp-style fields instead of a `companions` map.
- * Kept only so loadSave() can migrate old saves into the new shape once.
+ * v0 -> v1: saves before the multi-companion refactor stored Luna and Geist
+ * as flat companionHp/companion2Hp-style fields instead of a `companions`
+ * map. Folds those fields into `companions` and drops them. Saves that are
+ * already on the v1 shape (have `companions`, no legacy fields) pass through
+ * unchanged, since that was the only shape v0 saves came in before this
+ * migration existed.
  */
-interface LegacyCompanionFields {
-  companionHp?: number;
-  companionMp?: number;
-  companionEquipment?: EquipmentLoadout;
-  companion2Hp?: number;
-  companion2Mp?: number;
-  companion2Equipment?: EquipmentLoadout;
+function migrateV0ToV1(raw: any): any {
+  const {
+    companionHp,
+    companionMp,
+    companionEquipment,
+    companion2Hp,
+    companion2Mp,
+    companion2Equipment,
+    ...rest
+  } = raw;
+
+  const companions = { ...rest.companions };
+  if (companionHp !== undefined || companionMp !== undefined || companionEquipment !== undefined) {
+    companions.luna = { hp: companionHp, mp: companionMp, equipment: companionEquipment };
+  }
+  if (companion2Hp !== undefined || companion2Mp !== undefined || companion2Equipment !== undefined) {
+    companions.geist = { hp: companion2Hp, mp: companion2Mp, equipment: companion2Equipment };
+  }
+
+  return { ...rest, companions, saveVersion: 1 };
 }
 
+const MIGRATIONS: Record<number, (raw: any) => any> = {
+  0: migrateV0ToV1
+};
+
 export const initialSave = (): GameSave => ({
+  saveVersion: CURRENT_SAVE_VERSION,
   mapId: "village",
   x: 20,
   y: 15,
@@ -102,18 +134,14 @@ function loadSave(): GameSave {
       return initialSave();
     }
 
-    const rawParsed = JSON.parse(raw) as Partial<GameSave> & LegacyCompanionFields;
-    // Drop the pre-refactor flat companion fields once migrated below, so a
-    // save round-trip doesn't carry the old shape forward indefinitely.
-    const {
-      companionHp: _legacyCompanionHp,
-      companionMp: _legacyCompanionMp,
-      companionEquipment: _legacyCompanionEquipment,
-      companion2Hp: _legacyCompanion2Hp,
-      companion2Mp: _legacyCompanion2Mp,
-      companion2Equipment: _legacyCompanion2Equipment,
-      ...parsed
-    } = rawParsed;
+    let migrated = JSON.parse(raw);
+    let version = typeof migrated.saveVersion === "number" ? migrated.saveVersion : 0;
+    while (version < CURRENT_SAVE_VERSION) {
+      migrated = MIGRATIONS[version](migrated);
+      version++;
+    }
+
+    const parsed = migrated as Partial<GameSave>;
     const base = initialSave();
     const items = normalizeInventory(parsed.items, parsed.potions);
     const equipmentInventory = normalizeEquipmentInventory(parsed.equipmentInventory);
@@ -127,11 +155,12 @@ function loadSave(): GameSave {
     const equipmentStats = calculateEquipmentStats(equipment, equipmentUpgrades);
     const hp = normalizeHp(parsed.hp, maxHp + equipmentStats.maxHpBonus);
     const mp = normalizeMp(parsed.mp, maxMp + equipmentStats.maxMpBonus);
-    const companions = normalizeCompanions(rawParsed, level, equipmentUpgrades);
+    const companions = normalizeCompanions(parsed.companions, level, equipmentUpgrades);
 
     return {
       ...base,
       ...parsed,
+      saveVersion: CURRENT_SAVE_VERSION,
       level,
       maxHp,
       maxMp,
@@ -162,6 +191,7 @@ export function persistSave(): void {
   COMPANION_ORDER.forEach((id) => ensureCompanionSlot(id));
   clampVitalsToCurrentMax();
   syncLegacyPotionCount();
+  save.saveVersion = CURRENT_SAVE_VERSION;
   localStorage.setItem(SAVE_KEY, JSON.stringify(save));
 }
 
@@ -1146,48 +1176,18 @@ function normalizeEquipmentLoadout(equipment: unknown): EquipmentLoadout {
 }
 
 function normalizeCompanions(
-  parsed: Partial<GameSave> & LegacyCompanionFields,
+  companions: Partial<Record<CompanionId, CompanionSaveState>> | undefined,
   level: number,
   equipmentUpgrades: Partial<Record<EquipmentId, number>>
 ): Partial<Record<CompanionId, CompanionSaveState>> {
-  if (parsed.companions) {
-    const normalized: Partial<Record<CompanionId, CompanionSaveState>> = {};
-    COMPANION_ORDER.forEach((id) => {
-      const state = parsed.companions?.[id];
-      if (state) {
-        normalized[id] = normalizeCompanionState(id, state, level, equipmentUpgrades);
-      }
-    });
-    return normalized;
-  }
-
-  // Pre-refactor save: fold Luna's/Geist's old flat fields in, if present.
-  const migrated: Partial<Record<CompanionId, CompanionSaveState>> = {};
-  if (
-    parsed.companionHp !== undefined ||
-    parsed.companionMp !== undefined ||
-    parsed.companionEquipment !== undefined
-  ) {
-    migrated.luna = normalizeCompanionState(
-      "luna",
-      { hp: parsed.companionHp, mp: parsed.companionMp, equipment: parsed.companionEquipment },
-      level,
-      equipmentUpgrades
-    );
-  }
-  if (
-    parsed.companion2Hp !== undefined ||
-    parsed.companion2Mp !== undefined ||
-    parsed.companion2Equipment !== undefined
-  ) {
-    migrated.geist = normalizeCompanionState(
-      "geist",
-      { hp: parsed.companion2Hp, mp: parsed.companion2Mp, equipment: parsed.companion2Equipment },
-      level,
-      equipmentUpgrades
-    );
-  }
-  return migrated;
+  const normalized: Partial<Record<CompanionId, CompanionSaveState>> = {};
+  COMPANION_ORDER.forEach((id) => {
+    const state = companions?.[id];
+    if (state) {
+      normalized[id] = normalizeCompanionState(id, state, level, equipmentUpgrades);
+    }
+  });
+  return normalized;
 }
 
 function normalizeCompanionState(
