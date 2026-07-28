@@ -927,6 +927,22 @@ export class WorldScene extends Phaser.Scene {
         : ["ミラ: 傷を癒しましょう。"];
     }
 
+    // Same free full-heal service as the village's healer, in a hiddenVillage
+    // "inn" building instead — no item gifting here, this is just a warm bed
+    // to rest at, not Mira's herb-stocking role.
+    if (npc.id === "innkeeper") {
+      healPlayer(getPlayerMaxHp());
+      restorePlayerMp(getPlayerMaxMp());
+      COMPANION_ORDER.forEach((id) => {
+        if (hasCompanion(id)) {
+          healCompanion(id, getCompanionMaxHp(id));
+          restoreCompanionMp(id, getCompanionMaxMp(id));
+        }
+      });
+      stateChanged = true;
+      dialogue = ["宿番のイレーネ: よくいらっしゃいました。ゆっくり休んでいってくださいな。", "旅の疲れが癒えた。"];
+    }
+
     if (npc.id === "luna") {
       recruitCompanion("luna");
       stateChanged = true;
@@ -1577,7 +1593,7 @@ export class WorldScene extends Phaser.Scene {
     ) {
       return `${npc.name}\n売買`;
     }
-    if (npc.id === "healer") {
+    if (npc.id === "healer" || npc.id === "innkeeper") {
       return `${npc.name}\n回復`;
     }
     return npc.name;

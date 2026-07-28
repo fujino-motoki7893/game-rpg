@@ -157,8 +157,8 @@ export const MAPS: Record<MapId, MapDefinition> = {
       "##.........==.........##",
       "##....============....##",
       "##.........==.........##",
-      "##.........==.........##",
-      "##.........==.........##",
+      "##.........==...HHH...##",
+      "##.........==...HHH...##",
       "##..~~~....==.........##",
       "##..~~~....==.........##",
       "##.........==.........##",
@@ -170,7 +170,8 @@ export const MAPS: Record<MapId, MapDefinition> = {
     portals: [{ x: 12, y: 15, toMap: "highlands", toX: 12, toY: 16 }],
     npcs: [
       { id: "hiddenElder", name: "隠れ里の長老", texture: "npc-elder", x: 5, y: 5 },
-      { id: "masterworkShopkeeper", name: "名工ヴォルグ", texture: "npc-armorer", x: 17, y: 5 }
+      { id: "masterworkShopkeeper", name: "名工ヴォルグ", texture: "npc-armorer", x: 17, y: 5 },
+      { id: "innkeeper", name: "宿番のイレーネ", texture: "npc-healer", x: 17, y: 11 }
     ],
     chests: [],
     enemies: []
