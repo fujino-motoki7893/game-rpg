@@ -1,7 +1,7 @@
 import type { CompanionId } from "../data/companions";
 
 export type Direction = "up" | "down" | "left" | "right";
-export type MapId = "village" | "field" | "dungeon" | "hiddenVillage";
+export type MapId = "village" | "field" | "dungeon" | "hiddenVillage" | "highlands";
 
 export interface TilePosition {
   x: number;
@@ -149,6 +149,8 @@ export interface MapDefinition {
   floorCount?: number;
   /** Which dungeon tier this map's interior should be themed as (only meaningful when id is "dungeon"). */
   tier?: number;
+  /** Overworld ground autotile theme — picks which terrain spritesheet renders this map's blended ground/object tiles. Omitted means "grass" (the original tileset). */
+  groundTheme?: "grass" | "snow";
   rows: string[];
   spawn: TilePosition;
   portals: PortalDefinition[];

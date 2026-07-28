@@ -3,8 +3,8 @@ import {
   generateDungeon,
   getDungeonEnemyKeysForTier,
   getDungeonGuardianKeyForTier,
+  getDungeonEntranceForTier,
   getDungeonNameForTier,
-  getFieldDungeonEntranceForTier,
   getGuardianIdForTier,
   getRelicChestIdForTier,
   getSupplyChestCount,
@@ -425,7 +425,7 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
   }
 
   const spawn = { x: 1, y: 1 };
-  const fieldEntrance = getFieldDungeonEntranceForTier(context.tier);
+  const dungeonEntrance = getDungeonEntranceForTier(context.tier);
   rows[spawn.y][spawn.x] = ".";
   const reserved = new Set<string>([positionKey(spawn)]);
   const portals: PortalDefinition[] = [
@@ -433,9 +433,9 @@ function normalizeDungeon(value: unknown, context: DungeonRequest): MapDefinitio
       ? {
           x: spawn.x,
           y: spawn.y,
-          toMap: "field",
-          toX: fieldEntrance.x,
-          toY: fieldEntrance.y,
+          toMap: dungeonEntrance.mapId,
+          toX: dungeonEntrance.x,
+          toY: dungeonEntrance.y,
           kind: "stairs-up"
         }
       : {

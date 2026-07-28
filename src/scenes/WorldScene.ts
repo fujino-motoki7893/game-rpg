@@ -12,8 +12,8 @@ import {
   getNpcDialogue
 } from "../data/dialogues";
 import {
+  getDungeonEntranceForTier,
   getDungeonNameForTier,
-  getFieldDungeonEntranceForTier,
   getGuardianIdForTier
 } from "../data/dungeonGenerator";
 import { createDungeon } from "../data/dungeonService";
@@ -21,6 +21,7 @@ import {
   dungeonTileFrame,
   overworldGroundUnderObjectFrame,
   overworldTileFrame,
+  TERRAIN_HIGHLAND_KEY,
   TERRAIN_OVERWORLD_KEY
 } from "../game/autotile";
 import { ENEMIES } from "../data/enemies";
@@ -61,6 +62,7 @@ import {
   resetSave,
   resetDungeonEnemyDefeats,
   resetFieldEnemyDefeats,
+  resetHighlandsEnemyDefeats,
   restoreCompanionMp,
   restorePlayerMp,
   setActiveDungeonTier,
@@ -335,7 +337,9 @@ export class WorldScene extends Phaser.Scene {
   // A cart doesn't belong inside a cramped dungeon corridor, so it only
   // shows up on the overworld maps.
   private mapAllowsCarriage(mapId: MapId): boolean {
-    return mapId === "village" || mapId === "field" || mapId === "hiddenVillage";
+    return (
+      mapId === "village" || mapId === "field" || mapId === "hiddenVillage" || mapId === "highlands"
+    );
   }
 
   private setupCarriageFollower(entryTile: TilePosition): void {
@@ -538,7 +542,8 @@ export class WorldScene extends Phaser.Scene {
 
     markFlag("finalBeastDefeated");
     this.game.events.emit(GAME_EVENTS.stateChanged);
-    void this.loadMap("field", this.getFieldDungeonEntrance()).then(() => {
+    const { mapId, ...position } = this.getDungeonHomeReturn();
+    void this.loadMap(mapId, position).then(() => {
       this.showDialogue([
         "月蝕の魔獣を討ち果たした。深い霧が晴れていくのがわかる。",
         "ルナ: ……終わった、のですね。",
@@ -560,7 +565,8 @@ export class WorldScene extends Phaser.Scene {
     markFlag("mistSovereignDefeated");
     markFlag("carriageObtained");
     this.game.events.emit(GAME_EVENTS.stateChanged);
-    void this.loadMap("field", this.getFieldDungeonEntrance()).then(() => {
+    const { mapId, ...position } = this.getDungeonHomeReturn();
+    void this.loadMap(mapId, position).then(() => {
       this.showDialogue([
         "深霧の魔王は霧となって消え去った。",
         "ルナ: ここにも、まだ知られざる脅威が眠っていたのですね。",
@@ -1071,7 +1077,8 @@ export class WorldScene extends Phaser.Scene {
       resetDungeonEnemyDefeats();
       setCurrentDungeonFloor(1);
       this.game.events.emit(GAME_EVENTS.stateChanged);
-      await this.loadMap("field", this.getFieldDungeonEntrance(dungeonTier));
+      const { mapId, ...position } = this.getDungeonHomeReturn(dungeonTier);
+      await this.loadMap(mapId, position);
       this.showDialogue([
         `${relicName}を手に入れた。`,
         dungeonTier >= 2
@@ -1170,12 +1177,13 @@ export class WorldScene extends Phaser.Scene {
     this.menuOpen = false;
     resetDungeonEnemyDefeats();
     setCurrentDungeonFloor(1);
-    await this.loadMap("field", this.getFieldDungeonEntrance());
-    this.game.events.emit(GAME_EVENTS.toast, "帰還の羽で草原へ脱出した");
+    const { mapId, ...position } = this.getDungeonHomeReturn();
+    await this.loadMap(mapId, position);
+    this.game.events.emit(GAME_EVENTS.toast, `帰還の羽で${this.currentMap.name}へ脱出した`);
   }
 
-  private getFieldDungeonEntrance(tier = getActiveDungeonTier()): TilePosition {
-    return { ...getFieldDungeonEntranceForTier(tier) };
+  private getDungeonHomeReturn(tier = getActiveDungeonTier()): { mapId: MapId } & TilePosition {
+    return { ...getDungeonEntranceForTier(tier) };
   }
 
   private async checkPortal(): Promise<void> {
@@ -1208,6 +1216,10 @@ export class WorldScene extends Phaser.Scene {
   private applyRespawnRules(fromMapId: MapId, toMapId: MapId): void {
     if (fromMapId !== "field" && toMapId === "field") {
       resetFieldEnemyDefeats();
+    }
+
+    if (fromMapId !== "highlands" && toMapId === "highlands") {
+      resetHighlandsEnemyDefeats();
     }
 
     if (fromMapId === "dungeon" && toMapId !== "dungeon") {
@@ -1602,27 +1614,37 @@ export class WorldScene extends Phaser.Scene {
       return { ground: dungeonTileFrame(this.currentMap.rows, x, y, dungeonTier) };
     }
 
+    // A map's groundTheme picks which spritesheet its ground/object tiles
+    // render from — overworldTileFrame's frame math is theme-agnostic (see
+    // scripts/generate-terrain-tiles.mjs's buildHighlandSheet), only the
+    // destination texture key and object silhouette palette change.
+    const isSnowTheme = this.currentMap.groundTheme === "snow";
+    const terrainKey = isSnowTheme ? TERRAIN_HIGHLAND_KEY : TERRAIN_OVERWORLD_KEY;
+    const houseKey = isSnowTheme ? "tile-house-snow" : "tile-house";
+    const treeKey = isSnowTheme ? "tile-tree-snow" : "tile-tree";
+    const rockKey = isSnowTheme ? "tile-rock-snow" : "tile-rock";
+
     // Trees/rocks are drawn as a small silhouette over a real blended-grass
     // ground tile (see BootScene.createObjectTile), so the map doesn't read
     // as a solid colored square wherever an object sits. Houses stay a
     // single opaque tile — a building legitimately fills its whole footprint.
     switch (tile) {
       case "H":
-        return { ground: { key: "tile-house", frame: 0 } };
+        return { ground: { key: houseKey, frame: 0 } };
       case "#":
         return {
-          ground: { key: TERRAIN_OVERWORLD_KEY, frame: overworldGroundUnderObjectFrame(this.currentMap.rows, x, y) },
-          object: { key: "tile-tree", frame: 0 }
+          ground: { key: terrainKey, frame: overworldGroundUnderObjectFrame(this.currentMap.rows, x, y) },
+          object: { key: treeKey, frame: 0 }
         };
       case "^":
       case "C":
         return {
-          ground: { key: TERRAIN_OVERWORLD_KEY, frame: overworldGroundUnderObjectFrame(this.currentMap.rows, x, y) },
-          object: { key: "tile-rock", frame: 0 }
+          ground: { key: terrainKey, frame: overworldGroundUnderObjectFrame(this.currentMap.rows, x, y) },
+          object: { key: rockKey, frame: 0 }
         };
       default: {
         const frame = overworldTileFrame(this.currentMap.rows, x, y);
-        return { ground: { key: TERRAIN_OVERWORLD_KEY, frame: frame ?? 0 } };
+        return { ground: { key: terrainKey, frame: frame ?? 0 } };
       }
     }
   }

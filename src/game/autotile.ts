@@ -11,6 +11,10 @@
 
 export const TERRAIN_OVERWORLD_KEY = "terrain-overworld";
 export const TERRAIN_DUNGEON_KEY = "terrain-dungeon";
+// Same frame layout as terrain-overworld (see scripts/generate-terrain-tiles.mjs's
+// buildHighlandSheet), just a snow/ice reskin — overworldTileFrame's frame
+// index is theme-agnostic, only the destination spritesheet key differs.
+export const TERRAIN_HIGHLAND_KEY = "terrain-highland";
 
 export type GroundGroup = "grass" | "tallGrass" | "path" | "water";
 

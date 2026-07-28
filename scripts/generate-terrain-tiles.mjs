@@ -28,7 +28,10 @@ const TERRAIN_ID = {
   Grass_Dark: 6,
   Water: 28,
   Mudstone_Gray: 17,
-  Rock_Gray: 20
+  Rock_Gray: 20,
+  Ice: 12,
+  Snow_1: 23,
+  Snow_2: 24
 };
 
 async function fetchToCache(url, filename) {
@@ -111,21 +114,13 @@ function frameComposite(buffer, frameIndex) {
   return { input: buffer, left: col * OUT_TILE, top: row * OUT_TILE };
 }
 
-async function buildOverworldSheet(raw, combos) {
-  // Row 0: solid tiles for the four blendable ground groups (frames 0-3).
-  // Rows 1-6: every unordered pair's 16 corner-blend frames, 16 per row —
-  // this order (grass/tallGrass/path/water groups, upper-triangular pairs)
-  // must match GROUND_GROUPS / GROUND_PAIRS in src/game/autotile.ts.
-  const solids = [TERRAIN_ID.Grass, TERRAIN_ID.Grass_Dark, TERRAIN_ID.Dirt_Tan, TERRAIN_ID.Water];
-  const pairs = [
-    [TERRAIN_ID.Grass, TERRAIN_ID.Grass_Dark],
-    [TERRAIN_ID.Grass, TERRAIN_ID.Dirt_Tan],
-    [TERRAIN_ID.Grass, TERRAIN_ID.Water],
-    [TERRAIN_ID.Grass_Dark, TERRAIN_ID.Dirt_Tan],
-    [TERRAIN_ID.Grass_Dark, TERRAIN_ID.Water],
-    [TERRAIN_ID.Dirt_Tan, TERRAIN_ID.Water]
-  ];
-
+// Row 0: solid tiles for the four blendable ground groups (frames 0-3).
+// Rows 1-6: every unordered pair's 16 corner-blend frames, 16 per row —
+// this order (grass/tallGrass/path/water groups, upper-triangular pairs)
+// must match GROUND_GROUPS / GROUND_PAIRS in src/game/autotile.ts. Shared by
+// buildOverworldSheet and buildHighlandSheet, which only differ in which
+// four source terrain ids fill those group slots.
+async function buildGroundSheet(raw, combos, solids, pairs, filename) {
   const composites = [];
   for (let i = 0; i < solids.length; i += 1) {
     composites.push(frameComposite(await extractTile(raw, solids[i]), i));
@@ -141,8 +136,40 @@ async function buildOverworldSheet(raw, combos) {
   })
     .composite(composites)
     .png()
-    .toFile(path.join(outputDir, "terrain-overworld.png"));
-  console.log(`Wrote terrain-overworld.png (${OUT_COLUMNS}x${rows} frames)`);
+    .toFile(path.join(outputDir, filename));
+  console.log(`Wrote ${filename} (${OUT_COLUMNS}x${rows} frames)`);
+}
+
+async function buildOverworldSheet(raw, combos) {
+  const solids = [TERRAIN_ID.Grass, TERRAIN_ID.Grass_Dark, TERRAIN_ID.Dirt_Tan, TERRAIN_ID.Water];
+  const pairs = [
+    [TERRAIN_ID.Grass, TERRAIN_ID.Grass_Dark],
+    [TERRAIN_ID.Grass, TERRAIN_ID.Dirt_Tan],
+    [TERRAIN_ID.Grass, TERRAIN_ID.Water],
+    [TERRAIN_ID.Grass_Dark, TERRAIN_ID.Dirt_Tan],
+    [TERRAIN_ID.Grass_Dark, TERRAIN_ID.Water],
+    [TERRAIN_ID.Dirt_Tan, TERRAIN_ID.Water]
+  ];
+  await buildGroundSheet(raw, combos, solids, pairs, "terrain-overworld.png");
+}
+
+// The "highlands" area (src/data/maps.ts's MAPS.highlands) reskins the same
+// grass/tallGrass/path/water group slots as snow/deep-snow/ice-trail/water,
+// reusing overworldTileFrame's frame math as-is (see TERRAIN_HIGHLAND_KEY in
+// src/game/autotile.ts) — only these four source ids differ from the
+// overworld sheet, and only pairs the LPC atlas actually ships blend art for
+// were picked (Snow_1/Snow_2/Ice/Water form a complete 4-choose-2 set).
+async function buildHighlandSheet(raw, combos) {
+  const solids = [TERRAIN_ID.Snow_1, TERRAIN_ID.Snow_2, TERRAIN_ID.Ice, TERRAIN_ID.Water];
+  const pairs = [
+    [TERRAIN_ID.Snow_1, TERRAIN_ID.Snow_2],
+    [TERRAIN_ID.Snow_1, TERRAIN_ID.Ice],
+    [TERRAIN_ID.Snow_1, TERRAIN_ID.Water],
+    [TERRAIN_ID.Snow_2, TERRAIN_ID.Ice],
+    [TERRAIN_ID.Snow_2, TERRAIN_ID.Water],
+    [TERRAIN_ID.Ice, TERRAIN_ID.Water]
+  ];
+  await buildGroundSheet(raw, combos, solids, pairs, "terrain-highland.png");
 }
 
 // Each dungeon tier gets its own colorway by tinting the same wall/floor
@@ -208,6 +235,7 @@ async function main() {
   await fs.mkdir(cacheDir, { recursive: true });
   const { combos, raw } = await loadAtlas();
   await buildOverworldSheet(raw, combos);
+  await buildHighlandSheet(raw, combos);
   await buildDungeonSheet(raw, combos);
 }
 

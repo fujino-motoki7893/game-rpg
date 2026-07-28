@@ -6,7 +6,7 @@ import {
   getCharacterIdleAnimationKey,
   getCharacterWalkAnimationKey
 } from "../data/characterSprites";
-import { TERRAIN_DUNGEON_KEY, TERRAIN_OVERWORLD_KEY } from "../game/autotile";
+import { TERRAIN_DUNGEON_KEY, TERRAIN_HIGHLAND_KEY, TERRAIN_OVERWORLD_KEY } from "../game/autotile";
 
 type CreatureType =
   | "slime"
@@ -43,12 +43,22 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 32,
       frameHeight: 32
     });
+    this.load.spritesheet(TERRAIN_HIGHLAND_KEY, "assets/tiles/terrain-highland.png", {
+      frameWidth: 32,
+      frameHeight: 32
+    });
   }
 
   create(): void {
     this.createTile("tile-house", "#86533d", "#5e382c", "house");
     this.createObjectTile("tile-tree", "#1f5e38", "#153f2a", "tree");
     this.createObjectTile("tile-rock", "#58606b", "#3c424a", "rock");
+    // Snow-biome reskins for the "highlands" area (see MAPS.highlands's
+    // groundTheme: "snow") — same silhouettes, frostier palette, so trees/
+    // rocks/huts don't look like they were cut-and-pasted from the grassland.
+    this.createTile("tile-house-snow", "#7d8791", "#4d5761", "house");
+    this.createObjectTile("tile-tree-snow", "#2f5647", "#1f3c31", "tree", "#e8f2f5");
+    this.createObjectTile("tile-rock-snow", "#c7d0d6", "#8f99a3", "rock", "#eef4f7");
     this.createTile("tile-portal", "#614c9a", "#d9cfff", "portal");
     this.createTile("tile-stairs-up", "#6a5d48", "#423b31", "stairsUp");
     this.createTile("tile-stairs-down", "#6a5d48", "#423b31", "stairsDown");
@@ -145,7 +155,8 @@ export class BootScene extends Phaser.Scene {
     key: string,
     baseColor: string,
     shadeColor: string,
-    shape: "tree" | "rock"
+    shape: "tree" | "rock",
+    highlightColor?: string
   ): void {
     const texture = this.textures.createCanvas(key, 32, 32);
     if (!texture) {
@@ -156,9 +167,9 @@ export class BootScene extends Phaser.Scene {
     ctx.clearRect(0, 0, 32, 32);
 
     if (shape === "tree") {
-      this.drawTreeCanopy(ctx, baseColor, shadeColor, "#2e7a49");
+      this.drawTreeCanopy(ctx, baseColor, shadeColor, highlightColor ?? "#2e7a49");
     } else {
-      this.drawRockShape(ctx, baseColor, shadeColor, "#727b86");
+      this.drawRockShape(ctx, baseColor, shadeColor, highlightColor ?? "#727b86");
     }
 
     texture.refresh();

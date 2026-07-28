@@ -55,6 +55,7 @@ const DUNGEON_FLOOR_RANGES: Record<number, { min: number; max: number }> = {
   4: { min: 7, max: 8 }
 };
 const FIELD_ENEMY_ID_PREFIX = "field-";
+const HIGHLANDS_ENEMY_ID_PREFIX = "highlands-";
 const DUNGEON_ENEMY_ID_PREFIX = "dungeon-";
 
 // ---------------------------------------------------------------------------
@@ -1032,6 +1033,10 @@ export function isEnemyDefeated(enemyId: string): boolean {
 
 export function resetFieldEnemyDefeats(): boolean {
   return removeDefeatedEnemiesByPrefix(FIELD_ENEMY_ID_PREFIX);
+}
+
+export function resetHighlandsEnemyDefeats(): boolean {
+  return removeDefeatedEnemiesByPrefix(HIGHLANDS_ENEMY_ID_PREFIX);
 }
 
 export function resetDungeonEnemyDefeats(): boolean {

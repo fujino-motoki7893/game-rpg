@@ -1,6 +1,7 @@
 # 地形タイル素材クレジット
 
-`terrain-overworld.png`(草原/草むら/道/水の自動タイル)と `terrain-dungeon.png`
+`terrain-overworld.png`(草原/草むら/道/水の自動タイル)、`terrain-highland.png`
+(「霧の高地」エリア用の雪原/深雪/氷道/水の自動タイル)、`terrain-dungeon.png`
 (ダンジョン壁/床の自動タイル、4段階のティア別に色調変更)は、
 [[LPC] Terrains](https://opengameart.org/content/lpc-terrains) の
 `terrain-map-v7.png`(Tiledの「地形」ツール向けに、隣接する2種類の地形が

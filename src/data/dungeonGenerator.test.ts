@@ -4,10 +4,10 @@ import {
   generateDungeon,
   getDungeonDimensions,
   getDungeonEnemyKeysForTier,
+  getDungeonEntranceForTier,
   getDungeonGuardianKeyForTier,
   getDungeonNameForTier,
   getDungeonTileThemeForTier,
-  getFieldDungeonEntranceForTier,
   getGuardianIdForTier,
   getRelicChestIdForTier,
   getSupplyChestCount,
@@ -94,7 +94,7 @@ describe("tier normalization", () => {
   it("clamps below-range tiers to tier 1", () => {
     expect(getDungeonGuardianKeyForTier(0)).toBe(getDungeonGuardianKeyForTier(1));
     expect(getGuardianIdForTier(-1)).toBe(getGuardianIdForTier(1));
-    expect(getFieldDungeonEntranceForTier(0)).toEqual(getFieldDungeonEntranceForTier(1));
+    expect(getDungeonEntranceForTier(0)).toEqual(getDungeonEntranceForTier(1));
     expect(getDungeonTileThemeForTier(0)).toEqual(getDungeonTileThemeForTier(1));
     expect(getDungeonNameForTier(0)).toBe(getDungeonNameForTier(1));
   });
@@ -197,12 +197,13 @@ describe("generateDungeon", () => {
     expect(down?.dungeonTier).toBe(1);
   });
 
-  it("routes the floor-1 up-stairs to the field at the tier's dungeon entrance", () => {
+  it("routes the floor-1 up-stairs to each tier's home map at its dungeon entrance", () => {
     for (const tier of TIERS) {
       const map = generateDungeon({ seed: 5, floor: 1, floorCount: 8, tier });
       const up = map.portals.find((p) => p.kind === "stairs-up");
-      expect(up?.toMap).toBe("field");
-      expect({ x: up?.toX, y: up?.toY }).toEqual(getFieldDungeonEntranceForTier(tier));
+      const entrance = getDungeonEntranceForTier(tier);
+      expect(up?.toMap).toBe(entrance.mapId);
+      expect({ x: up?.toX, y: up?.toY }).toEqual({ x: entrance.x, y: entrance.y });
     }
   });
 

@@ -166,13 +166,78 @@ export const MAPS: Record<MapId, MapDefinition> = {
       "########################",
       "########################"
     ],
-    portals: [{ x: 12, y: 15, toMap: "field", toX: 14, toY: 9 }],
+    portals: [{ x: 12, y: 15, toMap: "highlands", toX: 12, toY: 16 }],
     npcs: [
       { id: "hiddenElder", name: "隠れ里の長老", texture: "npc-elder", x: 5, y: 5 },
       { id: "masterworkShopkeeper", name: "名工ヴォルグ", texture: "npc-armorer", x: 17, y: 5 }
     ],
     chests: [],
     enemies: []
+  },
+  // Tier-4 dungeon and its preceding village (hiddenVillage) both live here
+  // instead of on the field, now that the field is full of every other
+  // tier's dungeon entrance — a deliberately spacious map (48x36, vs.
+  // field/village's 40x30) so future tiers/areas have room to grow into it
+  // without another relocation.
+  highlands: {
+    id: "highlands",
+    name: "霧の高地",
+    groundTheme: "snow",
+    spawn: { x: 23, y: 4 },
+    rows: [
+      "################################################",
+      "################################################",
+      "##.....................==.....................##",
+      "##.....................O=.....................##",
+      "##.............^^^^....==.....................##",
+      "##.............^^^^....==.....,,,,,,,.........##",
+      "##...,,,,,.....^^^^....==.....,,,,,,,.........##",
+      "##...,,,,,.............==.....,,,,,,,.........##",
+      "##...,,,,,.............==.....,,,,,,,.........##",
+      "##...,HH,,.............==...............^^^^^.##",
+      "##.....................==...............^^^^^.##",
+      "##..~~~~~..............==...............^^^^^.##",
+      "##..~~~~~..............==........,,,,,..^^^^^.##",
+      "##..~~~~~..............==........,,,,,........##",
+      "##..~~~~~..............==........,,,,,...H....##",
+      "##.....................==........,,,,,........##",
+      "##........===============.....................##",
+      "##........==O============.....................##",
+      "##.....................==.............~~~~~~..##",
+      "##.....................==.............~~~~~~..##",
+      "##..,,,,,..............==.............~~~~~~..##",
+      "##..,,,,,..............==.............~~~~~~..##",
+      "##..,,,,,..............==.....................##",
+      "##..,,,,,..............==.....................##",
+      "##..,,,,,..............================.......##",
+      "##.....................===============O.......##",
+      "##.....................==.....................##",
+      "##..........,,,,,,,....==.....................##",
+      "##..........,,,,,,,....==.....................##",
+      "##..........,,,,,,,....==...,,,,,,,...........##",
+      "##..........,,,,,,,....==...,,,,,,,...........##",
+      "##..........,,,,,,,.........,,,,,,,...........##",
+      "##.......^^^^^..............,,,,,,,...........##",
+      "##.......^^^^^................................##",
+      "#########^^^^^##################################",
+      "################################################"
+    ],
+    portals: [
+      { x: 23, y: 3, toMap: "field", toX: 20, toY: 28, kind: "edge" },
+      { x: 12, y: 17, toMap: "hiddenVillage", toX: 12, toY: 15 },
+      { x: 38, y: 25, toMap: "dungeon", toX: 1, toY: 1, dungeonTier: 4 }
+    ],
+    npcs: [],
+    chests: [
+      { id: "highlands-chest-1", x: 30, y: 21, reward: { type: "equipment", equipmentId: "hornedHelm", quantity: 1 } },
+      { id: "highlands-chest-2", x: 20, y: 9, reward: { type: "item", itemId: "strongHerb", quantity: 2 } }
+    ],
+    enemies: [
+      { id: "highlands-orc-a", enemyKey: "orc", x: 33, y: 7 },
+      { id: "highlands-direwolf-a", enemyKey: "direWolf", x: 6, y: 22 },
+      { id: "highlands-darkmage-a", enemyKey: "darkMage", x: 15, y: 29 },
+      { id: "highlands-golem-a", enemyKey: "stoneGolem", x: 31, y: 31 }
+    ]
   }
 };
 
@@ -265,7 +330,7 @@ export const EXPANDED_MAPS: Partial<Record<MapId, MapDefinition>> = {
       "#########.......................########",
       "###########...................##########",
       "#############...............############",
-      "########################################",
+      "####################O###################",
       "########################################"
     ],
     portals: [
@@ -273,8 +338,11 @@ export const EXPANDED_MAPS: Partial<Record<MapId, MapDefinition>> = {
       { x: 6, y: 24, toMap: "dungeon", toX: 1, toY: 1, dungeonTier: 1 },
       { x: 34, y: 6, toMap: "dungeon", toX: 1, toY: 1, dungeonTier: 2 },
       { x: 36, y: 16, toMap: "dungeon", toX: 1, toY: 1, dungeonTier: 3 },
-      { x: 14, y: 9, toMap: "hiddenVillage", toX: 12, toY: 15, requiresFlag: "finalBeastDefeated" },
-      { x: 8, y: 19, toMap: "dungeon", toX: 1, toY: 1, dungeonTier: 4, requiresFlag: "finalBeastDefeated" }
+      // Tier 4's dungeon and its preceding village (hiddenVillage) both live
+      // on "highlands" now (see maps.ts's MAPS.highlands) — this single
+      // gated portal is the only way in, opening once the tier-3 guardian
+      // ("final beast") falls.
+      { x: 20, y: 28, toMap: "highlands", toX: 23, toY: 4, requiresFlag: "finalBeastDefeated" }
     ],
     npcs: [],
     chests: [

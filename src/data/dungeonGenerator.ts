@@ -6,6 +6,7 @@ import type {
   EquipmentId,
   ItemId,
   MapDefinition,
+  MapId,
   NpcDefinition,
   PortalDefinition,
   TilePosition
@@ -50,11 +51,15 @@ const DUNGEON_NAMES: Record<number, string> = {
   3: "月蝕の深奥",
   4: "霧隠れの深部"
 };
-const FIELD_DUNGEON_ENTRANCES: Record<number, TilePosition> = {
-  1: { x: 6, y: 24 },
-  2: { x: 34, y: 6 },
-  3: { x: 36, y: 16 },
-  4: { x: 8, y: 19 }
+// Which overworld map + tile a dungeon tier's floor-1 stairs lead back up
+// to. Tiers 1-3 all surface on the field; tier 4 surfaces on "highlands"
+// instead (see MAPS.highlands in data/maps.ts) since the field is already
+// home to every other tier's entrance.
+const DUNGEON_ENTRANCES: Record<number, { mapId: MapId } & TilePosition> = {
+  1: { mapId: "field", x: 6, y: 24 },
+  2: { mapId: "field", x: 34, y: 6 },
+  3: { mapId: "field", x: 36, y: 16 },
+  4: { mapId: "highlands", x: 38, y: 24 }
 };
 const TIER_3_DUNGEON_ENEMY_WEIGHTS: DungeonEnemyKey[] = [
   "orc",
@@ -265,7 +270,7 @@ export function generateDungeon(
   const sectors = buildSectors(width, height, extraDepth);
 
   const spawn = { x: 1, y: 1 };
-  const fieldEntrance = getFieldDungeonEntranceForTier(tier);
+  const dungeonEntrance = getDungeonEntranceForTier(tier);
   const reserved = new Set<string>([positionKey(spawn)]);
   const enemies: EnemySpawn[] = [];
   const portals: PortalDefinition[] = [
@@ -273,9 +278,9 @@ export function generateDungeon(
       ? {
           x: spawn.x,
           y: spawn.y,
-          toMap: "field",
-          toX: fieldEntrance.x,
-          toY: fieldEntrance.y,
+          toMap: dungeonEntrance.mapId,
+          toX: dungeonEntrance.x,
+          toY: dungeonEntrance.y,
           kind: "stairs-up"
         }
       : {
@@ -448,8 +453,8 @@ export function getRelicChestIdForTier(tier: number): string {
   return RELIC_CHEST_IDS[normalizeDungeonTier(tier)] ?? RELIC_CHEST_IDS[1];
 }
 
-export function getFieldDungeonEntranceForTier(tier: number): TilePosition {
-  return FIELD_DUNGEON_ENTRANCES[normalizeDungeonTier(tier)] ?? FIELD_DUNGEON_ENTRANCES[1];
+export function getDungeonEntranceForTier(tier: number): { mapId: MapId } & TilePosition {
+  return DUNGEON_ENTRANCES[normalizeDungeonTier(tier)] ?? DUNGEON_ENTRANCES[1];
 }
 
 export function getDungeonTileThemeForTier(tier: number): DungeonTileTheme {
