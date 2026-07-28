@@ -71,8 +71,11 @@ const TIER_3_DUNGEON_ENEMY_WEIGHTS: DungeonEnemyKey[] = [
   "stoneGolem",
   "mimic"
 ];
-// Tier 4 deliberately reuses tier 3's regular-enemy pool as-is — the new
-// boss is the point of tier 4, not a brand-new bestiary.
+// Tier 4 reuses tier 3's regular-enemy pool (the new guardian is still the
+// main point of tier 4) plus frostWraith, so "霧隠れの深部"'s mist theme
+// shows up in its regular encounters too, not just the overworld highlands
+// map it's reached from.
+const TIER_4_DUNGEON_ENEMY_WEIGHTS: DungeonEnemyKey[] = [...TIER_3_DUNGEON_ENEMY_WEIGHTS, "frostWraith", "frostWraith"];
 const DUNGEON_ENEMY_WEIGHTS_BY_TIER: Record<number, DungeonEnemyKey[]> = {
   1: [
     "goblin",
@@ -95,7 +98,7 @@ const DUNGEON_ENEMY_WEIGHTS_BY_TIER: Record<number, DungeonEnemyKey[]> = {
     "stoneGolem"
   ],
   3: TIER_3_DUNGEON_ENEMY_WEIGHTS,
-  4: TIER_3_DUNGEON_ENEMY_WEIGHTS
+  4: TIER_4_DUNGEON_ENEMY_WEIGHTS
 };
 type SupplyChestEquipmentBucket = "early" | "mid" | "late";
 const TIER_3_SUPPLY_CHEST_EARLY_EQUIPMENT: EquipmentId[] = ["clothCap", "roundShield", "ironHelm"];

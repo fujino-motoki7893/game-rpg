@@ -118,6 +118,14 @@ export const CHARACTER_SPRITES: CharacterSpriteDefinition[] = [
     battleScale: 3
   },
   {
+    key: "enemy-frost-wraith",
+    path: "assets/characters/enemy-frost-wraith.png",
+    frameWidth: 32,
+    frameHeight: 32,
+    role: "creature",
+    battleScale: 3
+  },
+  {
     key: "enemy-guardian",
     path: "assets/characters/enemy-guardian.png",
     frameWidth: 48,

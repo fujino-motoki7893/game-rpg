@@ -138,4 +138,26 @@ await buildMonster("enemy-slime", slimePath, 64, 64, 32, {
 });
 console.log("Generated enemy-slime.png from OpenGameArt LPC Monsters");
 
-console.log(`Done. Wrote 3 monster sprite sheets to ${outputDir}`);
+// --- Ghost -> enemy-frost-wraith (384x256 = 6 cols x 4 rows @ 64px) ---
+// Same pack as the slime, already cached above. Floating/symmetric like the
+// slime, so one row's frames are reused for all 4 directions. Row 0 is the
+// palest of the sheet's 4 color variants (row 1-3 shade progressively more
+// yellow-green with a visible skull face) — closest fit for a "highlands
+// mist wraith" without any retinting. Column 3 is a flash/hit frame bundled
+// into the sheet, not part of the idle float loop, so it's skipped.
+const ghostPath = await extractFromZip(
+  "https://opengameart.org/sites/default/files/lpc-monsters.zip",
+  "lpc-monsters.zip",
+  "lpc-monsters/ghost.png",
+  "ghost.png"
+);
+const ghostFrames = { row: 0, cols: [0, 1, 2, 4] };
+await buildMonster("enemy-frost-wraith", ghostPath, 64, 64, 32, {
+  down: ghostFrames,
+  left: ghostFrames,
+  right: ghostFrames,
+  up: ghostFrames
+});
+console.log("Generated enemy-frost-wraith.png from OpenGameArt LPC Monsters (ghost)");
+
+console.log(`Done. Wrote 4 monster sprite sheets to ${outputDir}`);

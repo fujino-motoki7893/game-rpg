@@ -7,9 +7,11 @@
 が配布する素材(body/head/hair/torso/legs/feet/shoulders/hat/capeの各レイヤー)を
 `scripts/generate-humanoid-sprites.mjs` / `scripts/generate-monster-sprites.mjs` で合成して生成しています。
 
-`enemy-guardian.png` / `enemy-bat.png` / `enemy-slime.png` は、LPCコミュニティの作者による
-OpenGameArt.org上の単体モンスター素材(人型骨格に依らない独自シート)を
-`scripts/generate-monster-sprites-external.mjs` で切り出して生成しています。
+`enemy-guardian.png` / `enemy-bat.png` / `enemy-slime.png` / `enemy-frost-wraith.png`
+(霧の高地エリア用、"霧の亡霊")は、LPCコミュニティの作者による OpenGameArt.org上の
+単体モンスター素材(人型骨格に依らない独自シート)を `scripts/generate-monster-sprites-external.mjs`
+で切り出して生成しています。frost-wraithは`enemy-slime.png`と同じ[LPC Monsters](https://opengameart.org/content/lpc-monsters)
+パック内の`ghost.png`が元絵で、追加のダウンロード/ライセンス確認は不要でした。
 
 残りの `enemy-*.png`(wolf/mimic)は従来どおり `scripts/generate-character-sheets.mjs` による
 プロシージャル生成です。狼・ミミック用の素材候補は見つかっていますが、方向別グリッドに
@@ -68,6 +70,7 @@ OpenGameArt.org上の単体モンスター素材(人型骨格に依らない独�
 | enemy-guardian | golem-walk.png | [LPC Golem](https://opengameart.org/content/lpc-golem) | Stephen Challener (Redshrike), William.Thomsponj | CC-BY / GPL / OGA-BY |
 | enemy-bat | bat-NESW.png (48x64) | [Bat (Rework)](https://opengameart.org/content/bat-rework) | bagzie, reworked by AntumDeluge | CC-BY 3.0 / OGA-BY 3.0 |
 | enemy-slime | slime.png | [LPC Monsters](https://opengameart.org/content/lpc-monsters) | Charles Sanchez (CharlesGabriel), bagzie, bluecarrot16 | CC-BY-SA 3.0 / GPL 3.0 |
+| enemy-frost-wraith (霧の亡霊, highlands用) | ghost.png | [LPC Monsters](https://opengameart.org/content/lpc-monsters) | Charles Sanchez (CharlesGabriel), bagzie, bluecarrot16 | CC-BY-SA 3.0 / GPL 3.0 |
 
 ## キャラクター/モンスターごとの構成
 
@@ -86,6 +89,7 @@ OpenGameArt.org上の単体モンスター素材(人型骨格に依らない独�
 | enemy-guardian | LPC Golem(単体素材、そのまま) | - | - |
 | enemy-bat | Bat Rework(単体素材、そのまま) | - | - |
 | enemy-slime | LPC Monsters slime(単体素材、方向を問わず同一フレームを使い回し) | - | - |
+| enemy-frost-wraith | LPC Monsters ghost(単体素材、シート内4色のうち最も白い1色目を採用、方向を問わず同一フレームを使い回し) | - | - |
 
 ## 再生成方法
 

@@ -236,7 +236,8 @@ export const MAPS: Record<MapId, MapDefinition> = {
       { id: "highlands-orc-a", enemyKey: "orc", x: 33, y: 7 },
       { id: "highlands-direwolf-a", enemyKey: "direWolf", x: 6, y: 22 },
       { id: "highlands-darkmage-a", enemyKey: "darkMage", x: 15, y: 29 },
-      { id: "highlands-golem-a", enemyKey: "stoneGolem", x: 31, y: 31 }
+      { id: "highlands-golem-a", enemyKey: "stoneGolem", x: 31, y: 31 },
+      { id: "highlands-wraith-a", enemyKey: "frostWraith", x: 35, y: 29 }
     ]
   }
 };

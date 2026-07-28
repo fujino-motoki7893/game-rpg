@@ -10,7 +10,8 @@ export const DUNGEON_ENEMY_KEYS = [
   "orc",
   "direWolf",
   "darkMage",
-  "stoneGolem"
+  "stoneGolem",
+  "frostWraith"
 ] as const;
 
 export type DungeonEnemyKey = (typeof DUNGEON_ENEMY_KEYS)[number];
@@ -133,6 +134,17 @@ export const ENEMIES: Record<string, EnemyDefinition> = {
     gold: 15,
     texture: "enemy-guardian",
     maxMp: 11
+  },
+  frostWraith: {
+    key: "frostWraith",
+    name: "霧の亡霊",
+    maxHp: 32,
+    attack: 12,
+    speed: 10,
+    exp: 16,
+    gold: 12,
+    texture: "enemy-frost-wraith",
+    maxMp: 10
   },
   guardian: {
     key: "guardian",
