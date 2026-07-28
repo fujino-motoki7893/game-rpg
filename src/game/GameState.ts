@@ -134,52 +134,64 @@ function loadSave(): GameSave {
       return initialSave();
     }
 
-    let migrated = JSON.parse(raw);
-    let version = typeof migrated.saveVersion === "number" ? migrated.saveVersion : 0;
-    while (version < CURRENT_SAVE_VERSION) {
-      migrated = MIGRATIONS[version](migrated);
-      version++;
-    }
-
-    const parsed = migrated as Partial<GameSave>;
-    const base = initialSave();
-    const items = normalizeInventory(parsed.items, parsed.potions);
-    const equipmentInventory = normalizeEquipmentInventory(parsed.equipmentInventory);
-    const equipment = normalizeEquipmentLoadout(parsed.equipment);
-    const equipmentUpgrades = normalizeEquipmentUpgrades(parsed.equipmentUpgrades);
-    const level = normalizePositiveInteger(parsed.level, base.level);
-    const maxHp = normalizePositiveInteger(parsed.maxHp, base.maxHp);
-    const maxMp = normalizeMaxMp(parsed.maxMp, level);
-    const attack = normalizePositiveInteger(parsed.attack, base.attack);
-    const speed = normalizePositiveInteger(parsed.speed, base.speed);
-    const equipmentStats = calculateEquipmentStats(equipment, equipmentUpgrades);
-    const hp = normalizeHp(parsed.hp, maxHp + equipmentStats.maxHpBonus);
-    const mp = normalizeMp(parsed.mp, maxMp + equipmentStats.maxMpBonus);
-    const companions = normalizeCompanions(parsed.companions, level, equipmentUpgrades);
-
-    return {
-      ...base,
-      ...parsed,
-      saveVersion: CURRENT_SAVE_VERSION,
-      level,
-      maxHp,
-      maxMp,
-      hp,
-      mp,
-      attack,
-      speed,
-      items,
-      equipmentInventory,
-      equipment,
-      equipmentUpgrades,
-      companions,
-      potions: items.herb ?? 0,
-      flags: parsed.flags ?? {},
-      defeatedEnemies: parsed.defeatedEnemies ?? []
-    };
+    return normalizeLoadedSave(JSON.parse(raw));
   } catch {
     return initialSave();
   }
+}
+
+// Shared by loadSave() (reading from localStorage) and importSaveCode()
+// (reading from a pasted export code) — both start from an untrusted,
+// loosely-typed blob and need the same migration + value sanitation before
+// it's safe to treat as a GameSave. Throws on unusable input; callers catch.
+function normalizeLoadedSave(rawParsed: unknown): GameSave {
+  if (!rawParsed || typeof rawParsed !== "object") {
+    throw new Error("Save data is not an object");
+  }
+
+  let migrated: any = rawParsed;
+  let version = typeof migrated.saveVersion === "number" ? migrated.saveVersion : 0;
+  while (version < CURRENT_SAVE_VERSION) {
+    migrated = MIGRATIONS[version](migrated);
+    version++;
+  }
+
+  const parsed = migrated as Partial<GameSave>;
+  const base = initialSave();
+  const items = normalizeInventory(parsed.items, parsed.potions);
+  const equipmentInventory = normalizeEquipmentInventory(parsed.equipmentInventory);
+  const equipment = normalizeEquipmentLoadout(parsed.equipment);
+  const equipmentUpgrades = normalizeEquipmentUpgrades(parsed.equipmentUpgrades);
+  const level = normalizePositiveInteger(parsed.level, base.level);
+  const maxHp = normalizePositiveInteger(parsed.maxHp, base.maxHp);
+  const maxMp = normalizeMaxMp(parsed.maxMp, level);
+  const attack = normalizePositiveInteger(parsed.attack, base.attack);
+  const speed = normalizePositiveInteger(parsed.speed, base.speed);
+  const equipmentStats = calculateEquipmentStats(equipment, equipmentUpgrades);
+  const hp = normalizeHp(parsed.hp, maxHp + equipmentStats.maxHpBonus);
+  const mp = normalizeMp(parsed.mp, maxMp + equipmentStats.maxMpBonus);
+  const companions = normalizeCompanions(parsed.companions, level, equipmentUpgrades);
+
+  return {
+    ...base,
+    ...parsed,
+    saveVersion: CURRENT_SAVE_VERSION,
+    level,
+    maxHp,
+    maxMp,
+    hp,
+    mp,
+    attack,
+    speed,
+    items,
+    equipmentInventory,
+    equipment,
+    equipmentUpgrades,
+    companions,
+    potions: items.herb ?? 0,
+    flags: parsed.flags ?? {},
+    defeatedEnemies: parsed.defeatedEnemies ?? []
+  };
 }
 
 export function getSave(): GameSave {
@@ -199,6 +211,54 @@ export function resetSave(): GameSave {
   save = initialSave();
   persistSave();
   return save;
+}
+
+export interface ImportSaveResult {
+  imported: boolean;
+  reason?: "invalid-code";
+}
+
+// A save code is just the save JSON, unicode-safe-base64'd behind a fixed
+// prefix. The prefix isn't a version marker (saveVersion/MIGRATIONS already
+// handle the save's own shape evolving) — it's only so a garbled or
+// unrelated paste is rejected up front with a clear "invalid-code" instead
+// of an obscure JSON/base64 parse error.
+const SAVE_CODE_PREFIX = "TTRPG1:";
+
+export function exportSaveCode(): string {
+  return SAVE_CODE_PREFIX + encodeSaveData(save);
+}
+
+export function importSaveCode(code: string): ImportSaveResult {
+  const trimmed = code.trim();
+  if (!trimmed.startsWith(SAVE_CODE_PREFIX)) {
+    return { imported: false, reason: "invalid-code" };
+  }
+
+  try {
+    const rawParsed = decodeSaveData(trimmed.slice(SAVE_CODE_PREFIX.length));
+    save = normalizeLoadedSave(rawParsed);
+  } catch {
+    return { imported: false, reason: "invalid-code" };
+  }
+
+  persistSave();
+  return { imported: true };
+}
+
+function encodeSaveData(data: GameSave): string {
+  const bytes = new TextEncoder().encode(JSON.stringify(data));
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+}
+
+function decodeSaveData(base64: string): unknown {
+  const binary = atob(base64);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(bytes));
 }
 
 export function getActiveDungeonTier(): number {

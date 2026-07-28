@@ -56,6 +56,8 @@ import {
   consumeItem,
   equipEquipment,
   equipEquipmentToCompanion,
+  exportSaveCode,
+  importSaveCode,
   useHealingSkill,
   useHealingSkillOnCompanion,
   useItem,
@@ -130,6 +132,7 @@ export class MenuScene extends Phaser.Scene {
     visibleTabs.forEach((tab, index) => {
       this.createTabButton(tab, 154 + index * tabSpacing, 176, tabWidth);
     });
+    this.createSaveCodeButtons();
     this.createCloseButton();
 
     this.contentContainer = this.add.container(0, 0).setDepth(101);
@@ -200,6 +203,80 @@ export class MenuScene extends Phaser.Scene {
       .setDepth(102)
       .setInteractive({ useHandCursor: true })
       .on("pointerdown", () => this.closeMenu());
+  }
+
+  /**
+   * Save export/import lives here rather than behind a keyboard shortcut
+   * (unlike the world's "R" reset) because it needs a text field to show/
+   * accept the save code — `window.prompt` is the simplest way to get one
+   * without building a custom on-canvas text input.
+   */
+  private createSaveCodeButtons(): void {
+    this.add
+      .text(284, 120, "セーブ出力", {
+        ...this.textStyle(14, "#101820"),
+        backgroundColor: "#8fb8d8",
+        padding: { x: 12, y: 8 },
+        fixedWidth: 110,
+        align: "center"
+      })
+      .setDepth(102)
+      .setInteractive({ useHandCursor: true })
+      .on("pointerdown", () => this.handleExportSaveCode());
+
+    this.add
+      .text(404, 120, "セーブ読込", {
+        ...this.textStyle(14, "#101820"),
+        backgroundColor: "#8fb8d8",
+        padding: { x: 12, y: 8 },
+        fixedWidth: 110,
+        align: "center"
+      })
+      .setDepth(102)
+      .setInteractive({ useHandCursor: true })
+      .on("pointerdown", () => this.handleImportSaveCode());
+  }
+
+  private async handleExportSaveCode(): Promise<void> {
+    const code = exportSaveCode();
+    let copied = false;
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(code);
+        copied = true;
+      } catch {
+        copied = false;
+      }
+    }
+
+    if (copied) {
+      this.setMessage("セーブコードをクリップボードにコピーしました");
+    } else {
+      window.prompt("このセーブコードをコピーして保存してください（Ctrl+C）", code);
+      this.setMessage("");
+    }
+  }
+
+  private handleImportSaveCode(): void {
+    const input = window.prompt("セーブコードを貼り付けてください（現在のセーブは上書きされます）");
+    if (input === null || input.trim() === "") {
+      return;
+    }
+
+    if (!window.confirm("現在のセーブデータを上書きします。よろしいですか？")) {
+      return;
+    }
+
+    const result = importSaveCode(input);
+    if (!result.imported) {
+      this.setMessage("セーブコードが正しくありません");
+      return;
+    }
+
+    // The imported save can point at a different map/position/stats than
+    // whatever WorldScene currently has live, so reload rather than try to
+    // reconcile every piece of in-memory scene state with the new save.
+    window.location.reload();
   }
 
   private selectTab(tab: MenuTab): void {
