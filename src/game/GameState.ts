@@ -67,7 +67,7 @@ const DUNGEON_ENEMY_ID_PREFIX = "dungeon-";
 // defaulting in loadSave/normalizers already covers that case).
 // ---------------------------------------------------------------------------
 
-export const CURRENT_SAVE_VERSION = 1;
+export const CURRENT_SAVE_VERSION = 2;
 
 /**
  * v0 -> v1: saves before the multi-companion refactor stored Luna and Geist
@@ -99,8 +99,36 @@ function migrateV0ToV1(raw: any): any {
   return { ...rest, companions, saveVersion: 1 };
 }
 
+/**
+ * v1 -> v2: tier 4's dungeon moved from being reachable-from/returning-to
+ * "field" to a new "highlands" map (see MAPS.highlands). Players who had
+ * already generated tier-4 floors before that change have them cached
+ * (dungeonProgressByTier[4].generatedFloors) with the old field-return
+ * portal baked in, which persisted forever since resolveMap() reuses a
+ * cached floor instead of regenerating it. Dropping just the floor cache
+ * (not floorCount/currentFloor) forces a fresh regenerate — with the
+ * corrected portal — without losing descent progress within the tier.
+ */
+function migrateV1ToV2(raw: any): any {
+  const tier4Progress = raw.dungeonProgressByTier?.[4];
+  if (!tier4Progress?.generatedFloors) {
+    return { ...raw, saveVersion: 2 };
+  }
+
+  const { generatedFloors, ...restTier4Progress } = tier4Progress;
+  return {
+    ...raw,
+    dungeonProgressByTier: {
+      ...raw.dungeonProgressByTier,
+      4: restTier4Progress
+    },
+    saveVersion: 2
+  };
+}
+
 const MIGRATIONS: Record<number, (raw: any) => any> = {
-  0: migrateV0ToV1
+  0: migrateV0ToV1,
+  1: migrateV1ToV2
 };
 
 export const initialSave = (): GameSave => ({
