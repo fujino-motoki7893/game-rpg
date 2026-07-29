@@ -102,7 +102,64 @@ supabase link --project-ref <本番プロジェクトのref>
 supabase db push
 ```
 
-## 3. 今後の拡張候補(未実装・要検討)
+## 3. 自動一時停止(Auto-pause)を防ぐ: Google Apps Scriptでのヘルスチェック
+
+Supabaseの無料プランは、**7日間APIアクセス(DBクエリ含む)が無いとプロジェクトが
+自動的に一時停止**します。再開はダッシュボードからワンクリックで可能ですが、
+気づかずに放置するとゲームのクラウド同期が突然動かなくなります。これを防ぐため、
+Google Apps Script (GAS) から定期的に軽いDBクエリを送るキープアライブを設定します。
+
+スクリプト本体は `gas/supabase-keepalive.gs` にコミット済みです(バージョン管理用。
+GASプロジェクトへの自動デプロイは行われないので、以下の手順で手動で貼り付けてください)。
+
+このpingは `saves` テーブルへの匿名(anon)ロールでのSELECTです。RLSにより
+`auth.uid() = user_id` が常にfalseになるため、**実データは一切返らず空配列が
+返るだけ**です(その代わり `grant select on public.saves to anon;` を実行して
+おく必要があります。既存の `saves_select_own` ポリシー自体は変更していません)。
+
+### 3-1. Supabase側: anonロールへのSELECT権限を追加
+
+ダッシュボードの **SQL Editor** で以下を実行してください
+(`supabase/migrations/20260729010000_grant_anon_select_saves.sql` と同じ内容):
+
+```sql
+grant select on public.saves to anon;
+```
+
+### 3-2. Google Apps Scriptプロジェクトの作成
+
+1. https://script.google.com を開き、**新しいプロジェクト** を作成する。
+2. デフォルトの `Code.gs` の内容を削除し、`gas/supabase-keepalive.gs` の
+   内容をそのまま貼り付ける。
+3. 左側の **プロジェクトの設定(歯車アイコン) → スクリプト プロパティ** を開き、
+   以下の2つを追加する(Project Settings画面ではなく「スクリプト プロパティ」欄):
+   | プロパティ | 値 |
+   |---|---|
+   | `SUPABASE_URL` | `https://xxxxxxxx.supabase.co` (`.env`の`VITE_SUPABASE_URL`と同じ) |
+   | `SUPABASE_ANON_KEY` | `anon public`キー(`.env`の`VITE_SUPABASE_ANON_KEY`と同じ) |
+4. エディタ上部の関数選択で `keepSupabaseAlive` を選び、**実行** ボタンを押す。
+   - 初回実行時に「承認が必要です」と出るので、Googleアカウントで許可する
+     (外部URLへのアクセス=`UrlFetchApp`の権限)。
+   - 実行ログ(表示 → 実行数、または左メニューの「実行数」)に
+     `Supabase keep-alive ping OK (status 200)` と出れば成功。
+
+### 3-3. 定期実行トリガーの設定
+
+1. 左メニューの **トリガー(時計アイコン)** → 右下の **トリガーを追加**。
+2. 実行する関数: `keepSupabaseAlive`
+3. イベントのソース: `時間主導型`
+4. 種類: `日タイマー`(7日間の猶予があるので1日1回で十分。心配なら`時間ベースのタイマー` → `6時間ごと`などに変更しても良い)
+5. 保存する。
+
+これで、GASが定期的にSupabaseへping送信 → 一時停止のタイマーがリセットされ続けます。
+
+### 3-4. 失敗時の通知(任意)
+
+トリガー実行が失敗(例外throw)すると、GASはデフォルトで**スクリプト所有者の
+Googleアカウントにメール通知**します。追加設定は不要ですが、通知頻度を変えたい
+場合は同じトリガー編集画面の「通知設定」から変更できます。
+
+## 4. 今後の拡張候補(未実装・要検討)
 
 - 現在はチート対策を行っていません(クライアントから直接RLS越しに書き込む方式)。
   将来的に不正防止が必要になった場合は、Cloudflare Worker(`src/worker/index.ts`)に
