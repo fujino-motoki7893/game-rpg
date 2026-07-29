@@ -31,6 +31,7 @@ import {
 } from "../data/skills";
 import { COMPANION_ORDER, COMPANIONS } from "../data/companions";
 import { SAVE_KEY } from "./constants";
+import { fetchCloudSave, isCloudSyncEnabled, scheduleCloudSync } from "./cloudSync";
 import type { EquipmentStats } from "../data/equipment";
 import type { SkillDefinition, SkillId } from "../data/skills";
 import type { CompanionId } from "../data/companions";
@@ -154,6 +155,11 @@ export const initialSave = (): GameSave => ({
   defeatedEnemies: []
 });
 
+// Recorded before loadSave() runs, so initCloudSave() can tell a genuinely
+// fresh browser (no local save yet — safe to adopt a cloud save) apart from
+// an existing local player (local always wins; cloud is just a backup target).
+const hadLocalSaveOnBoot = localStorage.getItem(SAVE_KEY) !== null;
+
 let save: GameSave = loadSave();
 
 function loadSave(): GameSave {
@@ -234,6 +240,22 @@ export function persistSave(): void {
   syncLegacyPotionCount();
   save.saveVersion = CURRENT_SAVE_VERSION;
   localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+  scheduleCloudSync(save);
+}
+
+// Awaited once at startup (see main.ts) before the game boots, so a restored
+// cloud save can't overwrite state a scene has already read. No-op when
+// Supabase env vars are unset, or when this browser already has a local save
+// (local always wins over cloud — this only restores saves on a fresh
+// browser/device, it never merges or resolves conflicts).
+export async function initCloudSave(): Promise<void> {
+  if (!isCloudSyncEnabled() || hadLocalSaveOnBoot) return;
+
+  const cloudSave = await fetchCloudSave();
+  if (!cloudSave) return;
+
+  save = normalizeLoadedSave(cloudSave);
+  persistSave();
 }
 
 export function resetSave(): GameSave {

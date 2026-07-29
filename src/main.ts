@@ -3,6 +3,7 @@ import "./styles.css";
 import { BootScene } from "./scenes/BootScene";
 import { UIScene } from "./scenes/UIScene";
 import { WorldScene } from "./scenes/WorldScene";
+import { initCloudSave } from "./game/GameState";
 
 // BattleScene/MenuScene/ShopScene/EndingScene are not registered here — each
 // is only needed once the player reaches a specific moment (first battle,
@@ -24,4 +25,9 @@ const config: Phaser.Types.Core.GameConfig = {
   }
 };
 
-new Phaser.Game(config);
+// Waited on before boot (rather than left to run in the background) so a
+// cloud save restored for a fresh browser can't land after a scene has
+// already read local state.
+void initCloudSave().then(() => {
+  new Phaser.Game(config);
+});
