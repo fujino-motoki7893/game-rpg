@@ -10,6 +10,11 @@ create table if not exists public.saves (
 
 alter table public.saves enable row level security;
 
+-- RLS policies below only restrict *which rows* a query can touch — Postgres
+-- still requires a table-level grant before `authenticated` (the role
+-- Supabase's anonymous auth sessions run as) can hit the table at all.
+grant select, insert, update on public.saves to authenticated;
+
 -- Each user may only ever read/write their own row. Safe to call from the
 -- browser with the public anon key because of this.
 create policy "saves_select_own" on public.saves
