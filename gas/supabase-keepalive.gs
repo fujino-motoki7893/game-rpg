@@ -18,9 +18,15 @@ function keepSupabaseAlive() {
   // reliably counts as the "database activity" Supabase's pause detector
   // looks for. RLS still returns zero rows for the anon role — see the
   // "grant select ... to anon" migration.
+  // PostgREST requires both headers: `apikey` identifies the API key,
+  // `Authorization` is the JWT it authorizes the request against — sending
+  // only one of the two gets rejected with 401.
   const response = UrlFetchApp.fetch(url + "/rest/v1/saves?select=user_id&limit=1", {
     method: "get",
-    headers: { apikey: anonKey },
+    headers: {
+      apikey: anonKey,
+      Authorization: "Bearer " + anonKey
+    },
     muteHttpExceptions: true
   });
 
